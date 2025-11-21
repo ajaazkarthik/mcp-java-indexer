@@ -1,0 +1,128 @@
+{
+  "name": "java-indexer-mcp",
+  "displayName": "Java Indexer MCP",
+  "description": "IntelliJ-style Java code indexing and call-graph analysis with no database. Index, search symbols, analyze call graphs, and navigate Java code instantly.",
+  "version": "1.0.0",
+  "publisher": "your-publisher-name",
+  "author": {
+    "name": "Your Name",
+    "email": "your.email@example.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/yourusername/java-indexer-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/java-indexer-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/java-indexer-mcp/issues"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Debuggers",
+    "Other"
+  ],
+  "keywords": [
+    "java",
+    "indexer",
+    "mcp",
+    "code-analysis",
+    "call-graph",
+    "symbol-search",
+    "refactoring"
+  ],
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1E90FF",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "mcpServers": [
+      {
+        "id": "java-indexer",
+        "name": "Java Indexer",
+        "command": "node",
+        "args": [
+          "${extensionPath}/server/dist/index.js"
+        ],
+        "documentation": "https://github.com/yourusername/java-indexer-mcp#readme"
+      }
+    ],
+    "commands": [
+      {
+        "command": "java-indexer.index",
+        "title": "Java Indexer: Index Project"
+      },
+      {
+        "command": "java-indexer.findSymbol",
+        "title": "Java Indexer: Find Symbol"
+      },
+      {
+        "command": "java-indexer.findUsages",
+        "title": "Java Indexer: Find Usages"
+      },
+      {
+        "command": "java-indexer.callGraph",
+        "title": "Java Indexer: Show Call Graph"
+      }
+    ],
+    "configuration": {
+      "title": "Java Indexer",
+      "properties": {
+        "javaIndexer.autoIndex": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically index Java projects on startup"
+        },
+        "javaIndexer.sourceRoots": {
+          "type": "array",
+          "default": [
+            "src/main/java",
+            "src"
+          ],
+          "description": "Default source root directories for indexing"
+        },
+        "javaIndexer.excludePatterns": {
+          "type": "array",
+          "default": [
+            "**/target/**",
+            "**/build/**",
+            "**/.git/**",
+            "**/node_modules/**"
+          ],
+          "description": "Patterns to exclude from indexing"
+        },
+        "javaIndexer.indexTimeout": {
+          "type": "number",
+          "default": 300000,
+          "description": "Maximum time (ms) to wait for indexing to complete"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./src && tsc -p ./server/src",
+    "watch": "tsc -watch -p ./src & tsc -watch -p ./server/src",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "@types/node": "^18.0.0",
+    "@vscode/vsce": "^2.21.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0"
+  }
+}

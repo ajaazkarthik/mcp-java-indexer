@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "java-indexer": {
+      "command": "node",
+      "args": [
+        "d:\\workspace\\repo\\github-playground\\mcp-java-indexer\\server\\dist\\index.js"
+      ],
+      "env": {}
+    }
+  }
+}
