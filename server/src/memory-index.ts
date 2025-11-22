@@ -43,6 +43,7 @@ export class MemoryIndex {
   // Core indices (in-memory)
   private symbols: Map<string, SymbolStub> = new Map(); // FQN -> SymbolStub
   private files: Map<string, FileInfo> = new Map(); // file path -> FileInfo
+  private indexedFiles: Set<string> = new Set(); // Only files we explicitly indexed (not dependencies)
   private references: Reference[] = []; // All references
   private callGraph: Map<string, CallGraphEdge[]> = new Map(); // caller FQN -> edges
   private reverseCallGraph: Map<string, CallGraphEdge[]> = new Map(); // callee FQN -> edges
@@ -185,13 +186,16 @@ export class MemoryIndex {
   }
 
   // File management
-  addFile(filePath: string, hash: string, symbols: string[]): void {
+  addFile(filePath: string, hash: string, symbols: string[], isIndexedFile: boolean = true): void {
     this.files.set(filePath, {
       path: filePath,
       hash,
       lastIndexed: Date.now(),
       symbols
     });
+    if (isIndexedFile) {
+      this.indexedFiles.add(filePath);
+    }
   }
 
   getFile(filePath: string): FileInfo | undefined {
@@ -220,6 +224,7 @@ export class MemoryIndex {
     this.references = this.references.filter(ref => ref.file !== filePath);
 
     this.files.delete(filePath);
+    this.indexedFiles.delete(filePath);
   }
 
   // Calculate file hash
@@ -245,7 +250,8 @@ export class MemoryIndex {
   getStats() {
     return {
       symbols: this.symbols.size,
-      files: this.files.size,
+      indexedFiles: this.indexedFiles.size,
+      allFiles: this.files.size,
       references: this.references.length,
       callGraphEdges: Array.from(this.callGraph.values()).reduce((sum, edges) => sum + edges.length, 0),
       inheritanceRelations: this.inheritance.size
@@ -256,6 +262,7 @@ export class MemoryIndex {
   clear(): void {
     this.symbols.clear();
     this.files.clear();
+    this.indexedFiles.clear();
     this.references = [];
     this.callGraph.clear();
     this.reverseCallGraph.clear();
@@ -268,6 +275,7 @@ export class MemoryIndex {
     return {
       symbols: Array.from(this.symbols.entries()),
       files: Array.from(this.files.entries()),
+      indexedFiles: Array.from(this.indexedFiles),
       references: this.references,
       callGraph: Array.from(this.callGraph.entries()),
       reverseCallGraph: Array.from(this.reverseCallGraph.entries()),
@@ -281,10 +289,11 @@ export class MemoryIndex {
     
     this.symbols = new Map(data.symbols);
     this.files = new Map(data.files);
-    this.references = data.references;
-    this.callGraph = new Map(data.callGraph);
-    this.reverseCallGraph = new Map(data.reverseCallGraph);
-    this.inheritance = new Map(data.inheritance);
-    this.reverseInheritance = new Map(data.reverseInheritance);
+    this.indexedFiles = new Set(data.indexedFiles || []);
+    this.references = data.references || [];
+    this.callGraph = new Map(data.callGraph || []);
+    this.reverseCallGraph = new Map(data.reverseCallGraph || []);
+    this.inheritance = new Map(data.inheritance || []);
+    this.reverseInheritance = new Map(data.reverseInheritance || []);
   }
 }

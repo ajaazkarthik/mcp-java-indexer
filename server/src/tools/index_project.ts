@@ -63,10 +63,14 @@ export async function handleIndexProject(
     // Convert source roots to absolute paths
     const absoluteSourceRoots = sourceRoots.map(sr => path.join(rootDir, sr).replace(/\\/g, '/'));
 
-    // Index files in batches
-    const batchSize = 50;
+    // Index files in batches (optimized for large projects)
+    const batchSize = 100; // Increased for better performance
     let totalSymbols = 0;
     let totalReferences = 0;
+    let processedFiles = 0;
+    let errorCount = 0;
+
+    console.error(`\n🔍 Indexing ${javaFiles.length} files in batches of ${batchSize}...`);
 
     for (let i = 0; i < javaFiles.length; i += batchSize) {
       const batch = javaFiles.slice(i, Math.min(i + batchSize, javaFiles.length));
@@ -75,7 +79,8 @@ export async function handleIndexProject(
 
       for (const result of results) {
         if (result.error) {
-          console.error(`Error indexing ${result.file}: ${result.error}`);
+          console.error(`⚠️  Error indexing ${result.file}: ${result.error}`);
+          errorCount++;
           continue;
         }
 
@@ -93,15 +98,29 @@ export async function handleIndexProject(
         }
 
         const hash = await MemoryIndex.calculateFileHash(result.file);
-        memoryIndex.addFile(result.file, hash, symbolFqns);
+        memoryIndex.addFile(result.file, hash, symbolFqns, true);
+        processedFiles++;
       }
 
-      console.error(`Indexed ${Math.min(i + batchSize, javaFiles.length)}/${javaFiles.length} files...`);
+      const progress = Math.min(i + batchSize, javaFiles.length);
+      const percentage = ((progress / javaFiles.length) * 100).toFixed(1);
+      console.error(`📊 Progress: ${progress}/${javaFiles.length} (${percentage}%) - ${totalSymbols} symbols, ${totalReferences} refs`);
+      
+      // Periodic garbage collection hint for large projects
+      if (javaFiles.length > 10000 && i % 1000 === 0 && global.gc) {
+        global.gc();
+      }
+    }
+
+    if (errorCount > 0) {
+      console.error(`\n⚠️  ${errorCount} files failed to index`);
     }
 
     // Persist index
+    console.error(`\n💾 Persisting index to disk...`);
     const persistence = new Persistence(memoryIndex.getIndexDir());
     await persistence.save(memoryIndex);
+    console.error(`✅ Index persisted successfully`);
 
     // Start file watcher
     const watcher = new FileSystemWatcher(rootDir, absoluteSourceRoots, memoryIndex, indexerClient, persistence);
@@ -118,7 +137,8 @@ export async function handleIndexProject(
 
 📊 Statistics:
   • Symbols: ${stats.symbols}
-  • Files: ${stats.files}
+  • Indexed Files: ${stats.indexedFiles}
+  • All Files (including dependencies): ${stats.allFiles}
   • References: ${stats.references}
   • Call Graph Edges: ${stats.callGraphEdges}
   • Inheritance Relations: ${stats.inheritanceRelations}
