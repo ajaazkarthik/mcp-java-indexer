@@ -94,6 +94,20 @@ export class MemoryIndex {
       return results;
     }
 
+    // Check if it's a qualified field access (e.g., "ClassName.fieldName")
+    if (nameOrFqn.includes('.')) {
+      const parts = nameOrFqn.split('.');
+      const fieldName = parts[parts.length - 1];
+      const className = parts.slice(0, -1).join('.');
+      
+      // Try to find the field in the class or its parents
+      const fieldInHierarchy = this.findFieldInHierarchy(className, fieldName);
+      if (fieldInHierarchy) {
+        results.push(fieldInHierarchy);
+        return results;
+      }
+    }
+
     // Partial name match
     const lowerQuery = nameOrFqn.toLowerCase();
     for (const [fqn, stub] of this.symbols) {
@@ -104,6 +118,106 @@ export class MemoryIndex {
     }
 
     return results;
+  }
+
+  // Find a field in a class or its parent hierarchy
+  private findFieldInHierarchy(className: string, fieldName: string): SymbolStub | undefined {
+    // Try exact class FQN
+    let currentClass = className;
+    const visited = new Set<string>();
+    
+    while (currentClass && !visited.has(currentClass)) {
+      visited.add(currentClass);
+      
+      // Look for the field in the current class
+      const fieldFqn = currentClass + '.' + fieldName;
+      const field = this.symbols.get(fieldFqn);
+      if (field && field.kind === 'field') {
+        return field;
+      }
+      
+      // Try to find the class symbol to get its parent
+      const classSymbol = this.symbols.get(currentClass);
+      if (classSymbol && classSymbol.extends) {
+        currentClass = classSymbol.extends;
+      } else {
+        break;
+      }
+    }
+    
+    // Also try searching by partial package-qualified names
+    for (const [fqn, stub] of this.symbols) {
+      if (stub.kind === 'field' && 
+          stub.name === fieldName && 
+          (fqn.endsWith('.' + className + '.' + fieldName) || 
+           fqn === className + '.' + fieldName)) {
+        // Found in a matching class, now check if it's in the hierarchy
+        if (stub.declaringClass) {
+          const declaring = this.findClassByName(stub.declaringClass);
+          if (declaring && this.isInHierarchy(className, declaring.fqn)) {
+            return stub;
+          }
+        }
+      }
+    }
+    
+    return undefined;
+  }
+
+  // Find a class by simple or qualified name
+  private findClassByName(name: string): SymbolStub | undefined {
+    // Try exact match first
+    const exact = this.symbols.get(name);
+    if (exact && (exact.kind === 'class' || exact.kind === 'interface' || exact.kind === 'enum')) {
+      return exact;
+    }
+    
+    // Try to find by simple name
+    for (const [fqn, stub] of this.symbols) {
+      if ((stub.kind === 'class' || stub.kind === 'interface' || stub.kind === 'enum') && 
+          (stub.name === name || fqn.endsWith('.' + name))) {
+        return stub;
+      }
+    }
+    
+    return undefined;
+  }
+
+  // Check if targetClass is in the hierarchy of baseClass
+  private isInHierarchy(baseClass: string, targetClass: string): boolean {
+    if (baseClass === targetClass) return true;
+    
+    const parents = this.getAllParents(baseClass);
+    return parents.includes(targetClass);
+  }
+
+  // Get all parents recursively
+  private getAllParents(className: string): string[] {
+    const parents: string[] = [];
+    const visited = new Set<string>();
+    const queue = [className];
+    
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      
+      const classSymbol = this.symbols.get(current);
+      if (classSymbol) {
+        if (classSymbol.extends) {
+          parents.push(classSymbol.extends);
+          queue.push(classSymbol.extends);
+        }
+        if (classSymbol.implements) {
+          for (const iface of classSymbol.implements) {
+            parents.push(iface);
+            queue.push(iface);
+          }
+        }
+      }
+    }
+    
+    return parents;
   }
 
   // Add reference

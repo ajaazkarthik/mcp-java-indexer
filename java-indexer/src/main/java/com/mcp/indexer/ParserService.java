@@ -115,16 +115,28 @@ public class ParserService {
             .map(m -> m.getKeyword().asString())
             .collect(Collectors.toList());
         
-        // Extends
+        // Extends - try to resolve to FQN
         if (!cid.isInterface() && !cid.getExtendedTypes().isEmpty()) {
-            classStub.extendsClass = cid.getExtendedTypes().get(0).getNameAsString();
+            ClassOrInterfaceType extendedType = cid.getExtendedTypes().get(0);
+            try {
+                classStub.extendsClass = extendedType.resolve().describe();
+            } catch (Exception e) {
+                // Fallback to simple name if resolution fails
+                classStub.extendsClass = packageName + "." + extendedType.getNameAsString();
+            }
         }
         
-        // Implements
+        // Implements - try to resolve to FQN
         if (!cid.getImplementedTypes().isEmpty()) {
-            classStub.implementsInterfaces = cid.getImplementedTypes().stream()
-                .map(ClassOrInterfaceType::getNameAsString)
-                .collect(Collectors.toList());
+            classStub.implementsInterfaces = new ArrayList<>();
+            for (ClassOrInterfaceType implType : cid.getImplementedTypes()) {
+                try {
+                    classStub.implementsInterfaces.add(implType.resolve().describe());
+                } catch (Exception e) {
+                    // Fallback to simple name if resolution fails
+                    classStub.implementsInterfaces.add(packageName + "." + implType.getNameAsString());
+                }
+            }
         }
         
         result.symbols.add(classStub);
@@ -214,10 +226,12 @@ public class ParserService {
     
     private void extractEnumSymbol(EnumDeclaration ed, String packageName, 
                                   String filePath, IndexResult result) {
+        String enumFqn = packageName.isEmpty() ? ed.getNameAsString() : packageName + "." + ed.getNameAsString();
+        
         SymbolStub enumStub = new SymbolStub();
         enumStub.name = ed.getNameAsString();
         enumStub.packageName = packageName;
-        enumStub.fqn = packageName.isEmpty() ? enumStub.name : packageName + "." + enumStub.name;
+        enumStub.fqn = enumFqn;
         enumStub.kind = "enum";
         enumStub.file = filePath;
         enumStub.line = ed.getBegin().map(pos -> pos.line).orElse(0);
@@ -227,12 +241,38 @@ public class ParserService {
             .collect(Collectors.toList());
         
         if (!ed.getImplementedTypes().isEmpty()) {
-            enumStub.implementsInterfaces = ed.getImplementedTypes().stream()
-                .map(ClassOrInterfaceType::getNameAsString)
-                .collect(Collectors.toList());
+            enumStub.implementsInterfaces = new ArrayList<>();
+            for (ClassOrInterfaceType implType : ed.getImplementedTypes()) {
+                try {
+                    enumStub.implementsInterfaces.add(implType.resolve().describe());
+                } catch (Exception e) {
+                    enumStub.implementsInterfaces.add(packageName + "." + implType.getNameAsString());
+                }
+            }
         }
         
         result.symbols.add(enumStub);
+        
+        // Extract enum constants as fields
+        ed.getEntries().forEach(entry -> {
+            SymbolStub constantStub = new SymbolStub();
+            constantStub.name = entry.getNameAsString();
+            constantStub.declaringClass = enumFqn;
+            constantStub.packageName = packageName;
+            constantStub.fqn = enumFqn + "." + entry.getNameAsString();
+            constantStub.kind = "field";
+            constantStub.file = filePath;
+            constantStub.line = entry.getBegin().map(pos -> pos.line).orElse(0);
+            constantStub.column = entry.getBegin().map(pos -> pos.column).orElse(0);
+            List<String> modifiers = new ArrayList<>();
+            modifiers.add("public");
+            modifiers.add("static");
+            modifiers.add("final");
+            constantStub.modifiers = modifiers;
+            constantStub.signature = ed.getNameAsString() + " " + entry.getNameAsString();
+            
+            result.symbols.add(constantStub);
+        });
     }
     
     private String getClassFqn(ClassOrInterfaceDeclaration cid, String packageName) {
