@@ -1,7 +1,33 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Java Indexer MCP extension is now active');
+
+	try {
+		// Register MCP server provider
+		const mcpProvider = (vscode.lm as any).registerMcpServerDefinitionProvider('java-indexer-mcp', {
+			provideMcpServerDefinitions: async (_token: vscode.CancellationToken) => {
+				const serverPath = path.join(context.extensionPath, 'server', 'dist', 'index.js');
+				console.log('MCP provider called, returning server definition:', serverPath);
+				
+				return [{
+					id: 'java-indexer',
+					label: 'Java Indexer',
+					type: 'stdio' as const,
+					command: 'node',
+					args: [serverPath],
+					env: {},
+				}];
+			}
+		});
+
+		context.subscriptions.push(mcpProvider);
+		console.log('MCP server provider registered successfully');
+	} catch (error) {
+		console.error('Failed to register MCP server provider:', error);
+		// Continue with extension anyway
+	}
 
 	// Register commands
 	let indexCommand = vscode.commands.registerCommand('java-indexer.index', async () => {

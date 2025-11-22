@@ -2,7 +2,7 @@
   "name": "java-indexer-mcp",
   "displayName": "Java Indexer MCP",
   "description": "IntelliJ-style Java code indexing and call-graph analysis with no database. Index, search symbols, analyze call graphs, and navigate Java code instantly.",
-  "version": "1.0.0",
+  "version": "1.0.0-beta.1",
   "publisher": "ubanishathanvenkatesan",
   "author": {
     "name": "Ubanishath Anvenkatesan",
@@ -18,8 +18,11 @@
     "url": "https://github.com/ubanishathanvenkatesan/mcp-java-indexer/issues"
   },
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.95.0"
   },
+  "enabledApiProposal": [
+    "lmApi"
+  ],
   "categories": [
     "Programming Languages",
     "Debuggers",
@@ -34,7 +37,6 @@
     "symbol-search",
     "refactoring"
   ],
-  "icon": "media/icon.png",
   "galleryBanner": {
     "color": "#1E90FF",
     "theme": "dark"
@@ -44,15 +46,10 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "mcpServers": [
+    "mcpServerDefinitionProviders": [
       {
-        "id": "java-indexer",
-        "name": "Java Indexer",
-        "command": "node",
-        "args": [
-          "${extensionPath}/server/dist/index.js"
-        ],
-        "documentation": "https://github.com/ubanishathanvenkatesan/mcp-java-indexer#readme"
+        "id": "java-indexer-mcp",
+        "label": "Java Indexer MCP"
       }
     ],
     "commands": [
@@ -108,13 +105,12 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "node build.js",
     "compile": "node build.js",
     "watch": "tsc -watch -p ./tsconfig.json",
     "pretest": "npm run compile",
     "test": "node ./out/test/runTest.js",
-    "package": "npm run compile && vsce package",
-    "publish": "npm run compile && vsce publish"
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/node": "^18.0.0",

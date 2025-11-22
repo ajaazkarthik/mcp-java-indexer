@@ -69,11 +69,17 @@ async function build() {
     checkFile(path.join(rootDir, 'dist', 'extension.js'), 'Extension compiled');
   }
 
-  // Step 2: Install server dependencies
-  log('\n[2/4] Installing server dependencies...', 'cyan');
+  // Step 2: Install server dependencies (skip if already installed)
+  log('\n[2/4] Checking server dependencies...', 'cyan');
   if (fs.existsSync(serverDir)) {
-    if (!execCommand('npm install', serverDir)) {
-      allSuccess = false;
+    const nodeModulesPath = path.join(serverDir, 'node_modules');
+    if (!fs.existsSync(nodeModulesPath)) {
+      log('  Installing server dependencies...', 'yellow');
+      if (!execCommand('npm install', serverDir)) {
+        allSuccess = false;
+      }
+    } else {
+      log('  ✓ Dependencies already installed', 'green');
     }
   }
 
