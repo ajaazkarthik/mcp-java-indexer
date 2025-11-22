@@ -69,15 +69,19 @@ export class MemoryIndex {
   addSymbol(stub: SymbolStub): void {
     this.symbols.set(stub.fqn, stub);
 
-    // Track inheritance (check both old and new property names for backward compatibility)
-    const extendsClass = stub.extends || stub.extendsClass;
-    if (extendsClass) {
-      this.addInheritance(stub.fqn, extendsClass);
-    }
-    const implementsInterfaces = stub.implements || stub.implementsInterfaces;
-    if (implementsInterfaces) {
-      for (const iface of implementsInterfaces) {
-        this.addInheritance(stub.fqn, iface);
+    // Track inheritance ONLY for class/interface/enum (not methods/fields/constructors)
+    // This prevents massive overhead with large projects
+    if (stub.kind === 'class' || stub.kind === 'interface' || stub.kind === 'enum') {
+      // Check both old and new property names for backward compatibility
+      const extendsClass = stub.extends || stub.extendsClass;
+      if (extendsClass) {
+        this.addInheritance(stub.fqn, extendsClass);
+      }
+      const implementsInterfaces = stub.implements || stub.implementsInterfaces;
+      if (implementsInterfaces) {
+        for (const iface of implementsInterfaces) {
+          this.addInheritance(stub.fqn, iface);
+        }
       }
     }
   }
@@ -126,26 +130,45 @@ export class MemoryIndex {
 
   // Find a field in a class or its parent hierarchy
   private findFieldInHierarchy(className: string, fieldName: string): SymbolStub | undefined {
-    // Try exact class FQN
-    let currentClass = className;
+    // First, resolve className to FQN if it's a simple name
+    const classSymbolResolved = this.findClassByName(className);
+    if (!classSymbolResolved) {
+      return undefined; // Class not found
+    }
+    
+    // Use BFS to traverse both class hierarchy (extends) and interface hierarchy (implements)
+    const queue: string[] = [classSymbolResolved.fqn];
     const visited = new Set<string>();
     
-    while (currentClass && !visited.has(currentClass)) {
+    while (queue.length > 0) {
+      const currentClass = queue.shift()!;
+      if (visited.has(currentClass)) continue;
       visited.add(currentClass);
       
-      // Look for the field in the current class
+      // Look for the field in the current class/interface
       const fieldFqn = currentClass + '.' + fieldName;
       const field = this.symbols.get(fieldFqn);
       if (field && field.kind === 'field') {
         return field;
       }
       
-      // Try to find the class symbol to get its parent
-      const classSymbol = this.symbols.get(currentClass);
-      if (classSymbol && classSymbol.extends) {
-        currentClass = classSymbol.extends;
-      } else {
-        break;
+      // Get the class/interface symbol to traverse its hierarchy
+      // Use findClassByName to handle nested class name mismatches
+      const classSymbol = this.findClassByName(currentClass);
+      if (classSymbol) {
+        // Check both old and new property names for backward compatibility
+        const parentClass = classSymbol.extends || classSymbol.extendsClass;
+        if (parentClass) {
+          queue.push(parentClass);
+        }
+        
+        // Also check implemented interfaces
+        const implementsInterfaces = classSymbol.implements || classSymbol.implementsInterfaces;
+        if (implementsInterfaces) {
+          for (const iface of implementsInterfaces) {
+            queue.push(iface);
+          }
+        }
       }
     }
     
@@ -174,6 +197,20 @@ export class MemoryIndex {
     const exact = this.symbols.get(name);
     if (exact && (exact.kind === 'class' || exact.kind === 'interface' || exact.kind === 'enum')) {
       return exact;
+    }
+    
+    // For nested classes, JavaParser might index them without the outer class prefix
+    // Try removing the inner class part (e.g., com.example.OuterClass.Inner -> com.example.Inner)
+    if (name.includes('.')) {
+      const parts = name.split('.');
+      if (parts.length >= 3) {
+        // Try without the second-to-last part (potential outer class)
+        const withoutOuter = [...parts.slice(0, -2), parts[parts.length - 1]].join('.');
+        const fallback = this.symbols.get(withoutOuter);
+        if (fallback && (fallback.kind === 'class' || fallback.kind === 'interface' || fallback.kind === 'enum')) {
+          return fallback;
+        }
+      }
     }
     
     // Try to find by simple name
@@ -208,12 +245,15 @@ export class MemoryIndex {
       
       const classSymbol = this.symbols.get(current);
       if (classSymbol) {
-        if (classSymbol.extends) {
-          parents.push(classSymbol.extends);
-          queue.push(classSymbol.extends);
+        // Check both old and new property names for backward compatibility
+        const extendsClass = classSymbol.extends || classSymbol.extendsClass;
+        if (extendsClass) {
+          parents.push(extendsClass);
+          queue.push(extendsClass);
         }
-        if (classSymbol.implements) {
-          for (const iface of classSymbol.implements) {
+        const implementsInterfaces = classSymbol.implements || classSymbol.implementsInterfaces;
+        if (implementsInterfaces) {
+          for (const iface of implementsInterfaces) {
             parents.push(iface);
             queue.push(iface);
           }
@@ -417,14 +457,17 @@ export class MemoryIndex {
     // Rebuild inheritance maps from symbols if they're empty
     if (this.inheritance.size === 0 && this.symbols.size > 0) {
       for (const [fqn, stub] of this.symbols) {
-        const extendsClass = stub.extends || stub.extendsClass;
-        if (extendsClass) {
-          this.addInheritance(fqn, extendsClass);
-        }
-        const implementsInterfaces = stub.implements || stub.implementsInterfaces;
-        if (implementsInterfaces) {
-          for (const iface of implementsInterfaces) {
-            this.addInheritance(fqn, iface);
+        // Only rebuild for class/interface/enum (not methods/fields/constructors)
+        if (stub.kind === 'class' || stub.kind === 'interface' || stub.kind === 'enum') {
+          const extendsClass = stub.extends || stub.extendsClass;
+          if (extendsClass) {
+            this.addInheritance(fqn, extendsClass);
+          }
+          const implementsInterfaces = stub.implements || stub.implementsInterfaces;
+          if (implementsInterfaces) {
+            for (const iface of implementsInterfaces) {
+              this.addInheritance(fqn, iface);
+            }
           }
         }
       }

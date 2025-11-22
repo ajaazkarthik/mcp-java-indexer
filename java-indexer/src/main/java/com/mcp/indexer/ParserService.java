@@ -115,26 +115,39 @@ public class ParserService {
             .map(m -> m.getKeyword().asString())
             .collect(Collectors.toList());
         
-        // Extends - try to resolve to FQN
+        // Extends - try to resolve to FQN (strip generic type parameters)
         if (!cid.isInterface() && !cid.getExtendedTypes().isEmpty()) {
             ClassOrInterfaceType extendedType = cid.getExtendedTypes().get(0);
             try {
-                classStub.extendsClass = extendedType.resolve().describe();
+                String resolved = extendedType.resolve().describe();
+                // Strip generic type parameters (e.g., "Foo<T>" -> "Foo", "Foo<T, U>" -> "Foo")
+                int genericStart = resolved.indexOf('<');
+                classStub.extendsClass = (genericStart > 0) ? resolved.substring(0, genericStart) : resolved;
             } catch (Exception e) {
                 // Fallback to simple name if resolution fails
-                classStub.extendsClass = packageName + "." + extendedType.getNameAsString();
+                String simpleName = extendedType.getNameAsString();
+                int genericStart = simpleName.indexOf('<');
+                String cleanName = (genericStart > 0) ? simpleName.substring(0, genericStart) : simpleName;
+                classStub.extendsClass = packageName + "." + cleanName;
             }
         }
         
-        // Implements - try to resolve to FQN
+        // Implements - try to resolve to FQN (strip generic type parameters)
         if (!cid.getImplementedTypes().isEmpty()) {
             classStub.implementsInterfaces = new ArrayList<>();
             for (ClassOrInterfaceType implType : cid.getImplementedTypes()) {
                 try {
-                    classStub.implementsInterfaces.add(implType.resolve().describe());
+                    String resolved = implType.resolve().describe();
+                    // Strip generic type parameters
+                    int genericStart = resolved.indexOf('<');
+                    String cleanResolved = (genericStart > 0) ? resolved.substring(0, genericStart) : resolved;
+                    classStub.implementsInterfaces.add(cleanResolved);
                 } catch (Exception e) {
                     // Fallback to simple name if resolution fails
-                    classStub.implementsInterfaces.add(packageName + "." + implType.getNameAsString());
+                    String simpleName = implType.getNameAsString();
+                    int genericStart = simpleName.indexOf('<');
+                    String cleanName = (genericStart > 0) ? simpleName.substring(0, genericStart) : simpleName;
+                    classStub.implementsInterfaces.add(packageName + "." + cleanName);
                 }
             }
         }
