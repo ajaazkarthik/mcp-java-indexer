@@ -3,19 +3,19 @@
   "displayName": "Java Indexer MCP",
   "description": "IntelliJ-style Java code indexing and call-graph analysis with no database. Index, search symbols, analyze call graphs, and navigate Java code instantly.",
   "version": "1.0.0",
-  "publisher": "your-publisher-name",
+  "publisher": "ubanishathanvenkatesan",
   "author": {
-    "name": "Your Name",
-    "email": "your.email@example.com"
+    "name": "Ubanishath Anvenkatesan",
+    "email": "ubanishathanvenkatesan@example.com"
   },
   "license": "MIT",
-  "homepage": "https://github.com/yourusername/java-indexer-mcp",
+  "homepage": "https://github.com/ubanishathanvenkatesan/mcp-java-indexer",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/java-indexer-mcp.git"
+    "url": "https://github.com/ubanishathanvenkatesan/mcp-java-indexer.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/java-indexer-mcp/issues"
+    "url": "https://github.com/ubanishathanvenkatesan/mcp-java-indexer/issues"
   },
   "engines": {
     "vscode": "^1.75.0"
@@ -52,7 +52,7 @@
         "args": [
           "${extensionPath}/server/dist/index.js"
         ],
-        "documentation": "https://github.com/yourusername/java-indexer-mcp#readme"
+        "documentation": "https://github.com/ubanishathanvenkatesan/mcp-java-indexer#readme"
       }
     ],
     "commands": [
@@ -108,21 +108,23 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./src && tsc -p ./server/src",
-    "watch": "tsc -watch -p ./src & tsc -watch -p ./server/src",
+    "vscode:prepublish": "npm run compile && cd server && npm install --production",
+    "compile": "tsc -p ./src && cd server && npm install && npm run build",
+    "watch": "tsc -watch -p ./src & cd server && npm run watch",
     "pretest": "npm run compile",
     "test": "node ./out/test/runTest.js",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "package": "npm run compile && vsce package",
+    "publish": "npm run compile && vsce publish"
   },
   "devDependencies": {
-    "@types/vscode": "^1.75.0",
     "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
     "@vscode/vsce": "^2.21.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.6.0"
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "chokidar": "^3.5.3",
+    "glob": "^10.3.10"
   }
 }
