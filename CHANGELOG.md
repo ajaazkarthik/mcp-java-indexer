@@ -5,6 +5,21 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-11-23
+
+### Fixed
+- **Inheritance tracking** now correctly displays relation counts instead of showing 0
+  - Fixed property name mismatch between Java indexer (`extendsClass`, `implementsInterfaces`) and TypeScript server (`extends`, `implements`)
+  - Updated `SymbolStub` interface to support both property naming conventions for backward compatibility
+  - Modified `addSymbol()` method to check both old and new property names
+  - Updated `fromJSON()` rebuild logic to properly restore inheritance maps from persisted data
+  - Inheritance relations now correctly tracked during indexing and persistence
+
+### Technical Details
+- Java indexer uses `extendsClass` and `implementsInterfaces` properties
+- TypeScript server now checks both naming conventions with fallback: `stub.extends || stub.extendsClass`
+- No breaking changes - fully backward compatible with existing indices
+
 ## [1.0.0] - 2024-01-15
 
 ### Added

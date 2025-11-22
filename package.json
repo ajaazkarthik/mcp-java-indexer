@@ -2,7 +2,7 @@
   "name": "java-indexer-mcp",
   "displayName": "Java Indexer MCP",
   "description": "IntelliJ-style Java code indexing and call-graph analysis with no database. Index, search symbols, analyze call graphs, and navigate Java code instantly.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "ubanishathanvenkatesan",
   "author": {
     "name": "Ubanishath Anvenkatesan",
