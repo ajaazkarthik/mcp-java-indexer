@@ -12,8 +12,10 @@ export interface SymbolStub {
   packageName: string;
   modifiers: string[];
   signature?: string; // For methods: return type + params
-  extends?: string;
-  implements?: string[];
+  extends?: string; // Backward compatibility
+  extendsClass?: string; // Java indexer uses this
+  implements?: string[]; // Backward compatibility
+  implementsInterfaces?: string[]; // Java indexer uses this
   declaringClass?: string; // For methods/fields
 }
 
@@ -67,12 +69,14 @@ export class MemoryIndex {
   addSymbol(stub: SymbolStub): void {
     this.symbols.set(stub.fqn, stub);
 
-    // Track inheritance
-    if (stub.extends) {
-      this.addInheritance(stub.fqn, stub.extends);
+    // Track inheritance (check both old and new property names for backward compatibility)
+    const extendsClass = stub.extends || stub.extendsClass;
+    if (extendsClass) {
+      this.addInheritance(stub.fqn, extendsClass);
     }
-    if (stub.implements) {
-      for (const iface of stub.implements) {
+    const implementsInterfaces = stub.implements || stub.implementsInterfaces;
+    if (implementsInterfaces) {
+      for (const iface of implementsInterfaces) {
         this.addInheritance(stub.fqn, iface);
       }
     }
@@ -409,5 +413,21 @@ export class MemoryIndex {
     this.reverseCallGraph = new Map(data.reverseCallGraph || []);
     this.inheritance = new Map(data.inheritance || []);
     this.reverseInheritance = new Map(data.reverseInheritance || []);
+    
+    // Rebuild inheritance maps from symbols if they're empty
+    if (this.inheritance.size === 0 && this.symbols.size > 0) {
+      for (const [fqn, stub] of this.symbols) {
+        const extendsClass = stub.extends || stub.extendsClass;
+        if (extendsClass) {
+          this.addInheritance(fqn, extendsClass);
+        }
+        const implementsInterfaces = stub.implements || stub.implementsInterfaces;
+        if (implementsInterfaces) {
+          for (const iface of implementsInterfaces) {
+            this.addInheritance(fqn, iface);
+          }
+        }
+      }
+    }
   }
 }
