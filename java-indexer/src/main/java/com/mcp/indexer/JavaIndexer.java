@@ -93,25 +93,35 @@ public class JavaIndexer {
         
         protocol.log("Indexing " + filePaths.size() + " files");
         
-        // Initialize parser service
+        // Initialize parser service (reuse when possible)
         if (parserService == null || !sourceRoots.isEmpty()) {
             parserService = new ParserService(sourceRoots);
         }
         
-        List<IndexResult> results = new ArrayList<>();
+        List<IndexResult> results = new ArrayList<>(filePaths.size()); // Pre-allocate capacity
         int count = 0;
+        int totalSymbols = 0;
+        int totalRefs = 0;
         
         for (String filePath : filePaths) {
             IndexResult result = parserService.indexFile(filePath);
             results.add(result);
             
             count++;
-            if (count % 10 == 0) {
-                protocol.log("Indexed " + count + "/" + filePaths.size() + " files");
+            if (result.error == null) {
+                totalSymbols += result.symbols.size();
+                totalRefs += result.references.size();
+            }
+            
+            // Reduced logging - only every 50 files for large batches
+            if (count % 50 == 0 || count == filePaths.size()) {
+                protocol.log("Indexed " + count + "/" + filePaths.size() + " files (" + 
+                           totalSymbols + " symbols, " + totalRefs + " refs)");
             }
         }
         
-        protocol.log("Completed indexing " + filePaths.size() + " files");
+        protocol.log("Completed indexing " + filePaths.size() + " files - Total: " + 
+                    totalSymbols + " symbols, " + totalRefs + " references");
         
         return results;
     }

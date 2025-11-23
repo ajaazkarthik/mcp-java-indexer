@@ -106,13 +106,13 @@ export class IndexerClient {
       const message = JSON.stringify(request) + '\n';
       this.javaProcess!.stdin!.write(message);
 
-      // Timeout after 5 minutes (for large batches)
+      // Timeout after 10 minutes (for large projects with 16k+ files)
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
-          reject(new Error('Request timeout'));
+          reject(new Error('Request timeout after 10 minutes'));
         }
-      }, 300000);
+      }, 600000);
     });
   }
 

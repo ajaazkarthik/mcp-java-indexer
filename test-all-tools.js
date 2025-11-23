@@ -80,12 +80,15 @@ class ComprehensiveTestExecutor {
       this.pendingRequests.set(id, { resolve, reject });
       this.server.stdin.write(JSON.stringify(request) + '\n');
 
+      // Extended timeout for index_project on large projects
+      const isIndexProject = params?.name === 'index_project';
+      const timeout = isIndexProject ? 300000 : 60000;
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
-          reject(new Error('Request timeout'));
+          reject(new Error(`Request timeout after ${timeout/1000}s for ${params?.name || method}`));
         }
-      }, 60000);
+      }, timeout);
     });
   }
 
@@ -107,11 +110,17 @@ class ComprehensiveTestExecutor {
       this.passedTests++;
       this.testResults.push({ name, status: 'PASS', duration });
       console.log(`${colors.green}  ✓ PASS${colors.reset} (${duration}ms)\n`);
+      
+      // Small delay between tests to ensure cleanup
+      await new Promise(resolve => setTimeout(resolve, 100));
     } catch (error) {
       this.failedTests++;
       this.testResults.push({ name, status: 'FAIL', error: error.message });
       console.log(`${colors.red}  ✗ FAIL${colors.reset}`);
       console.log(`${colors.red}    ${error.message}${colors.reset}\n`);
+      
+      // Small delay after failure too
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
   }
 

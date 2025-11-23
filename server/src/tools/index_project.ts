@@ -64,16 +64,18 @@ export async function handleIndexProject(
     const absoluteSourceRoots = sourceRoots.map(sr => path.join(rootDir, sr).replace(/\\/g, '/'));
 
     // Index files in batches (optimized for large projects)
-    const batchSize = 100; // Increased for better performance
+    const batchSize = 200; // Optimized for 16k+ file projects
     let totalSymbols = 0;
     let totalReferences = 0;
     let processedFiles = 0;
     let errorCount = 0;
+    let batchCount = 0;
 
     console.error(`\n🔍 Indexing ${javaFiles.length} files in batches of ${batchSize}...`);
 
     for (let i = 0; i < javaFiles.length; i += batchSize) {
       const batch = javaFiles.slice(i, Math.min(i + batchSize, javaFiles.length));
+      batchCount++;
       
       const results = await indexerClient.indexFiles(batch, absoluteSourceRoots);
 
@@ -102,12 +104,18 @@ export async function handleIndexProject(
         processedFiles++;
       }
 
-      const progress = Math.min(i + batchSize, javaFiles.length);
-      const percentage = ((progress / javaFiles.length) * 100).toFixed(1);
-      console.error(`📊 Progress: ${progress}/${javaFiles.length} (${percentage}%) - ${totalSymbols} symbols, ${totalReferences} refs`);
+      // Reduced logging overhead - only log every 5 batches or at completion
+      const isLastBatch = i + batchSize >= javaFiles.length;
+      const shouldLog = batchCount % 5 === 0 || isLastBatch;
       
-      // Periodic garbage collection hint for large projects
-      if (javaFiles.length > 10000 && i % 1000 === 0 && global.gc) {
+      if (shouldLog) {
+        const progress = Math.min(i + batchSize, javaFiles.length);
+        const percentage = ((progress / javaFiles.length) * 100).toFixed(1);
+        console.error(`📊 Progress: ${progress}/${javaFiles.length} (${percentage}%) - ${totalSymbols} symbols, ${totalReferences} refs`);
+      }
+      
+      // Periodic garbage collection hint for large projects (every 2000 files)
+      if (javaFiles.length > 10000 && i % 2000 === 0 && i > 0 && global.gc) {
         global.gc();
       }
     }
