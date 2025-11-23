@@ -182,9 +182,21 @@ public class ReferenceExtractor {
         result.references.add(ref);
     }
     
+    // PERFORMANCE: Use switch for JVM optimization (faster than multiple equals)
     private boolean isPrimitiveType(String type) {
-        return type.equals("int") || type.equals("long") || type.equals("double") || 
-               type.equals("float") || type.equals("boolean") || type.equals("char") || 
-               type.equals("byte") || type.equals("short") || type.equals("void");
+        switch (type) {
+            case "int":
+            case "long":
+            case "double":
+            case "float":
+            case "boolean":
+            case "char":
+            case "byte":
+            case "short":
+            case "void":
+                return true;
+            default:
+                return false;
+        }
     }
 }

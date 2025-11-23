@@ -14,6 +14,7 @@ public class JavaIndexer {
     
     private static final Gson gson = new Gson();
     private static ParserService parserService;
+    private static String cachedSourceRootsKey = null;
     
     public static void main(String[] args) {
         MessageProtocol protocol = new MessageProtocol();
@@ -93,15 +94,25 @@ public class JavaIndexer {
         
         protocol.log("Indexing " + filePaths.size() + " files");
         
-        // Initialize parser service (reuse when possible)
-        if (parserService == null || !sourceRoots.isEmpty()) {
+        // Smart parser caching - only recreate if source roots changed
+        String currentSourceRootsKey = sourceRoots.isEmpty() ? "" : String.join(";", sourceRoots);
+        if (parserService == null || !currentSourceRootsKey.equals(cachedSourceRootsKey)) {
+            protocol.log("Creating ParserService for source roots: " + currentSourceRootsKey);
             parserService = new ParserService(sourceRoots);
+            cachedSourceRootsKey = currentSourceRootsKey;
+        } else {
+            protocol.log("Reusing cached ParserService");
         }
         
-        List<IndexResult> results = new ArrayList<>(filePaths.size()); // Pre-allocate capacity
+        List<IndexResult> results = new ArrayList<>(filePaths.size());
         int count = 0;
         int totalSymbols = 0;
         int totalRefs = 0;
+        long lastHeartbeat = System.currentTimeMillis();
+        
+        // Adaptive mini-batching: send progress periodically to prevent timeout
+        final int HEARTBEAT_INTERVAL = 50; // files - reduced logging for performance
+        final long HEARTBEAT_TIME = 45000; // 45 seconds
         
         for (String filePath : filePaths) {
             IndexResult result = parserService.indexFile(filePath);
@@ -113,10 +124,16 @@ public class JavaIndexer {
                 totalRefs += result.references.size();
             }
             
-            // Reduced logging - only every 50 files for large batches
-            if (count % 50 == 0 || count == filePaths.size()) {
-                protocol.log("Indexed " + count + "/" + filePaths.size() + " files (" + 
+            // Heartbeat progress logging to keep connection alive and prevent timeout
+            long currentTime = System.currentTimeMillis();
+            boolean shouldLog = (count % HEARTBEAT_INTERVAL == 0) || 
+                               (count == filePaths.size()) ||
+                               ((currentTime - lastHeartbeat) > HEARTBEAT_TIME);
+            
+            if (shouldLog) {
+                protocol.log("Progress: " + count + "/" + filePaths.size() + " files (" + 
                            totalSymbols + " symbols, " + totalRefs + " refs)");
+                lastHeartbeat = currentTime;
             }
         }
         

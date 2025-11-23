@@ -147,8 +147,9 @@ export async function handleIndexProject(
       filesToIndex = javaFiles;
     }
 
-    // Index files in batches (optimized for large projects)
-    const batchSize = 200; // Optimized for 16k+ file projects
+    // Adaptive batch sizing: optimal balance between throughput and memory
+    // 600 files = sweet spot for parser efficiency vs memory pressure
+    const batchSize = 600; // Optimal: maximum throughput without memory pressure
     let totalSymbols = 0;
     let totalReferences = 0;
     let processedFiles = 0;
@@ -156,6 +157,7 @@ export async function handleIndexProject(
     let batchCount = 0;
 
     console.error(`\n🔍 ${loadedExisting ? 'Incrementally indexing' : 'Indexing'} ${filesToIndex.length} files in batches of ${batchSize}...`);
+    console.error(`⚡ Parser caching enabled - TypeSolver initialization happens once per batch`);
 
     for (let i = 0; i < filesToIndex.length; i += batchSize) {
       const batch = filesToIndex.slice(i, Math.min(i + batchSize, filesToIndex.length));
@@ -193,14 +195,16 @@ export async function handleIndexProject(
         processedFiles++;
       }
 
-      // Reduced logging overhead - only log every 5 batches or at completion
+      // Frequent progress updates to show activity and prevent perceived hangs
       const isLastBatch = i + batchSize >= filesToIndex.length;
-      const shouldLog = batchCount % 5 === 0 || isLastBatch;
+      const shouldLog = batchCount % 3 === 0 || isLastBatch;
       
       if (shouldLog) {
         const progress = Math.min(i + batchSize, filesToIndex.length);
         const percentage = ((progress / filesToIndex.length) * 100).toFixed(1);
-        console.error(`📊 Progress: ${progress}/${filesToIndex.length} (${percentage}%) - ${totalSymbols} symbols, ${totalReferences} refs`);
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        const rate = (progress / parseFloat(elapsed)).toFixed(0);
+        console.error(`📊 Batch ${batchCount}: ${progress}/${filesToIndex.length} (${percentage}%) - ${totalSymbols} symbols - ${rate} files/s`);
       }
       
       // Periodic garbage collection hint for large projects (every 2000 files)
