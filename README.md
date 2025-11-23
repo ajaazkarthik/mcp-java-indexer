@@ -4,6 +4,7 @@ A complete **LOCAL** Model Context Protocol (MCP) extension for VS Code that per
 
 ## 🎯 Features
 
+### Core Indexing
 - **Full Java Code Indexing**: Parse .java files using JavaParser + SymbolSolver
 - **Symbol Extraction**: Packages, classes, methods, fields, imports, extends, implements
 - **Call Graph Analysis**: Outbound/inbound calls with polymorphism resolution
@@ -11,6 +12,19 @@ A complete **LOCAL** Model Context Protocol (MCP) extension for VS Code that per
 - **Incremental Indexing**: File watcher with hash-based change detection
 - **Fast Performance**: 10k-20k classes indexed in <40 seconds
 - **No Database**: Pure in-memory indices persisted as JSON files
+
+### 🧠 AI-Friendly Tools
+- **Code Explanation**: Natural language descriptions of classes/methods/fields
+- **Semantic Search**: Find code by intent (e.g., "database save methods"), not just names
+- **Impact Analysis**: Analyze what breaks when you change code, with risk scoring
+- **Pattern Detection**: Automatically detect Builder, Factory, Repository, and 20+ patterns
+
+### 🚀 Quality & Generation Tools (v1.4.0)
+- **Test Coverage**: Analyze test coverage, identify gaps, suggest test names
+- **Refactoring Suggestions**: Code health scoring, detect code smells, priority recommendations
+- **Code Generation**: Generate Builder, Repository, Service, DTO, Test, and more patterns
+
+👉 See [ADVANCED_TOOLS.md](ADVANCED_TOOLS.md) and [V1.4.0_COMPLETE.md](V1.4.0_COMPLETE.md) for details
 
 ## 📁 Architecture
 
@@ -24,13 +38,19 @@ mcp-java-indexer/
 │   │   ├── persistence.ts    # JSON persistence
 │   │   ├── fs-watcher.ts     # File watcher
 │   │   └── tools/            # MCP tool implementations
-│   │       ├── index_project.ts
-│   │       ├── reindex_file.ts
-│   │       ├── find_symbol.ts
-│   │       ├── find_usages.ts
-│   │       ├── call_graph.ts
-│   │       ├── goto_definition.ts
-│   │       └── search_text.ts
+│   │       ├── index_project.ts     # Index entire project
+│   │       ├── reindex_file.ts      # Reindex single file
+│   │       ├── find_symbol.ts       # Find class/method/field
+│   │       ├── find_usages.ts       # Find all references
+│   │       ├── call_graph.ts        # Analyze call graph
+│   │       ├── goto_definition.ts   # Navigate to definition
+│   │       ├── search_text.ts           # Text search in code
+│   │       ├── explain_code.ts          # 🧠 Explain code in plain English
+│   │       ├── semantic_search.ts       # 🧠 Search by intent/pattern
+│   │       ├── analyze_impact.ts        # 🧠 Impact & risk analysis
+│   │       ├── test_coverage.ts         # 🚀 Test coverage analysis
+│   │       ├── refactoring_suggestions.ts # 🚀 Smart refactoring tips
+│   │       └── code_generation.ts       # 🚀 Pattern-based generation
 │   ├── package.json
 │   └── tsconfig.json
 │

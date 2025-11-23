@@ -91,6 +91,11 @@ export class MemoryIndex {
     return this.symbols.get(fqn);
   }
 
+  // Get all symbols (for semantic search and code explanation)
+  getAllSymbols(): Map<string, SymbolStub> {
+    return this.symbols;
+  }
+
   // Find symbols by name (partial match)
   findSymbols(nameOrFqn: string): SymbolStub[] {
     const results: SymbolStub[] = [];

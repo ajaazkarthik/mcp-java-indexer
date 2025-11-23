@@ -15,6 +15,12 @@ import { findUsagesTool, handleFindUsages } from './tools/find_usages.js';
 import { callGraphTool, handleCallGraph } from './tools/call_graph.js';
 import { gotoDefinitionTool, handleGotoDefinition } from './tools/goto_definition.js';
 import { searchTextTool, handleSearchText } from './tools/search_text.js';
+import { analyzeImpactTool, handleAnalyzeImpact } from './tools/analyze_impact.js';
+import { semanticSearchTool, handleSemanticSearch } from './tools/semantic_search.js';
+import { explainCodeTool, handleExplainCode } from './tools/explain_code.js';
+import { testCoverageTool, handleTestCoverage } from './tools/test_coverage.js';
+import { refactoringSuggestionsTool, handleRefactoringSuggestions } from './tools/refactoring_suggestions.js';
+import { codeGenerationTool, handleCodeGeneration } from './tools/code_generation.js';
 
 const server = new Server(
   {
@@ -42,7 +48,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     findUsagesTool,
     callGraphTool,
     gotoDefinitionTool,
-    searchTextTool
+    searchTextTool,
+    analyzeImpactTool,
+    semanticSearchTool,
+    explainCodeTool,
+    testCoverageTool,
+    refactoringSuggestionsTool,
+    codeGenerationTool
   ];
 
   return { tools };
@@ -76,6 +88,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'search_text':
         return await handleSearchText(args, memoryIndex);
+
+      case 'analyze_impact':
+        return await handleAnalyzeImpact(args, memoryIndex);
+
+      case 'semantic_search':
+        return await handleSemanticSearch(args, memoryIndex);
+
+      case 'explain_code':
+        return await handleExplainCode(args, memoryIndex);
+
+      case 'test_coverage':
+        return await handleTestCoverage(args, memoryIndex);
+
+      case 'refactoring_suggestions':
+        return await handleRefactoringSuggestions(args, memoryIndex);
+
+      case 'code_generation':
+        return await handleCodeGeneration(args, memoryIndex);
 
       default:
         throw new Error(`Unknown tool: ${name}`);

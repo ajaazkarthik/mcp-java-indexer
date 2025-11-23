@@ -1,8 +1,8 @@
 {
   "name": "java-indexer-mcp",
   "displayName": "Java Indexer MCP",
-  "description": "IntelliJ-style Java code indexing and call-graph analysis with no database. Index, search symbols, analyze call graphs, and navigate Java code instantly.",
-  "version": "1.2.1",
+  "description": "Complete Java code intelligence: indexing, AI explanations, test coverage, refactoring suggestions, code generation. 13 tools, zero setup!",
+  "version": "1.4.0",
   "publisher": "ubanishathanvenkatesan",
   "author": {
     "name": "Ubanishath Anvenkatesan",
@@ -35,7 +35,14 @@
     "code-analysis",
     "call-graph",
     "symbol-search",
-    "refactoring"
+    "refactoring",
+    "ai-assistant",
+    "code-explanation",
+    "semantic-search",
+    "impact-analysis",
+    "test-coverage",
+    "code-generation",
+    "code-quality"
   ],
   "galleryBanner": {
     "color": "#1E90FF",
