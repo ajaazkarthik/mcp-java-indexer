@@ -178,4 +178,12 @@ export class IndexerClient {
       bufferSize: this.messageBuffer.length
     };
   }
+  
+  // Clear message buffer (call after batch processing to prevent OOM)
+  clearBuffer(): void {
+    // Only clear if no pending requests (safe to clear)
+    if (this.pendingRequests.size === 0) {
+      this.messageBuffer = '';
+    }
+  }
 }

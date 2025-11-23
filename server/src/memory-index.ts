@@ -270,8 +270,24 @@ export class MemoryIndex {
     return parents;
   }
 
-  // Add reference
+  // Add reference with deduplication to prevent memory bloat
   addReference(ref: Reference): void {
+    // CRITICAL: Deduplicate to prevent OOM from duplicate references
+    // Check if this exact reference already exists in the file's references
+    const fileRefs = this.referencesByFile.get(ref.file);
+    if (fileRefs) {
+      const isDuplicate = fileRefs.some(existing => 
+        existing.fromFqn === ref.fromFqn &&
+        existing.toFqn === ref.toFqn &&
+        existing.line === ref.line &&
+        existing.column === ref.column &&
+        existing.kind === ref.kind
+      );
+      if (isDuplicate) {
+        return; // Skip duplicate
+      }
+    }
+    
     this.references.push(ref);
     
     // Track by file for efficient cleanup
@@ -556,8 +572,10 @@ export class MemoryIndex {
     this.reverseInheritance.clear();
   }
   
-  // Periodic cleanup to prevent memory bloat
+  // Aggressive cleanup to prevent memory bloat and OOM
   performMaintenanceCleanup(): void {
+    const beforeMem = process.memoryUsage().heapUsed / 1024 / 1024;
+    
     // Remove orphaned references (where fromFqn or toFqn no longer exist)
     const validFqns = new Set(this.symbols.keys());
     const beforeCount = this.references.length;
@@ -587,15 +605,43 @@ export class MemoryIndex {
       }
     }
     
-    const afterCount = this.references.length;
-    if (beforeCount !== afterCount) {
-      console.error(`Maintenance cleanup: removed ${beforeCount - afterCount} orphaned references`);
+    // Trim call graph edges with duplicate locations
+    for (const [caller, edges] of this.callGraph.entries()) {
+      for (const edge of edges) {
+        // Deduplicate locations
+        const uniqueLocations = new Map<string, typeof edge.locations[0]>();
+        for (const loc of edge.locations) {
+          const key = `${loc.file}:${loc.line}:${loc.column}`;
+          uniqueLocations.set(key, loc);
+        }
+        edge.locations = Array.from(uniqueLocations.values());
+      }
+    }
+    for (const [callee, edges] of this.reverseCallGraph.entries()) {
+      for (const edge of edges) {
+        const uniqueLocations = new Map<string, typeof edge.locations[0]>();
+        for (const loc of edge.locations) {
+          const key = `${loc.file}:${loc.line}:${loc.column}`;
+          uniqueLocations.set(key, loc);
+        }
+        edge.locations = Array.from(uniqueLocations.values());
+      }
     }
     
-    // Trigger garbage collection if available
+    const afterCount = this.references.length;
+    const removed = beforeCount - afterCount;
+    
+    // Double GC for aggressive cleanup
     if (global.gc) {
       global.gc();
-      console.error('Triggered garbage collection');
+      global.gc();
+    }
+    
+    const afterMem = process.memoryUsage().heapUsed / 1024 / 1024;
+    const memFreed = beforeMem - afterMem;
+    
+    if (removed > 0 || memFreed > 0) {
+      console.error(`🧹 Cleanup: removed ${removed} orphaned refs, freed ${memFreed.toFixed(1)}MB`);
     }
   }
 

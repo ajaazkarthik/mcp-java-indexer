@@ -11,12 +11,18 @@ export function activate(context: vscode.ExtensionContext) {
 				const serverPath = path.join(context.extensionPath, 'server', 'dist', 'index.js');
 				console.log('MCP provider called, returning server definition:', serverPath);
 				
+				// CRITICAL: Increase heap size to 8GB to prevent OOM on large projects
+				// Also enable manual GC and expose it via --expose-gc
 				return [{
 					id: 'java-indexer',
 					label: 'Java Indexer',
 					type: 'stdio' as const,
 					command: 'node',
-					args: [serverPath],
+					args: [
+						'--max-old-space-size=8192',  // 8GB heap limit
+						'--expose-gc',                 // Enable manual GC
+						serverPath
+					],
 					env: {},
 				}];
 			}

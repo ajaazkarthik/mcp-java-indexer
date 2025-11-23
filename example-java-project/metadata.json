@@ -1,0 +1,15 @@
+{
+  "version": "1.0",
+  "timestamp": 1763901616268,
+  "stats": {
+    "symbols": 324,
+    "files": 55,
+    "indexedFiles": 55,
+    "references": 290,
+    "referencesByFile": 42,
+    "callGraph": 50,
+    "reverseCallGraph": 47,
+    "inheritance": 33,
+    "reverseInheritance": 41
+  }
+}

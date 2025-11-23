@@ -147,9 +147,9 @@ export async function handleIndexProject(
       filesToIndex = javaFiles;
     }
 
-    // Adaptive batch sizing: optimal balance between throughput and memory
-    // 600 files = sweet spot for parser efficiency vs memory pressure
-    const batchSize = 600; // Optimal: maximum throughput without memory pressure
+    // Conservative batch sizing to prevent OOM - smaller batches = more GC opportunities
+    // 100 files = safe for large projects, allows GC between batches
+    const batchSize = 100; // CRITICAL: Reduced from 600 to prevent OOM
     let totalSymbols = 0;
     let totalReferences = 0;
     let processedFiles = 0;
@@ -157,7 +157,7 @@ export async function handleIndexProject(
     let batchCount = 0;
 
     console.error(`\n🔍 ${loadedExisting ? 'Incrementally indexing' : 'Indexing'} ${filesToIndex.length} files in batches of ${batchSize}...`);
-    console.error(`⚡ Parser caching enabled - TypeSolver initialization happens once per batch`);
+    console.error(`⚡ Conservative batch size to prevent OOM`);
 
     for (let i = 0; i < filesToIndex.length; i += batchSize) {
       const batch = filesToIndex.slice(i, Math.min(i + batchSize, filesToIndex.length));
@@ -195,21 +195,40 @@ export async function handleIndexProject(
         processedFiles++;
       }
 
-      // Frequent progress updates to show activity and prevent perceived hangs
-      const isLastBatch = i + batchSize >= filesToIndex.length;
-      const shouldLog = batchCount % 3 === 0 || isLastBatch;
+      // CRITICAL: Aggressive memory cleanup after EVERY batch to prevent OOM
+      // Clear references to batch results to allow GC
+      const progress = Math.min(i + batchSize, filesToIndex.length);
+      const percentage = ((progress / filesToIndex.length) * 100).toFixed(1);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const rate = (progress / parseFloat(elapsed)).toFixed(0);
       
-      if (shouldLog) {
-        const progress = Math.min(i + batchSize, filesToIndex.length);
-        const percentage = ((progress / filesToIndex.length) * 100).toFixed(1);
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        const rate = (progress / parseFloat(elapsed)).toFixed(0);
-        console.error(`📊 Batch ${batchCount}: ${progress}/${filesToIndex.length} (${percentage}%) - ${totalSymbols} symbols - ${rate} files/s`);
+      // Clear indexer client buffer to prevent accumulation
+      indexerClient.clearBuffer();
+      
+      // Run maintenance cleanup to remove orphaned references
+      if (batchCount % 5 === 0) {
+        memoryIndex.performMaintenanceCleanup();
       }
       
-      // Periodic garbage collection hint for large projects (every 2000 files)
-      if (filesToIndex.length > 10000 && i % 2000 === 0 && i > 0 && global.gc) {
+      // Force GC after every batch (critical for large projects)
+      if (global.gc) {
         global.gc();
+      }
+      
+      const memUsage = process.memoryUsage();
+      const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+      const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+      
+      console.error(`📊 Batch ${batchCount}: ${progress}/${filesToIndex.length} (${percentage}%) - ${totalSymbols} symbols - ${rate} files/s - Heap: ${heapUsedMB}/${heapTotalMB}MB`);
+      
+      // Emergency brake: if heap usage > 3.5GB, trigger aggressive cleanup
+      if (heapUsedMB > 3500) {
+        console.error(`⚠️  HIGH MEMORY WARNING: ${heapUsedMB}MB - Running emergency cleanup...`);
+        memoryIndex.performMaintenanceCleanup();
+        if (global.gc) {
+          global.gc();
+          global.gc(); // Double GC for aggressive cleanup
+        }
       }
     }
 
