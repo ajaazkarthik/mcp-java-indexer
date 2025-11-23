@@ -4,7 +4,7 @@ import * as fs from 'fs/promises';
 
 export const searchTextTool: Tool = {
   name: 'search_text',
-  description: 'Search for a text pattern in indexed Java files. Returns matching lines with file locations.',
+  description: 'Search for a text pattern in indexed Java files. Returns matching lines with file locations. Use regex for powerful pattern matching (e.g., "class.*Service" to find all Service classes).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -18,7 +18,7 @@ export const searchTextTool: Tool = {
       },
       maxResults: {
         type: 'number',
-        description: 'Maximum number of results to return. Default: 50'
+        description: 'Maximum number of results to return. Default: 200 (increased from 50 for better coverage)'
       }
     },
     required: ['pattern']
@@ -31,7 +31,7 @@ export async function handleSearchText(
 ) {
   const pattern = args.pattern as string;
   const isRegex = (args.isRegex as boolean) || false;
-  const maxResults = (args.maxResults as number) || 50;
+  const maxResults = (args.maxResults as number) || 200; // Increased default for better coverage
 
   try {
     const files = memoryIndex.getAllFiles();
@@ -65,32 +65,32 @@ export async function handleSearchText(
       };
     }
 
-    // Search through files
+    // Search through files - collect ALL matches first, then truncate
     const results: Array<{ file: string; line: number; content: string }> = [];
+    let filesSearched = 0;
+    let totalFiles = files.length;
 
     for (const fileInfo of files) {
+      filesSearched++;
       try {
         const content = await fs.readFile(fileInfo.path, 'utf-8');
         const lines = content.split('\n');
 
         for (let i = 0; i < lines.length; i++) {
-          if (regex.test(lines[i])) {
+          // Create new regex for each line to avoid lastIndex issues
+          const lineRegex = new RegExp(pattern, 'gi');
+          if (lineRegex.test(lines[i])) {
             results.push({
               file: fileInfo.path,
               line: i + 1,
               content: lines[i].trim()
             });
-
-            if (results.length >= maxResults) {
-              break;
-            }
           }
-          
-          // Reset regex lastIndex for global regex
-          regex.lastIndex = 0;
         }
-
-        if (results.length >= maxResults) {
+        
+        // Don't break early - search all files unless we have too many results
+        if (results.length >= maxResults * 2) {
+          // Only stop if we have way more than maxResults
           break;
         }
       } catch (error) {
@@ -103,7 +103,14 @@ export async function handleSearchText(
       return {
         content: [{
           type: 'text',
-          text: `No matches found for pattern: ${pattern}`
+          text: `No matches found for pattern: ${pattern}
+
+Searched ${filesSearched} file${filesSearched > 1 ? 's' : ''}.
+
+💡 Tips:
+- Try simpler patterns (e.g., "Service" instead of "class.*Service")
+- Use isRegex: true for regex patterns
+- Check if files are indexed (use index_project first)`
         }]
       };
     }
@@ -117,23 +124,42 @@ export async function handleSearchText(
       byFile.get(result.file)!.push(result);
     }
 
+    // Truncate to maxResults
+    const displayResults = results.slice(0, maxResults);
+    const truncated = results.length > maxResults;
+
     // Format results
     const sections: string[] = [];
-    sections.push(`Found ${results.length} match${results.length > 1 ? 'es' : ''} for "${pattern}" in ${byFile.size} file${byFile.size > 1 ? 's' : ''}:`);
+    sections.push(`Found ${results.length} match${results.length > 1 ? 'es' : ''} for "${pattern}" in ${byFile.size} file${byFile.size > 1 ? 's' : ''}${truncated ? ` (showing first ${maxResults})` : ''}`);
+    sections.push(`Searched: ${filesSearched}/${totalFiles} files`);
     sections.push('');
 
-    for (const [file, matches] of byFile) {
+    // Group display results by file
+    const displayByFile = new Map<string, typeof displayResults>();
+    for (const result of displayResults) {
+      if (!displayByFile.has(result.file)) {
+        displayByFile.set(result.file, []);
+      }
+      displayByFile.get(result.file)!.push(result);
+    }
+
+    for (const [file, matches] of displayByFile) {
       sections.push(`📁 **${file}** (${matches.length} match${matches.length > 1 ? 'es' : ''})`);
       
-      for (const match of matches) {
+      for (const match of matches.slice(0, 10)) { // Limit per file to keep output manageable
         sections.push(`  Line ${match.line}: ${match.content}`);
+      }
+      
+      if (matches.length > 10) {
+        sections.push(`  ... and ${matches.length - 10} more matches in this file`);
       }
       
       sections.push('');
     }
 
-    if (results.length >= maxResults) {
-      sections.push(`_Showing first ${maxResults} results. Use maxResults parameter to see more._`);
+    if (truncated) {
+      sections.push(`⚠️ Showing first ${maxResults} of ${results.length} total matches.`);
+      sections.push(`Use maxResults parameter to see more (e.g., maxResults: ${results.length}).`);
     }
 
     return {

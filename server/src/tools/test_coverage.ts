@@ -29,23 +29,47 @@ export async function handleTestCoverage(
   const includeIndirect = args.includeIndirect !== false;
 
   try {
-    const symbol = memoryIndex.getSymbol(symbolFqn);
+    // Try exact match first, then fuzzy search
+    let symbol = memoryIndex.getSymbol(symbolFqn);
+    let resolvedFqn = symbolFqn;
+    
     if (!symbol) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Symbol not found: ${symbolFqn}\n\nTry using find_symbol first to get the exact FQN.`
-        }]
-      };
+      // Use findSymbols for fuzzy matching
+      const matches = memoryIndex.findSymbols(symbolFqn);
+      
+      if (matches.length === 0) {
+        return {
+          content: [{
+            type: 'text',
+            text: `Symbol not found: ${symbolFqn}\n\nNo matching symbols in index. Possible reasons:\n• Symbol doesn't exist\n• Project not indexed (use index_project)\n• Typo in symbol name\n\nTip: Try partial name matching (e.g., "UserService" instead of full FQN)`
+          }]
+        };
+      } else if (matches.length === 1) {
+        // Single match - use it
+        symbol = matches[0];
+        resolvedFqn = symbol.fqn;
+      } else {
+        // Multiple matches - ask user to clarify
+        const list = matches.map((s, i) => 
+          `${i + 1}. ${s.kind}: \`${s.fqn}\` in ${s.file.split(/[\\/]/).pop()}:${s.line}`
+        ).join('\n');
+
+        return {
+          content: [{
+            type: 'text',
+            text: `Multiple symbols match "${symbolFqn}". Please specify the full FQN:\n\n${list}\n\nUse the exact FQN from above.`
+          }]
+        };
+      }
     }
 
     let report = `# Test Coverage Analysis: ${symbol.name}\n\n`;
     report += `**Type**: ${symbol.kind}\n`;
     report += `**Location**: ${getFileName(symbol.file)}:${symbol.line}\n`;
-    report += `**FQN**: ${symbolFqn}\n\n`;
+    report += `**FQN**: ${resolvedFqn}\n\n`;
 
     // Find all callers (potential test methods)
-    const inboundCalls = memoryIndex.getInboundCalls(symbolFqn);
+    const inboundCalls = memoryIndex.getInboundCalls(resolvedFqn);
     const directTests: any[] = [];
     const indirectTests: any[] = [];
 

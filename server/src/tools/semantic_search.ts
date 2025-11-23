@@ -207,6 +207,7 @@ export async function handleSemanticSearch(
     // Build results report
     let report = `# Semantic Search Results\n\n`;
     report += `**Query**: "${args.query}"\n`;
+    report += `**Scope**: ${scope}\n`;
     report += `**Found**: ${topResults.length} relevant symbols`;
     if (results.length > limit) {
       report += ` (showing top ${limit} of ${results.length})`;
@@ -216,15 +217,28 @@ export async function handleSemanticSearch(
     if (matchedPatterns.length > 0) {
       report += `**Detected Patterns**: ${matchedPatterns.join(', ')}\n\n`;
     }
+    
+    // Scoring explanation
+    report += `## 📊 Scoring System\n\n`;
+    report += `- **Name match** (50 pts): Symbol name contains query\n`;
+    report += `- **FQN match** (30 pts): Full qualified name contains query\n`;
+    report += `- **Word matches** (15 pts each): Individual query words found\n`;
+    report += `- **Signature match** (40 pts): Method signature contains query\n`;
+    report += `- **Pattern match** (20 pts each): Design pattern keywords found\n`;
+    report += `- **Modifiers** (10-25 pts): static, abstract, final, etc.\n`;
+    report += `- **Inheritance** (30 pts): extends/implements matches query\n\n`;
 
     report += `---\n\n`;
 
     for (const result of topResults) {
       const sym = result.symbol;
+      const scoreBar = getScoreBar(result.score);
+      
       report += `## ${sym.kind}: \`${sym.name}\`\n\n`;
-      report += `**Score**: ${result.score} (${result.reasons.join(', ')})\n`;
+      report += `**Relevance**: ${scoreBar} ${result.score} pts\n`;
+      report += `**Match Reasons**: ${result.reasons.join(', ')}\n`;
       report += `**Location**: ${getFileName(sym.file)}:${sym.line}\n`;
-      report += `**FQN**: ${sym.fqn}\n`;
+      report += `**FQN**: \`${sym.fqn}\`\n`;
       
       if (sym.signature) {
         report += `**Signature**: \`${sym.signature}\`\n`;
@@ -235,12 +249,12 @@ export async function handleSemanticSearch(
       }
       
       if (sym.extendsClass || sym.extends) {
-        report += `**Extends**: ${sym.extendsClass || sym.extends}\n`;
+        report += `**Extends**: \`${sym.extendsClass || sym.extends}\`\n`;
       }
       
       if (sym.implementsInterfaces || sym.implements) {
         const interfaces = sym.implementsInterfaces || sym.implements || [];
-        report += `**Implements**: ${interfaces.join(', ')}\n`;
+        report += `**Implements**: \`${interfaces.join(', ')}\`\n`;
       }
       
       report += `\n`;
@@ -263,6 +277,16 @@ export async function handleSemanticSearch(
       isError: true
     };
   }
+}
+
+// Helper functions
+function getScoreBar(score: number): string {
+  // Visual score indicator
+  if (score >= 100) return '🟢🟢🟢';
+  if (score >= 70) return '🟢🟢⚪';
+  if (score >= 50) return '🟢⚪⚪';
+  if (score >= 30) return '🟡⚪⚪';
+  return '⚪⚪⚪';
 }
 
 function getFileName(path: string): string {

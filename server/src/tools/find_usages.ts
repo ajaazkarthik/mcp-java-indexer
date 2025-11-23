@@ -67,7 +67,33 @@ Use the exact FQN to find usages.`
     }
 
     // Find all usages using the resolved FQN
-    const usages = memoryIndex.findUsages(resolvedFqn);
+    // Merge references array with call graph data for complete results
+    const directReferences = memoryIndex.findUsages(resolvedFqn);
+    const callGraphRefs = memoryIndex.getInboundCalls(resolvedFqn);
+    
+    // Convert call graph edges to Reference format
+    const callGraphUsages: any[] = [];
+    for (const edge of callGraphRefs) {
+      for (const loc of edge.locations) {
+        // Check if this location is already in directReferences to avoid duplicates
+        const isDuplicate = directReferences.some(
+          ref => ref.file === loc.file && ref.line === loc.line && ref.column === loc.column
+        );
+        if (!isDuplicate) {
+          callGraphUsages.push({
+            fromFqn: edge.caller,
+            toFqn: resolvedFqn,
+            file: loc.file,
+            line: loc.line,
+            column: loc.column,
+            kind: 'method_call' // Call graph only tracks method calls and instantiations
+          });
+        }
+      }
+    }
+    
+    // Merge both sources
+    const usages = [...directReferences, ...callGraphUsages];
 
     if (usages.length === 0) {
       // Provide helpful message
