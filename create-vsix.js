@@ -21,7 +21,7 @@ try {
     }
   );
   
-  const vsixFile = 'java-indexer-mcp-1.2.0.vsix';
+  const vsixFile = 'java-indexer-mcp-1.4.2.vsix';
   if (fs.existsSync(vsixFile)) {
     const stats = fs.statSync(vsixFile);
     console.log(`\n✅ VSIX created: ${vsixFile}`);
