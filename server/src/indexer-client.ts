@@ -16,8 +16,10 @@ export interface IndexResult {
 export class IndexerClient {
   private javaProcess: ChildProcess | null = null;
   private messageBuffer: string = '';
-  private pendingRequests: Map<number, { resolve: (value: any) => void; reject: (error: any) => void }> = new Map();
+  private pendingRequests: Map<number, { resolve: (value: any) => void; reject: (error: any) => void; timeout: NodeJS.Timeout }> = new Map();
   private nextRequestId: number = 1;
+  private readonly REQUEST_TIMEOUT = 600000; // 10 minutes
+  private readonly MAX_BUFFER_SIZE = 50 * 1024 * 1024; // 50MB max buffer
 
   constructor() {}
 
@@ -33,6 +35,14 @@ export class IndexerClient {
     // Handle stdout (JSON responses)
     this.javaProcess.stdout!.on('data', (data: Buffer) => {
       this.messageBuffer += data.toString();
+      
+      // Prevent buffer overflow
+      if (this.messageBuffer.length > this.MAX_BUFFER_SIZE) {
+        console.error('Message buffer exceeded limit, clearing...');
+        this.messageBuffer = '';
+        this.rejectAllPending('Buffer overflow');
+      }
+      
       this.processMessages();
     });
 
@@ -44,7 +54,14 @@ export class IndexerClient {
     // Handle exit
     this.javaProcess.on('exit', (code) => {
       console.error(`Java indexer exited with code ${code}`);
+      this.rejectAllPending(`Java process exited with code ${code}`);
       this.javaProcess = null;
+    });
+    
+    // Handle errors
+    this.javaProcess.on('error', (error) => {
+      console.error('Java indexer error:', error);
+      this.rejectAllPending(error.message);
     });
 
     // Wait for ready signal
@@ -77,6 +94,7 @@ export class IndexerClient {
         const pending = this.pendingRequests.get(response.id);
         
         if (pending) {
+          clearTimeout(pending.timeout);
           this.pendingRequests.delete(response.id);
           
           if (response.error) {
@@ -101,18 +119,18 @@ export class IndexerClient {
     const request = { id, method, params };
 
     return new Promise((resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject });
+      // Create timeout
+      const timeout = setTimeout(() => {
+        if (this.pendingRequests.has(id)) {
+          this.pendingRequests.delete(id);
+          reject(new Error(`Request timeout after ${this.REQUEST_TIMEOUT / 1000}s`));
+        }
+      }, this.REQUEST_TIMEOUT);
+      
+      this.pendingRequests.set(id, { resolve, reject, timeout });
 
       const message = JSON.stringify(request) + '\n';
       this.javaProcess!.stdin!.write(message);
-
-      // Timeout after 10 minutes (for large projects with 16k+ files)
-      setTimeout(() => {
-        if (this.pendingRequests.has(id)) {
-          this.pendingRequests.delete(id);
-          reject(new Error('Request timeout after 10 minutes'));
-        }
-      }, 600000);
     });
   }
 
@@ -134,11 +152,30 @@ export class IndexerClient {
     return result;
   }
 
+  // Reject all pending requests
+  private rejectAllPending(reason: string): void {
+    for (const [id, pending] of this.pendingRequests.entries()) {
+      clearTimeout(pending.timeout);
+      pending.reject(new Error(reason));
+    }
+    this.pendingRequests.clear();
+  }
+  
   // Stop the process
   async stop(): Promise<void> {
     if (this.javaProcess) {
+      this.rejectAllPending('IndexerClient stopped');
       this.javaProcess.kill();
       this.javaProcess = null;
     }
+    this.messageBuffer = '';
+  }
+  
+  // Get memory stats
+  getMemoryStats() {
+    return {
+      pendingRequests: this.pendingRequests.size,
+      bufferSize: this.messageBuffer.length
+    };
   }
 }

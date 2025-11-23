@@ -39,6 +39,65 @@ const memoryIndex = new MemoryIndex();
 const indexerClient = new IndexerClient();
 let fsWatcher: FileSystemWatcher | null = null;
 
+// Memory monitoring and cleanup
+let maintenanceInterval: NodeJS.Timeout | null = null;
+
+// Setup periodic maintenance (every 30 minutes)
+function startMaintenanceSchedule(): void {
+  if (maintenanceInterval) return;
+  
+  maintenanceInterval = setInterval(() => {
+    console.error('Running periodic maintenance cleanup...');
+    
+    try {
+      // Cleanup orphaned data
+      memoryIndex.performMaintenanceCleanup();
+      
+      // Log memory stats
+      const stats = memoryIndex.getStats();
+      const clientStats = indexerClient.getMemoryStats();
+      const memUsage = process.memoryUsage();
+      
+      console.error('Memory stats:', {
+        heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
+        rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
+        symbols: stats.symbols,
+        references: stats.references,
+        pendingRequests: clientStats.pendingRequests,
+        bufferSize: `${Math.round(clientStats.bufferSize / 1024)}KB`
+      });
+      
+      // Warn if memory is high
+      const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
+      if (heapUsedMB > 3072) { // 3GB warning threshold
+        console.error(`⚠️  WARNING: High memory usage (${Math.round(heapUsedMB)}MB). Consider restarting.`);
+      }
+    } catch (error) {
+      console.error('Maintenance cleanup error:', error);
+    }
+  }, 30 * 60 * 1000); // 30 minutes
+  
+  console.error('Maintenance schedule started (runs every 30 minutes)');
+}
+
+// Cleanup on shutdown
+process.on('SIGINT', async () => {
+  console.error('Shutting down gracefully...');
+  if (maintenanceInterval) clearInterval(maintenanceInterval);
+  if (fsWatcher) fsWatcher.stop();
+  await indexerClient.stop();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.error('Shutting down gracefully...');
+  if (maintenanceInterval) clearInterval(maintenanceInterval);
+  if (fsWatcher) fsWatcher.stop();
+  await indexerClient.stop();
+  process.exit(0);
+});
+
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   const tools: Tool[] = [
@@ -129,6 +188,17 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('MCP Java Indexer server running on stdio');
+  
+  // Start maintenance schedule after server is running
+  startMaintenanceSchedule();
+  
+  // Log initial memory
+  const memUsage = process.memoryUsage();
+  console.error('Initial memory:', {
+    heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
+    heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
+    rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`
+  });
 }
 
 main().catch((error) => {

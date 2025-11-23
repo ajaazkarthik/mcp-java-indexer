@@ -7,8 +7,8 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "start": "node dist/index.js",
-    "dev": "tsc && node dist/index.js"
+    "start": "node --max-old-space-size=4096 dist/index.js",
+    "dev": "tsc && node --max-old-space-size=4096 dist/index.js"
   },
   "keywords": ["mcp", "java", "indexer", "call-graph"],
   "author": "",

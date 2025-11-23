@@ -47,6 +47,7 @@ export class MemoryIndex {
   private files: Map<string, FileInfo> = new Map(); // file path -> FileInfo
   private indexedFiles: Set<string> = new Set(); // Only files we explicitly indexed (not dependencies)
   private references: Reference[] = []; // All references
+  private referencesByFile: Map<string, Reference[]> = new Map(); // file -> references (for efficient cleanup)
   private callGraph: Map<string, CallGraphEdge[]> = new Map(); // caller FQN -> edges
   private reverseCallGraph: Map<string, CallGraphEdge[]> = new Map(); // callee FQN -> edges
   private inheritance: Map<string, string[]> = new Map(); // child -> parents
@@ -272,6 +273,12 @@ export class MemoryIndex {
   // Add reference
   addReference(ref: Reference): void {
     this.references.push(ref);
+    
+    // Track by file for efficient cleanup
+    if (!this.referencesByFile.has(ref.file)) {
+      this.referencesByFile.set(ref.file, []);
+    }
+    this.referencesByFile.get(ref.file)!.push(ref);
 
     // Build call graph for method calls
     if (ref.kind === 'method_call') {
@@ -383,11 +390,49 @@ export class MemoryIndex {
       this.reverseInheritance.delete(fqn);
     }
 
-    // Remove references
-    this.references = this.references.filter(ref => ref.file !== filePath);
+    // Efficiently remove references using file index
+    const fileRefs = this.referencesByFile.get(filePath);
+    if (fileRefs) {
+      // Remove from main references array
+      this.references = this.references.filter(ref => ref.file !== filePath);
+      this.referencesByFile.delete(filePath);
+    }
+    
+    // Clean up call graph edges for this file
+    this.cleanupCallGraphForFile(filePath);
 
     this.files.delete(filePath);
     this.indexedFiles.delete(filePath);
+  }
+  
+  // Clean up call graph edges for a file
+  private cleanupCallGraphForFile(filePath: string): void {
+    // Remove edges with locations in this file
+    for (const [caller, edges] of this.callGraph.entries()) {
+      const filteredEdges = edges.map(edge => ({
+        ...edge,
+        locations: edge.locations.filter(loc => loc.file !== filePath)
+      })).filter(edge => edge.locations.length > 0);
+      
+      if (filteredEdges.length === 0) {
+        this.callGraph.delete(caller);
+      } else if (filteredEdges.length !== edges.length) {
+        this.callGraph.set(caller, filteredEdges);
+      }
+    }
+    
+    for (const [callee, edges] of this.reverseCallGraph.entries()) {
+      const filteredEdges = edges.map(edge => ({
+        ...edge,
+        locations: edge.locations.filter(loc => loc.file !== filePath)
+      })).filter(edge => edge.locations.length > 0);
+      
+      if (filteredEdges.length === 0) {
+        this.reverseCallGraph.delete(callee);
+      } else if (filteredEdges.length !== edges.length) {
+        this.reverseCallGraph.set(callee, filteredEdges);
+      }
+    }
   }
 
   // Calculate file hash
@@ -427,10 +472,54 @@ export class MemoryIndex {
     this.files.clear();
     this.indexedFiles.clear();
     this.references = [];
+    this.referencesByFile.clear();
     this.callGraph.clear();
     this.reverseCallGraph.clear();
     this.inheritance.clear();
     this.reverseInheritance.clear();
+  }
+  
+  // Periodic cleanup to prevent memory bloat
+  performMaintenanceCleanup(): void {
+    // Remove orphaned references (where fromFqn or toFqn no longer exist)
+    const validFqns = new Set(this.symbols.keys());
+    const beforeCount = this.references.length;
+    
+    this.references = this.references.filter(ref => 
+      validFqns.has(ref.fromFqn) && validFqns.has(ref.toFqn)
+    );
+    
+    // Rebuild referencesByFile
+    this.referencesByFile.clear();
+    for (const ref of this.references) {
+      if (!this.referencesByFile.has(ref.file)) {
+        this.referencesByFile.set(ref.file, []);
+      }
+      this.referencesByFile.get(ref.file)!.push(ref);
+    }
+    
+    // Clean up empty call graph entries
+    for (const [fqn, edges] of this.callGraph.entries()) {
+      if (edges.length === 0) {
+        this.callGraph.delete(fqn);
+      }
+    }
+    for (const [fqn, edges] of this.reverseCallGraph.entries()) {
+      if (edges.length === 0) {
+        this.reverseCallGraph.delete(fqn);
+      }
+    }
+    
+    const afterCount = this.references.length;
+    if (beforeCount !== afterCount) {
+      console.error(`Maintenance cleanup: removed ${beforeCount - afterCount} orphaned references`);
+    }
+    
+    // Trigger garbage collection if available
+    if (global.gc) {
+      global.gc();
+      console.error('Triggered garbage collection');
+    }
   }
 
   // Serialization for persistence
@@ -440,6 +529,7 @@ export class MemoryIndex {
       files: Array.from(this.files.entries()),
       indexedFiles: Array.from(this.indexedFiles),
       references: this.references,
+      referencesByFile: Array.from(this.referencesByFile.entries()),
       callGraph: Array.from(this.callGraph.entries()),
       reverseCallGraph: Array.from(this.reverseCallGraph.entries()),
       inheritance: Array.from(this.inheritance.entries()),
@@ -454,10 +544,21 @@ export class MemoryIndex {
     this.files = new Map(data.files);
     this.indexedFiles = new Set(data.indexedFiles || []);
     this.references = data.references || [];
+    this.referencesByFile = new Map(data.referencesByFile || []);
     this.callGraph = new Map(data.callGraph || []);
     this.reverseCallGraph = new Map(data.reverseCallGraph || []);
     this.inheritance = new Map(data.inheritance || []);
     this.reverseInheritance = new Map(data.reverseInheritance || []);
+    
+    // Rebuild referencesByFile if missing
+    if (this.referencesByFile.size === 0 && this.references.length > 0) {
+      for (const ref of this.references) {
+        if (!this.referencesByFile.has(ref.file)) {
+          this.referencesByFile.set(ref.file, []);
+        }
+        this.referencesByFile.get(ref.file)!.push(ref);
+      }
+    }
     
     // Rebuild inheritance maps from symbols if they're empty
     if (this.inheritance.size === 0 && this.symbols.size > 0) {

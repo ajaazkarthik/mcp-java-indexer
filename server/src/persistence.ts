@@ -40,6 +40,7 @@ export class Persistence {
           files: data.files.length,
           indexedFiles: data.indexedFiles.length,
           references: data.references.length,
+          referencesByFile: data.referencesByFile.length,
           callGraph: data.callGraph.length,
           reverseCallGraph: data.reverseCallGraph.length,
           inheritance: data.inheritance.length,
@@ -57,6 +58,7 @@ export class Persistence {
       await this.saveChunked('symbols', data.symbols);
       await this.saveChunked('files', data.files);
       await this.saveChunked('references', data.references);
+      await this.saveChunked('referencesByFile', data.referencesByFile);
       await this.saveChunked('callGraph', data.callGraph);
       await this.saveChunked('reverseCallGraph', data.reverseCallGraph);
       await this.saveChunked('inheritance', data.inheritance);
@@ -158,6 +160,7 @@ export class Persistence {
       data.symbols = await this.loadChunkedArray('symbols');
       data.files = await this.loadChunkedArray('files');
       data.references = await this.loadChunkedArray('references');
+      data.referencesByFile = await this.loadChunkedArray('referencesByFile');
       data.callGraph = await this.loadChunkedArray('callGraph');
       data.reverseCallGraph = await this.loadChunkedArray('reverseCallGraph');
       data.inheritance = await this.loadChunkedArray('inheritance');
