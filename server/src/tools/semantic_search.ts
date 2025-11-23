@@ -98,6 +98,19 @@ export async function handleSemanticSearch(
       } else if (fqnLower.includes(query)) {
         score += 30;
         reasons.push('FQN match');
+      } else {
+        // Check individual words in the query
+        const queryWords = query.split(/\s+/).filter(w => w.length > 2);
+        let wordMatchCount = 0;
+        for (const word of queryWords) {
+          if (symbolNameLower.includes(word) || fqnLower.includes(word)) {
+            wordMatchCount++;
+          }
+        }
+        if (wordMatchCount > 0) {
+          score += wordMatchCount * 15;
+          reasons.push(`${wordMatchCount} word match${wordMatchCount > 1 ? 'es' : ''}`);
+        }
       }
 
       // Signature matching
@@ -186,7 +199,7 @@ export async function handleSemanticSearch(
       return {
         content: [{
           type: 'text',
-          text: `No results found for: "${args.query}"\n\nTry:\n- More general terms (e.g., "save" instead of "saveToDatabase")\n- Pattern names (e.g., "builder", "factory", "repository")\n- Exception types (e.g., "IOException", "SQLException")\n- Operations (e.g., "read file", "http request", "database query")`
+          text: `# Semantic Search Results\n\n**Query**: "${args.query}"\n**Found**: 0 symbols\n\nNo results found. Try:\n- More general terms (e.g., "save" instead of "saveToDatabase")\n- Pattern names (e.g., "builder", "factory", "repository")\n- Exception types (e.g., "IOException", "SQLException")\n- Operations (e.g., "read file", "http request", "database query")`
         }]
       };
     }

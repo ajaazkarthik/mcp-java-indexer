@@ -20,28 +20,69 @@ export async function handleFindUsages(
   args: any,
   memoryIndex: MemoryIndex
 ) {
-  const fqn = args.fqn as string;
+  // Support both 'fqn' and 'symbolFqn' for backward compatibility
+  const fqn = (args.fqn || args.symbolFqn) as string;
+
+  if (!fqn) {
+    return {
+      content: [{
+        type: 'text',
+        text: 'Error: Missing required parameter "fqn"'
+      }],
+      isError: true
+    };
+  }
 
   try {
-    // Verify symbol exists
-    const symbol = memoryIndex.getSymbol(fqn);
+    // Try exact match first
+    let symbol = memoryIndex.getSymbol(fqn);
+    let resolvedFqn = fqn;
+    
+    // If not found, try searching for partial matches
     if (!symbol) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Symbol not found: ${fqn}\n\nTip: Use find_symbol to search for the correct FQN.`
-        }]
-      };
+      const matches = memoryIndex.findSymbols(fqn);
+      
+      if (matches.length === 1) {
+        symbol = matches[0];
+        resolvedFqn = symbol.fqn;
+      } else if (matches.length > 1) {
+        // Multiple matches - show options
+        const list = matches.map((s, i) => 
+          `${i + 1}. ${s.kind}: \`${s.fqn}\` in ${s.file}:${s.line}`
+        ).join('\n');
+
+        return {
+          content: [{
+            type: 'text',
+            text: `Multiple symbols match "${fqn}". Please specify the full FQN:
+
+${list}
+
+Use the exact FQN to find usages.`
+          }]
+        };
+      }
+      // If no matches, continue anyway - symbol might be from external library
+      // and we can still find usages of it
     }
 
-    // Find all usages
-    const usages = memoryIndex.findUsages(fqn);
+    // Find all usages using the resolved FQN
+    const usages = memoryIndex.findUsages(resolvedFqn);
 
     if (usages.length === 0) {
+      // Provide helpful message
+      if (!symbol) {
+        return {
+          content: [{
+            type: 'text',
+            text: `No usages found for: ${fqn}\n\nSymbol not found in index. It may not exist or may be from an external library.\n\nTip: Use find_symbol to search for similar symbols.`
+          }]
+        };
+      }
       return {
         content: [{
           type: 'text',
-          text: `No usages found for: ${fqn}`
+          text: `No usages found for: ${resolvedFqn}`
         }]
       };
     }
@@ -69,7 +110,7 @@ export async function handleFindUsages(
       }
     }
 
-    const text = `Found ${usages.length} usage${usages.length > 1 ? 's' : ''} of \`${fqn}\` in ${byFile.size} file${byFile.size > 1 ? 's' : ''}:
+    const text = `Found ${usages.length} usage${usages.length > 1 ? 's' : ''} of \`${resolvedFqn}\` in ${byFile.size} file${byFile.size > 1 ? 's' : ''}:
 
 ${results.join('\n')}`;
 

@@ -1,0 +1,62 @@
+{
+  "total": 12,
+  "passed": 6,
+  "failed": 6,
+  "skipped": 0,
+  "tests": [
+    {
+      "name": "Find symbol by simple name",
+      "status": "PASS"
+    },
+    {
+      "name": "Symbol identified as class",
+      "status": "PASS"
+    },
+    {
+      "name": "Find symbol by full FQN",
+      "status": "PASS"
+    },
+    {
+      "name": "Find method by name",
+      "status": "PASS"
+    },
+    {
+      "name": "Find usages for UserService",
+      "status": "FAIL",
+      "error": "No usages found or symbol not found"
+    },
+    {
+      "name": "Call graph for method",
+      "status": "FAIL",
+      "error": "Symbol not found or no call graph"
+    },
+    {
+      "name": "Semantic search finds relevant UserService",
+      "status": "PASS"
+    },
+    {
+      "name": "Impact analysis shows dependencies (was 0 in 1.4.2)",
+      "status": "PASS"
+    },
+    {
+      "name": "Text search finds results",
+      "status": "FAIL",
+      "expected": "found"
+    },
+    {
+      "name": "Refactoring suggestions work",
+      "status": "FAIL",
+      "expected": "Code Health"
+    },
+    {
+      "name": "Test coverage analysis works",
+      "status": "FAIL",
+      "expected": "Coverage"
+    },
+    {
+      "name": "Code generation works",
+      "status": "FAIL",
+      "expected": "Test"
+    }
+  ]
+}

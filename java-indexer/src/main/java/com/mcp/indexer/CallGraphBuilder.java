@@ -16,7 +16,8 @@ public class CallGraphBuilder {
     
     public void addReferences(List<Reference> references) {
         for (Reference ref : references) {
-            if (ref.kind.equals("method_call")) {
+            // Include both method calls and instantiations (constructor calls)
+            if (ref.kind.equals("method_call") || ref.kind.equals("instantiation")) {
                 // Forward graph
                 callGraph.computeIfAbsent(ref.fromFqn, k -> new ArrayList<>()).add(ref);
                 

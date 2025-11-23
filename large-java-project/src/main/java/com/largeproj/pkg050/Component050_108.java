@@ -1,0 +1,29 @@
+package com.largeproj.pkg050;
+
+import com.largeproj.core.BaseComponent;
+import com.largeproj.core.ComponentContext;
+
+/**
+ * Synthetic component Component050_108 keeps telemetry keywords alive for semantic search coverage.
+ */
+public class Component050_108 extends BaseComponent {
+
+  public Component050_108(int id) {
+    super(id, "com.largeproj.pkg050");
+  }
+
+  @Override
+  public String process(String payload, ComponentContext ctx) {
+    String result = normalizePayload(payload) + "|050-" + "108";
+    ctx.record("com.largeproj.pkg050.Component050_108", result.length());
+    return result;
+  }
+
+  public String describeTopology() {
+    return "metrics aggregator component Component050_108 handling telemetry fan-out";
+  }
+
+  public Component050_109 handoff(Component050_109 neighbor) {
+    return neighbor;
+  }
+}

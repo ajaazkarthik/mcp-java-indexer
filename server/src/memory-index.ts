@@ -280,15 +280,28 @@ export class MemoryIndex {
     }
     this.referencesByFile.get(ref.file)!.push(ref);
 
-    // Build call graph for method calls
-    if (ref.kind === 'method_call') {
+    // Build call graph for method calls and instantiations (constructor calls)
+    if (ref.kind === 'method_call' || ref.kind === 'instantiation') {
       this.addCallGraphEdge(ref.fromFqn, ref.toFqn, ref.file, ref.line, ref.column);
     }
   }
 
   // Find all usages of a symbol
   findUsages(fqn: string): Reference[] {
-    return this.references.filter(ref => ref.toFqn === fqn);
+    // Get the simple name from the FQN for matching unqualified references
+    const simpleName = fqn.split('.').pop() || fqn;
+    
+    // Match on:
+    // 1. Exact FQN match: ref.toFqn === fqn
+    // 2. Prefix match for class members: ref.toFqn.startsWith(fqn + '.')
+    // 3. Simple name match (for unqualified references): ref.toFqn === simpleName
+    // 4. Simple name in qualified context: ref.toFqn.endsWith('.' + simpleName)
+    return this.references.filter(ref => 
+      ref.toFqn === fqn || 
+      ref.toFqn.startsWith(fqn + '.') ||
+      ref.toFqn === simpleName ||
+      (simpleName !== fqn && ref.toFqn.endsWith('.' + simpleName))
+    );
   }
 
   // Add call graph edge
@@ -325,7 +338,71 @@ export class MemoryIndex {
 
   // Get inbound calls (who calls this method)
   getInboundCalls(fqn: string): CallGraphEdge[] {
-    return this.reverseCallGraph.get(fqn) || [];
+    const exact = this.reverseCallGraph.get(fqn) || [];
+    
+    // Also check for partial matches (e.g., "repository.save" -> "com.example.UserRepository.save(User)")
+    // This handles cases where Java indexer couldn't resolve full FQN
+    
+    // Extract components from the full FQN
+    const parts = fqn.split('.');
+    const methodName = parts[parts.length - 1]; // e.g., "save(User)" or just "save"
+    const baseMethodName = methodName.split('(')[0]; // Remove parameters: "save(User)" -> "save"
+    const className = parts[parts.length - 2]; // e.g., "UserRepository" or "User" (for constructors)
+    
+    // Check if this is a constructor (className === baseMethodName)
+    const isConstructor = className === baseMethodName;
+    
+    const fuzzyMatches: CallGraphEdge[] = [];
+    const seenCallers = new Set<string>(); // Deduplicate
+    
+    for (const [callee, edges] of this.reverseCallGraph.entries()) {
+      if (callee === fqn) continue; // Skip exact match (already handled)
+      
+      let isMatch = false;
+      const calleeLower = callee.toLowerCase();
+      const baseMethodLower = baseMethodName.toLowerCase();
+      const classNameLower = className?.toLowerCase() || '';
+      
+      // Pattern 1: Simple method name match: "save", "log"
+      if (callee === baseMethodName || callee === methodName) {
+        isMatch = true;
+      }
+      
+      // Pattern 2: field.method format: "repository.save", "logger.log"
+      else if (callee.includes('.')) {
+        const calleeParts = callee.split('.');
+        const calleeMethod = calleeParts[calleeParts.length - 1];
+        const calleeMethodBase = calleeMethod.split('(')[0];
+        
+        // Match if method name matches
+        if (calleeMethodBase.toLowerCase() === baseMethodLower) {
+          isMatch = true;
+        }
+      }
+      
+      // Pattern 3: Partial class name match: "UserRepository.save"
+      else if (classNameLower && calleeLower.includes(classNameLower) && calleeLower.includes(baseMethodLower)) {
+        isMatch = true;
+      }
+      
+      // Pattern 4: Constructor instantiation: "User" matches "com.example.demo.User.User(...)"
+      // Instantiation references store just the simple class name (e.g., "User")
+      else if (isConstructor && callee === className) {
+        isMatch = true;
+      }
+      
+      if (isMatch) {
+        for (const edge of edges) {
+          const key = `${edge.caller}->${edge.callee}`;
+          if (!seenCallers.has(key)) {
+            seenCallers.add(key);
+            fuzzyMatches.push(edge);
+          }
+        }
+      }
+    }
+    
+    return [...exact, ...fuzzyMatches];
   }
 
   // Add inheritance relationship

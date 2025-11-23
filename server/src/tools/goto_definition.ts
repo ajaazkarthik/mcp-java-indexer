@@ -10,9 +10,13 @@ export const gotoDefinitionTool: Tool = {
       symbol: {
         type: 'string',
         description: 'Symbol name or fully qualified name (FQN) to find definition for'
+      },
+      symbolName: {
+        type: 'string',
+        description: 'Alternative parameter name for symbol (for backward compatibility)'
       }
     },
-    required: ['symbol']
+    required: []
   }
 };
 
@@ -20,7 +24,18 @@ export async function handleGotoDefinition(
   args: any,
   memoryIndex: MemoryIndex
 ) {
-  const symbol = args.symbol as string;
+  // Accept both 'symbol' and 'symbolName' for backward compatibility
+  const symbol = (args.symbol || args.symbolName) as string;
+  
+  if (!symbol) {
+    return {
+      content: [{
+        type: 'text',
+        text: 'Error: Missing required parameter. Please provide either "symbol" or "symbolName".'
+      }],
+      isError: true
+    };
+  }
 
   try {
     // Try exact match first

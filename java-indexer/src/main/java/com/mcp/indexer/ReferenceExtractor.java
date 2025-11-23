@@ -37,8 +37,21 @@ public class ReferenceExtractor {
         
         // Extract references from methods
         cid.getMethods().forEach(md -> {
-            String methodFqn = contextFqn + "." + md.getNameAsString();
+            // Build method FQN with parameters to match symbol FQN format
+            String params = md.getParameters().stream()
+                .map(p -> p.getType().asString())
+                .collect(java.util.stream.Collectors.joining(", "));
+            String methodFqn = contextFqn + "." + md.getNameAsString() + "(" + params + ")";
             extractMethodReferences(md, methodFqn);
+        });
+        
+        // Extract references from constructors
+        cid.getConstructors().forEach(cd -> {
+            String params = cd.getParameters().stream()
+                .map(p -> p.getType().asString())
+                .collect(java.util.stream.Collectors.joining(", "));
+            String constructorFqn = contextFqn + "." + cd.getNameAsString() + "(" + params + ")";
+            extractConstructorReferences(cd, constructorFqn);
         });
     }
     
@@ -99,6 +112,58 @@ public class ReferenceExtractor {
             String typeName = vd.getType().asString();
             if (!isPrimitiveType(typeName)) {
                 addReference(methodFqn, typeName, "type_reference",
+                    vd.getBegin().map(p -> p.line).orElse(0),
+                    vd.getBegin().map(p -> p.column).orElse(0));
+            }
+        });
+    }
+    
+    private void extractConstructorReferences(com.github.javaparser.ast.body.ConstructorDeclaration cd, String constructorFqn) {
+        // Extract method calls
+        cd.findAll(MethodCallExpr.class).forEach(mce -> {
+            String calledMethod = mce.getNameAsString();
+            
+            // Try to resolve scope
+            String targetFqn = calledMethod;
+            if (mce.getScope().isPresent()) {
+                Expression scope = mce.getScope().get();
+                if (scope.isNameExpr()) {
+                    targetFqn = scope.asNameExpr().getNameAsString() + "." + calledMethod;
+                } else if (scope.isFieldAccessExpr()) {
+                    targetFqn = scope.asFieldAccessExpr().toString() + "." + calledMethod;
+                }
+            }
+            
+            addReference(constructorFqn, targetFqn, "method_call",
+                mce.getBegin().map(p -> p.line).orElse(0),
+                mce.getBegin().map(p -> p.column).orElse(0));
+        });
+        
+        // Extract field accesses
+        cd.findAll(FieldAccessExpr.class).forEach(fae -> {
+            String fieldName = fae.getNameAsString();
+            String scopeName = fae.getScope().toString();
+            String targetFqn = scopeName + "." + fieldName;
+            
+            addReference(constructorFqn, targetFqn, "field_access",
+                fae.getBegin().map(p -> p.line).orElse(0),
+                fae.getBegin().map(p -> p.column).orElse(0));
+        });
+        
+        // Extract object creations (new X())
+        cd.findAll(ObjectCreationExpr.class).forEach(oce -> {
+            String typeName = oce.getType().getNameAsString();
+            
+            addReference(constructorFqn, typeName, "instantiation",
+                oce.getBegin().map(p -> p.line).orElse(0),
+                oce.getBegin().map(p -> p.column).orElse(0));
+        });
+        
+        // Extract variable declarations with types
+        cd.findAll(VariableDeclarator.class).forEach(vd -> {
+            String typeName = vd.getType().asString();
+            if (!isPrimitiveType(typeName)) {
+                addReference(constructorFqn, typeName, "type_reference",
                     vd.getBegin().map(p -> p.line).orElse(0),
                     vd.getBegin().map(p -> p.column).orElse(0));
             }

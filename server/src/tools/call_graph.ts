@@ -23,8 +23,38 @@ export async function handleCallGraph(
   const fqn = args.fqn as string;
 
   try {
-    // Verify symbol exists
-    const symbol = memoryIndex.getSymbol(fqn);
+    // Try to find symbol - first exact match, then fuzzy match for methods
+    let symbol = memoryIndex.getSymbol(fqn);
+    let actualFqn = fqn;
+    
+    if (!symbol) {
+      // Try fuzzy matching for methods
+      // User might provide: com.example.Service.method
+      // But stored as: com.example.Service.method(String, Integer)
+      const symbols = memoryIndex.findSymbols(fqn);
+      
+      // Filter to only methods/constructors that match the base name
+      const methodSymbols = symbols.filter(s => 
+        (s.kind === 'method' || s.kind === 'constructor') && 
+        s.fqn.startsWith(fqn + '(')
+      );
+      
+      if (methodSymbols.length === 1) {
+        // Found exactly one matching method
+        symbol = methodSymbols[0];
+        actualFqn = symbol.fqn;
+      } else if (methodSymbols.length > 1) {
+        // Multiple matches - show them to user
+        const matches = methodSymbols.map(s => `  • ${s.fqn}`).join('\n');
+        return {
+          content: [{
+            type: 'text',
+            text: `Multiple methods found matching "${fqn}". Please specify with full signature:\n\n${matches}\n\nExample: ${methodSymbols[0].fqn}`
+          }]
+        };
+      }
+    }
+    
     if (!symbol) {
       return {
         content: [{
@@ -34,9 +64,9 @@ export async function handleCallGraph(
       };
     }
 
-    // Get outbound and inbound calls
-    const outbound = memoryIndex.getOutboundCalls(fqn);
-    const inbound = memoryIndex.getInboundCalls(fqn);
+    // Get outbound and inbound calls (use actualFqn which might be resolved)
+    const outbound = memoryIndex.getOutboundCalls(actualFqn);
+    const inbound = memoryIndex.getInboundCalls(actualFqn);
 
     // Also check for polymorphic calls if this is a method in a class hierarchy
     let polymorphicInbound: typeof inbound = [];
@@ -56,10 +86,13 @@ export async function handleCallGraph(
     // Format results
     const sections: string[] = [];
 
-    sections.push(`# Call Graph for \`${fqn}\``);
+    sections.push(`# Call Graph for \`${actualFqn}\``);
     sections.push('');
     sections.push(`**Symbol**: ${symbol.kind} in ${symbol.declaringClass || symbol.packageName}`);
     sections.push(`**Location**: ${symbol.file}:${symbol.line}`);
+    if (actualFqn !== fqn) {
+      sections.push(`**Note**: Resolved "${fqn}" to "${actualFqn}"`);
+    }
 
     // Outbound calls
     sections.push('');
