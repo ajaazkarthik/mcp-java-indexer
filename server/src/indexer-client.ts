@@ -18,7 +18,7 @@ export class IndexerClient {
   private messageBuffer: string = '';
   private pendingRequests: Map<number, { resolve: (value: any) => void; reject: (error: any) => void; timeout: NodeJS.Timeout }> = new Map();
   private nextRequestId: number = 1;
-  private readonly REQUEST_TIMEOUT = 600000; // 10 minutes
+  private readonly REQUEST_TIMEOUT = 1800000; // 30 minutes
   private readonly MAX_BUFFER_SIZE = 50 * 1024 * 1024; // 50MB max buffer
 
   constructor() {}
