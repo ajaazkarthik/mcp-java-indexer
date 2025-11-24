@@ -2,7 +2,7 @@
   "name": "java-indexer-mcp",
   "displayName": "Java Indexer MCP",
   "description": "Complete Java code intelligence: indexing, AI explanations, test coverage, refactoring suggestions, code generation. 13 tools, zero setup!",
-  "version": "2.1.0",
+  "version": "2.2.1",
   "publisher": "ubanishathanvenkatesan",
   "author": {
     "name": "Ubanishath Anvenkatesan",
