@@ -69,8 +69,8 @@ public class ParserService {
                 .map(pd -> pd.getNameAsString())
                 .orElse("");
             
-            // Extract symbols and references
-            ReferenceExtractor refExtractor = new ReferenceExtractor(filePath, result);
+            // Extract symbols and references (pass CompilationUnit for type resolution)
+            ReferenceExtractor refExtractor = new ReferenceExtractor(filePath, result, cu);
             
             // Process classes, interfaces, enums
             cu.findAll(ClassOrInterfaceDeclaration.class).forEach(cid -> {

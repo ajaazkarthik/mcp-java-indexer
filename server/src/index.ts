@@ -6,6 +6,7 @@ import {
   Tool
 } from '@modelcontextprotocol/sdk/types.js';
 import { MemoryIndex } from './memory-index.js';
+import { MemoryIndexWithStorage } from './memory-index-storage.js';
 import { IndexerClient } from './indexer-client.js';
 import { FileSystemWatcher } from './fs-watcher.js';
 import { indexProjectTool, handleIndexProject } from './tools/index_project.js';
@@ -22,6 +23,7 @@ import { testCoverageTool, handleTestCoverage } from './tools/test_coverage.js';
 import { refactoringSuggestionsTool, handleRefactoringSuggestions } from './tools/refactoring_suggestions.js';
 import { codeGenerationTool, handleCodeGeneration } from './tools/code_generation.js';
 import { compactIndexTool, handleCompactIndex } from './tools/compact_index.js';
+import { withTiming } from './utils/timing.js';
 
 const server = new Server(
   {
@@ -36,7 +38,19 @@ const server = new Server(
 );
 
 // Global state
-const memoryIndex = new MemoryIndex();
+// Storage backend enabled by default for better memory efficiency
+// Set ENABLE_STORAGE=0 to use legacy in-memory index
+const USE_STORAGE = process.env.ENABLE_STORAGE !== '0';
+const memoryIndex: MemoryIndex = USE_STORAGE 
+  ? (new MemoryIndexWithStorage() as any as MemoryIndex) // Type cast for compatibility
+  : new MemoryIndex();
+
+if (USE_STORAGE) {
+  console.error('🚀 Storage backend enabled by default - using SQLite for memory efficiency');
+} else {
+  console.error('📦 Using legacy in-memory index (set ENABLE_STORAGE=1 to enable storage)');
+}
+
 const indexerClient = new IndexerClient();
 let fsWatcher: FileSystemWatcher | null = null;
 
@@ -150,6 +164,38 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools };
 });
 
+// Wrap all handlers with timing measurement
+const timedHandlers = {
+  index_project: withTiming(async (args: any, memIndex: MemoryIndex, client: IndexerClient, watcherSetter: (watcher: FileSystemWatcher) => void) => 
+    handleIndexProject(args, memIndex, client, watcherSetter)),
+  reindex_file: withTiming((args: any, memIndex: MemoryIndex, client: IndexerClient) => 
+    handleReindexFile(args, memIndex, client)),
+  find_symbol: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleFindSymbol(args, memIndex)),
+  find_usages: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleFindUsages(args, memIndex)),
+  call_graph: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleCallGraph(args, memIndex)),
+  goto_definition: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleGotoDefinition(args, memIndex)),
+  search_text: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleSearchText(args, memIndex)),
+  analyze_impact: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleAnalyzeImpact(args, memIndex)),
+  semantic_search: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleSemanticSearch(args, memIndex)),
+  explain_code: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleExplainCode(args, memIndex)),
+  test_coverage: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleTestCoverage(args, memIndex)),
+  refactoring_suggestions: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleRefactoringSuggestions(args, memIndex)),
+  code_generation: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleCodeGeneration(args, memIndex)),
+  compact_index: withTiming((args: any, memIndex: MemoryIndex) => 
+    handleCompactIndex(args, memIndex))
+};
+
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
@@ -157,48 +203,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'index_project':
-        return await handleIndexProject(args, memoryIndex, indexerClient, (watcher) => {
+        return await timedHandlers.index_project(args, memoryIndex, indexerClient, (watcher) => {
           fsWatcher = watcher;
         });
 
       case 'reindex_file':
-        return await handleReindexFile(args, memoryIndex, indexerClient);
+        return await timedHandlers.reindex_file(args, memoryIndex, indexerClient);
 
       case 'find_symbol':
-        return await handleFindSymbol(args, memoryIndex);
+        return await timedHandlers.find_symbol(args, memoryIndex);
 
       case 'find_usages':
-        return await handleFindUsages(args, memoryIndex);
+        return await timedHandlers.find_usages(args, memoryIndex);
 
       case 'call_graph':
-        return await handleCallGraph(args, memoryIndex);
+        return await timedHandlers.call_graph(args, memoryIndex);
 
       case 'goto_definition':
-        return await handleGotoDefinition(args, memoryIndex);
+        return await timedHandlers.goto_definition(args, memoryIndex);
 
       case 'search_text':
-        return await handleSearchText(args, memoryIndex);
+        return await timedHandlers.search_text(args, memoryIndex);
 
       case 'analyze_impact':
-        return await handleAnalyzeImpact(args, memoryIndex);
+        return await timedHandlers.analyze_impact(args, memoryIndex);
 
       case 'semantic_search':
-        return await handleSemanticSearch(args, memoryIndex);
+        return await timedHandlers.semantic_search(args, memoryIndex);
 
       case 'explain_code':
-        return await handleExplainCode(args, memoryIndex);
+        return await timedHandlers.explain_code(args, memoryIndex);
 
       case 'test_coverage':
-        return await handleTestCoverage(args, memoryIndex);
+        return await timedHandlers.test_coverage(args, memoryIndex);
 
       case 'refactoring_suggestions':
-        return await handleRefactoringSuggestions(args, memoryIndex);
+        return await timedHandlers.refactoring_suggestions(args, memoryIndex);
 
       case 'code_generation':
-        return await handleCodeGeneration(args, memoryIndex);
+        return await timedHandlers.code_generation(args, memoryIndex);
 
       case 'compact_index':
-        return await handleCompactIndex(args, memoryIndex);
+        return await timedHandlers.compact_index(args, memoryIndex);
 
       default:
         throw new Error(`Unknown tool: ${name}`);

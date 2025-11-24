@@ -1,5 +1,7 @@
 package com.mcp.indexer;
 
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
@@ -7,21 +9,59 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.*;
 import com.mcp.indexer.StubModel.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class ReferenceExtractor {
     
     private final String filePath;
     private final IndexResult result;
+    private final Map<String, String> importMap; // simpleName -> FQN
+    private final String packageName;
     
-    public ReferenceExtractor(String filePath, IndexResult result) {
+    public ReferenceExtractor(String filePath, IndexResult result, CompilationUnit cu) {
         this.filePath = filePath;
         this.result = result;
+        this.importMap = new HashMap<>();
+        this.packageName = cu.getPackageDeclaration()
+            .map(pd -> pd.getNameAsString())
+            .orElse("");
+        
+        // Build import map for type resolution
+        for (ImportDeclaration imp : cu.getImports()) {
+            if (!imp.isAsterisk()) {
+                String importFqn = imp.getNameAsString();
+                String simpleName = importFqn.substring(importFqn.lastIndexOf('.') + 1);
+                importMap.put(simpleName, importFqn);
+            }
+        }
+    }
+    
+    /**
+     * Resolve simple type name to FQN using imports and package context
+     */
+    private String resolveTypeName(String simpleName) {
+        // Check imports first
+        if (importMap.containsKey(simpleName)) {
+            return importMap.get(simpleName);
+        }
+        
+        // If in same package, use packageName + simpleName
+        if (!packageName.isEmpty()) {
+            return packageName + "." + simpleName;
+        }
+        
+        // Otherwise return as-is (might be in default package or external type)
+        return simpleName;
     }
     
     public void extractReferences(ClassOrInterfaceDeclaration cid, String contextFqn) {
         // Extract inheritance references
         if (!cid.getExtendedTypes().isEmpty()) {
             cid.getExtendedTypes().forEach(ext -> {
-                addReference(contextFqn, ext.getNameAsString(), "inheritance", 
+                String typeName = ext.getNameAsString();
+                String resolvedType = resolveTypeName(typeName);
+                addReference(contextFqn, resolvedType, "inheritance", 
                     ext.getBegin().map(p -> p.line).orElse(0),
                     ext.getBegin().map(p -> p.column).orElse(0));
             });
@@ -29,7 +69,9 @@ public class ReferenceExtractor {
         
         if (!cid.getImplementedTypes().isEmpty()) {
             cid.getImplementedTypes().forEach(impl -> {
-                addReference(contextFqn, impl.getNameAsString(), "inheritance",
+                String typeName = impl.getNameAsString();
+                String resolvedType = resolveTypeName(typeName);
+                addReference(contextFqn, resolvedType, "inheritance",
                     impl.getBegin().map(p -> p.line).orElse(0),
                     impl.getBegin().map(p -> p.column).orElse(0));
             });
@@ -59,7 +101,9 @@ public class ReferenceExtractor {
         // Extract interface implementations
         if (!ed.getImplementedTypes().isEmpty()) {
             ed.getImplementedTypes().forEach(impl -> {
-                addReference(contextFqn, impl.getNameAsString(), "inheritance",
+                String typeName = impl.getNameAsString();
+                String resolvedType = resolveTypeName(typeName);
+                addReference(contextFqn, resolvedType, "inheritance",
                     impl.getBegin().map(p -> p.line).orElse(0),
                     impl.getBegin().map(p -> p.column).orElse(0));
             });
@@ -101,8 +145,9 @@ public class ReferenceExtractor {
         // Extract object creations (new X())
         md.findAll(ObjectCreationExpr.class).forEach(oce -> {
             String typeName = oce.getType().getNameAsString();
+            String resolvedType = resolveTypeName(typeName);
             
-            addReference(methodFqn, typeName, "instantiation",
+            addReference(methodFqn, resolvedType, "instantiation",
                 oce.getBegin().map(p -> p.line).orElse(0),
                 oce.getBegin().map(p -> p.column).orElse(0));
         });
@@ -111,7 +156,8 @@ public class ReferenceExtractor {
         md.findAll(VariableDeclarator.class).forEach(vd -> {
             String typeName = vd.getType().asString();
             if (!isPrimitiveType(typeName)) {
-                addReference(methodFqn, typeName, "type_reference",
+                String resolvedType = resolveTypeName(typeName);
+                addReference(methodFqn, resolvedType, "type_reference",
                     vd.getBegin().map(p -> p.line).orElse(0),
                     vd.getBegin().map(p -> p.column).orElse(0));
             }
@@ -153,8 +199,9 @@ public class ReferenceExtractor {
         // Extract object creations (new X())
         cd.findAll(ObjectCreationExpr.class).forEach(oce -> {
             String typeName = oce.getType().getNameAsString();
+            String resolvedType = resolveTypeName(typeName);
             
-            addReference(constructorFqn, typeName, "instantiation",
+            addReference(constructorFqn, resolvedType, "instantiation",
                 oce.getBegin().map(p -> p.line).orElse(0),
                 oce.getBegin().map(p -> p.column).orElse(0));
         });
@@ -163,7 +210,8 @@ public class ReferenceExtractor {
         cd.findAll(VariableDeclarator.class).forEach(vd -> {
             String typeName = vd.getType().asString();
             if (!isPrimitiveType(typeName)) {
-                addReference(constructorFqn, typeName, "type_reference",
+                String resolvedType = resolveTypeName(typeName);
+                addReference(constructorFqn, resolvedType, "type_reference",
                     vd.getBegin().map(p -> p.line).orElse(0),
                     vd.getBegin().map(p -> p.column).orElse(0));
             }
