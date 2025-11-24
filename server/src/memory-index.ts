@@ -46,8 +46,6 @@ export class MemoryIndex {
   private symbols: Map<string, SymbolStub> = new Map(); // FQN -> SymbolStub
   private files: Map<string, FileInfo> = new Map(); // file path -> FileInfo
   private indexedFiles: Set<string> = new Set(); // Only files we explicitly indexed (not dependencies)
-  private dependencyFiles: Set<string> = new Set(); // Dependency files (can be cleaned up)
-  private symbolAccessTime: Map<string, number> = new Map(); // FQN -> last access timestamp (LRU)
   private references: Reference[] = []; // All references
   private referencesByFile: Map<string, Reference[]> = new Map(); // file -> references (for efficient cleanup)
   private callGraph: Map<string, CallGraphEdge[]> = new Map(); // caller FQN -> edges
@@ -56,11 +54,6 @@ export class MemoryIndex {
   private reverseInheritance: Map<string, string[]> = new Map(); // parent -> children
 
   private indexDir: string = '';
-  
-  // Memory management thresholds (AGGRESSIVE for large projects)
-  private readonly MAX_SYMBOLS = 50000; // Reduced from 300k - evict LRU symbols beyond this
-  private readonly MAX_DEPENDENCIES = 20000; // Reduced from 100k - clean up old dependencies
-  private readonly DEPENDENCY_TTL = 1000 * 60 * 10; // 10 minutes (reduced from 30)
 
   constructor() {}
 
@@ -96,12 +89,7 @@ export class MemoryIndex {
 
   // Get symbol by FQN
   getSymbol(fqn: string): SymbolStub | undefined {
-    const symbol = this.symbols.get(fqn);
-    if (symbol) {
-      // Track access time for LRU eviction
-      this.symbolAccessTime.set(fqn, Date.now());
-    }
-    return symbol;
+    return this.symbols.get(fqn);
   }
 
   // Get all symbols (for semantic search and code explanation)
@@ -282,24 +270,8 @@ export class MemoryIndex {
     return parents;
   }
 
-  // Add reference with deduplication to prevent memory bloat
+  // Add reference
   addReference(ref: Reference): void {
-    // CRITICAL: Deduplicate to prevent OOM from duplicate references
-    // Check if this exact reference already exists in the file's references
-    const fileRefs = this.referencesByFile.get(ref.file);
-    if (fileRefs) {
-      const isDuplicate = fileRefs.some(existing => 
-        existing.fromFqn === ref.fromFqn &&
-        existing.toFqn === ref.toFqn &&
-        existing.line === ref.line &&
-        existing.column === ref.column &&
-        existing.kind === ref.kind
-      );
-      if (isDuplicate) {
-        return; // Skip duplicate
-      }
-    }
-    
     this.references.push(ref);
     
     // Track by file for efficient cleanup
@@ -308,28 +280,15 @@ export class MemoryIndex {
     }
     this.referencesByFile.get(ref.file)!.push(ref);
 
-    // Build call graph for method calls and instantiations (constructor calls)
-    if (ref.kind === 'method_call' || ref.kind === 'instantiation') {
+    // Build call graph for method calls
+    if (ref.kind === 'method_call') {
       this.addCallGraphEdge(ref.fromFqn, ref.toFqn, ref.file, ref.line, ref.column);
     }
   }
 
   // Find all usages of a symbol
   findUsages(fqn: string): Reference[] {
-    // Get the simple name from the FQN for matching unqualified references
-    const simpleName = fqn.split('.').pop() || fqn;
-    
-    // Match on:
-    // 1. Exact FQN match: ref.toFqn === fqn
-    // 2. Prefix match for class members: ref.toFqn.startsWith(fqn + '.')
-    // 3. Simple name match (for unqualified references): ref.toFqn === simpleName
-    // 4. Simple name in qualified context: ref.toFqn.endsWith('.' + simpleName)
-    return this.references.filter(ref => 
-      ref.toFqn === fqn || 
-      ref.toFqn.startsWith(fqn + '.') ||
-      ref.toFqn === simpleName ||
-      (simpleName !== fqn && ref.toFqn.endsWith('.' + simpleName))
-    );
+    return this.references.filter(ref => ref.toFqn === fqn);
   }
 
   // Add call graph edge
@@ -366,71 +325,7 @@ export class MemoryIndex {
 
   // Get inbound calls (who calls this method)
   getInboundCalls(fqn: string): CallGraphEdge[] {
-    const exact = this.reverseCallGraph.get(fqn) || [];
-    
-    // Also check for partial matches (e.g., "repository.save" -> "com.example.UserRepository.save(User)")
-    // This handles cases where Java indexer couldn't resolve full FQN
-    
-    // Extract components from the full FQN
-    const parts = fqn.split('.');
-    const methodName = parts[parts.length - 1]; // e.g., "save(User)" or just "save"
-    const baseMethodName = methodName.split('(')[0]; // Remove parameters: "save(User)" -> "save"
-    const className = parts[parts.length - 2]; // e.g., "UserRepository" or "User" (for constructors)
-    
-    // Check if this is a constructor (className === baseMethodName)
-    const isConstructor = className === baseMethodName;
-    
-    const fuzzyMatches: CallGraphEdge[] = [];
-    const seenCallers = new Set<string>(); // Deduplicate
-    
-    for (const [callee, edges] of this.reverseCallGraph.entries()) {
-      if (callee === fqn) continue; // Skip exact match (already handled)
-      
-      let isMatch = false;
-      const calleeLower = callee.toLowerCase();
-      const baseMethodLower = baseMethodName.toLowerCase();
-      const classNameLower = className?.toLowerCase() || '';
-      
-      // Pattern 1: Simple method name match: "save", "log"
-      if (callee === baseMethodName || callee === methodName) {
-        isMatch = true;
-      }
-      
-      // Pattern 2: field.method format: "repository.save", "logger.log"
-      else if (callee.includes('.')) {
-        const calleeParts = callee.split('.');
-        const calleeMethod = calleeParts[calleeParts.length - 1];
-        const calleeMethodBase = calleeMethod.split('(')[0];
-        
-        // Match if method name matches
-        if (calleeMethodBase.toLowerCase() === baseMethodLower) {
-          isMatch = true;
-        }
-      }
-      
-      // Pattern 3: Partial class name match: "UserRepository.save"
-      else if (classNameLower && calleeLower.includes(classNameLower) && calleeLower.includes(baseMethodLower)) {
-        isMatch = true;
-      }
-      
-      // Pattern 4: Constructor instantiation: "User" matches "com.example.demo.User.User(...)"
-      // Instantiation references store just the simple class name (e.g., "User")
-      else if (isConstructor && callee === className) {
-        isMatch = true;
-      }
-      
-      if (isMatch) {
-        for (const edge of edges) {
-          const key = `${edge.caller}->${edge.callee}`;
-          if (!seenCallers.has(key)) {
-            seenCallers.add(key);
-            fuzzyMatches.push(edge);
-          }
-        }
-      }
-    }
-    
-    return [...exact, ...fuzzyMatches];
+    return this.reverseCallGraph.get(fqn) || [];
   }
 
   // Add inheritance relationship
@@ -470,9 +365,6 @@ export class MemoryIndex {
     });
     if (isIndexedFile) {
       this.indexedFiles.add(filePath);
-      this.dependencyFiles.delete(filePath); // Remove from deps if promoted to indexed
-    } else {
-      this.dependencyFiles.add(filePath);
     }
   }
 
@@ -579,8 +471,6 @@ export class MemoryIndex {
     this.symbols.clear();
     this.files.clear();
     this.indexedFiles.clear();
-    this.dependencyFiles.clear();
-    this.symbolAccessTime.clear();
     this.references = [];
     this.referencesByFile.clear();
     this.callGraph.clear();
@@ -589,75 +479,12 @@ export class MemoryIndex {
     this.reverseInheritance.clear();
   }
   
-  // Aggressive cleanup to prevent memory bloat and OOM
+  // Periodic cleanup to prevent memory bloat
   performMaintenanceCleanup(): void {
-    const beforeMem = process.memoryUsage().heapUsed / 1024 / 1024;
-    const beforeSymbols = this.symbols.size;
-    const beforeRefs = this.references.length;
-    
-    // STAGE 1: Remove old dependency files (not accessed recently)
-    const now = Date.now();
-    const oldDeps = Array.from(this.dependencyFiles).filter(filePath => {
-      const fileInfo = this.files.get(filePath);
-      return fileInfo && (now - fileInfo.lastIndexed) > this.DEPENDENCY_TTL;
-    });
-    
-    for (const filePath of oldDeps) {
-      this.removeFile(filePath);
-    }
-    
-    // STAGE 1.5: If still over dependency limit, remove oldest dependencies regardless of TTL
-    if (this.dependencyFiles.size > this.MAX_DEPENDENCIES) {
-      const sortedDeps = Array.from(this.dependencyFiles)
-        .map(filePath => ({
-          path: filePath,
-          lastIndexed: this.files.get(filePath)?.lastIndexed || 0
-        }))
-        .sort((a, b) => a.lastIndexed - b.lastIndexed); // Oldest first
-      
-      const toRemove = this.dependencyFiles.size - this.MAX_DEPENDENCIES;
-      for (let i = 0; i < toRemove && i < sortedDeps.length; i++) {
-        this.removeFile(sortedDeps[i].path);
-      }
-    }
-    
-    // STAGE 2: LRU eviction if symbol count exceeds threshold
-    if (this.symbols.size > this.MAX_SYMBOLS) {
-      // Get all dependency symbols (not from indexed files)
-      const indexedSymbols = new Set<string>();
-      for (const filePath of this.indexedFiles) {
-        const fileInfo = this.files.get(filePath);
-        if (fileInfo) {
-          for (const fqn of fileInfo.symbols) {
-            indexedSymbols.add(fqn);
-          }
-        }
-      }
-      
-      // Sort dependency symbols by access time (LRU)
-      const depSymbols = Array.from(this.symbols.keys())
-        .filter(fqn => !indexedSymbols.has(fqn))
-        .map(fqn => ({
-          fqn,
-          accessTime: this.symbolAccessTime.get(fqn) || 0
-        }))
-        .sort((a, b) => a.accessTime - b.accessTime); // Oldest first
-      
-      // Evict oldest dependency symbols
-      const toEvict = this.symbols.size - this.MAX_SYMBOLS;
-      for (let i = 0; i < Math.min(toEvict, depSymbols.length); i++) {
-        const fqn = depSymbols[i].fqn;
-        this.symbols.delete(fqn);
-        this.symbolAccessTime.delete(fqn);
-        this.callGraph.delete(fqn);
-        this.reverseCallGraph.delete(fqn);
-        this.inheritance.delete(fqn);
-        this.reverseInheritance.delete(fqn);
-      }
-    }
-    
-    // STAGE 3: Remove orphaned references (where fromFqn or toFqn no longer exist)
+    // Remove orphaned references (where fromFqn or toFqn no longer exist)
     const validFqns = new Set(this.symbols.keys());
+    const beforeCount = this.references.length;
+    
     this.references = this.references.filter(ref => 
       validFqns.has(ref.fromFqn) && validFqns.has(ref.toFqn)
     );
@@ -671,140 +498,28 @@ export class MemoryIndex {
       this.referencesByFile.get(ref.file)!.push(ref);
     }
     
-    // STAGE 4: Clean up empty call graph entries
+    // Clean up empty call graph entries
     for (const [fqn, edges] of this.callGraph.entries()) {
-      if (edges.length === 0 || !validFqns.has(fqn)) {
+      if (edges.length === 0) {
         this.callGraph.delete(fqn);
       }
     }
     for (const [fqn, edges] of this.reverseCallGraph.entries()) {
-      if (edges.length === 0 || !validFqns.has(fqn)) {
+      if (edges.length === 0) {
         this.reverseCallGraph.delete(fqn);
       }
     }
     
-    // STAGE 5: Trim call graph edges with duplicate locations (memory efficiency)
-    for (const [caller, edges] of this.callGraph.entries()) {
-      for (const edge of edges) {
-        const uniqueLocations = new Map<string, typeof edge.locations[0]>();
-        for (const loc of edge.locations) {
-          const key = `${loc.file}:${loc.line}:${loc.column}`;
-          uniqueLocations.set(key, loc);
-        }
-        edge.locations = Array.from(uniqueLocations.values());
-      }
-    }
-    for (const [callee, edges] of this.reverseCallGraph.entries()) {
-      for (const edge of edges) {
-        const uniqueLocations = new Map<string, typeof edge.locations[0]>();
-        for (const loc of edge.locations) {
-          const key = `${loc.file}:${loc.line}:${loc.column}`;
-          uniqueLocations.set(key, loc);
-        }
-        edge.locations = Array.from(uniqueLocations.values());
-      }
+    const afterCount = this.references.length;
+    if (beforeCount !== afterCount) {
+      console.error(`Maintenance cleanup: removed ${beforeCount - afterCount} orphaned references`);
     }
     
-    // STAGE 6: Clear access time for evicted symbols
-    const currentSymbols = new Set(this.symbols.keys());
-    for (const fqn of this.symbolAccessTime.keys()) {
-      if (!currentSymbols.has(fqn)) {
-        this.symbolAccessTime.delete(fqn);
-      }
-    }
-    
-    // STAGE 7: Explicit nulling for better GC (helps V8 optimizer)
-    // Clear temporary collections to allow immediate GC
-    const afterSymbols = this.symbols.size;
-    const afterRefs = this.references.length;
-    const symbolsRemoved = beforeSymbols - afterSymbols;
-    const refsRemoved = beforeRefs - afterRefs;
-    
-    // Quintuple GC for maximum cleanup (critical for large projects)
+    // Trigger garbage collection if available
     if (global.gc) {
       global.gc();
-      global.gc();
-      global.gc();
-      global.gc();
-      global.gc();
+      console.error('Triggered garbage collection');
     }
-    
-    const afterMem = process.memoryUsage().heapUsed / 1024 / 1024;
-    const memFreed = beforeMem - afterMem;
-    
-    if (symbolsRemoved > 0 || refsRemoved > 0 || memFreed > 5) {
-      console.error(`🧹 Cleanup: -${symbolsRemoved} symbols, -${refsRemoved} refs, -${oldDeps.length} old deps, freed ${memFreed.toFixed(1)}MB (heap: ${afterMem.toFixed(0)}MB)`);
-    }
-  }
-  
-  /**
-   * Ultra-aggressive cleanup for emergency OOM situations
-   * Removes ALL dependency symbols and old references
-   */
-  emergencyCleanup(): void {
-    console.error(`🚨 EMERGENCY CLEANUP - removing all dependency data...`);
-    
-    const beforeMem = process.memoryUsage().heapUsed / 1024 / 1024;
-    
-    // Remove ALL dependency files
-    const depFiles = Array.from(this.dependencyFiles);
-    for (const filePath of depFiles) {
-      this.removeFile(filePath);
-    }
-    
-    // Keep only symbols from indexed files
-    const indexedSymbols = new Set<string>();
-    for (const filePath of this.indexedFiles) {
-      const fileInfo = this.files.get(filePath);
-      if (fileInfo) {
-        for (const fqn of fileInfo.symbols) {
-          indexedSymbols.add(fqn);
-        }
-      }
-    }
-    
-    // Remove all non-indexed symbols
-    const symbolsToRemove: string[] = [];
-    for (const [fqn] of this.symbols) {
-      if (!indexedSymbols.has(fqn)) {
-        symbolsToRemove.push(fqn);
-      }
-    }
-    
-    for (const fqn of symbolsToRemove) {
-      this.symbols.delete(fqn);
-      this.symbolAccessTime.delete(fqn);
-      this.callGraph.delete(fqn);
-      this.reverseCallGraph.delete(fqn);
-      this.inheritance.delete(fqn);
-      this.reverseInheritance.delete(fqn);
-    }
-    
-    // Remove references to deleted symbols
-    this.references = this.references.filter(ref =>
-      indexedSymbols.has(ref.fromFqn) && indexedSymbols.has(ref.toFqn)
-    );
-    
-    // Rebuild referencesByFile
-    this.referencesByFile.clear();
-    for (const ref of this.references) {
-      if (!this.referencesByFile.has(ref.file)) {
-        this.referencesByFile.set(ref.file, []);
-      }
-      this.referencesByFile.get(ref.file)!.push(ref);
-    }
-    
-    // Extreme GC
-    if (global.gc) {
-      for (let i = 0; i < 10; i++) {
-        global.gc();
-      }
-    }
-    
-    const afterMem = process.memoryUsage().heapUsed / 1024 / 1024;
-    const memFreed = beforeMem - afterMem;
-    
-    console.error(`✅ Emergency cleanup complete: ${symbolsToRemove.length} symbols removed, freed ${memFreed.toFixed(1)}MB (heap: ${afterMem.toFixed(0)}MB)`);
   }
 
   // Serialization for persistence
@@ -813,8 +528,6 @@ export class MemoryIndex {
       symbols: Array.from(this.symbols.entries()),
       files: Array.from(this.files.entries()),
       indexedFiles: Array.from(this.indexedFiles),
-      dependencyFiles: Array.from(this.dependencyFiles),
-      symbolAccessTime: Array.from(this.symbolAccessTime.entries()),
       references: this.references,
       referencesByFile: Array.from(this.referencesByFile.entries()),
       callGraph: Array.from(this.callGraph.entries()),
@@ -830,8 +543,6 @@ export class MemoryIndex {
     this.symbols = new Map(data.symbols);
     this.files = new Map(data.files);
     this.indexedFiles = new Set(data.indexedFiles || []);
-    this.dependencyFiles = new Set(data.dependencyFiles || []);
-    this.symbolAccessTime = new Map(data.symbolAccessTime || []);
     this.references = data.references || [];
     this.referencesByFile = new Map(data.referencesByFile || []);
     this.callGraph = new Map(data.callGraph || []);

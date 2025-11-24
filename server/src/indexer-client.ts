@@ -18,9 +18,8 @@ export class IndexerClient {
   private messageBuffer: string = '';
   private pendingRequests: Map<number, { resolve: (value: any) => void; reject: (error: any) => void; timeout: NodeJS.Timeout }> = new Map();
   private nextRequestId: number = 1;
-  private readonly REQUEST_TIMEOUT = 1800000; // 30 minutes
+  private readonly REQUEST_TIMEOUT = 600000; // 10 minutes
   private readonly MAX_BUFFER_SIZE = 50 * 1024 * 1024; // 50MB max buffer
-  private readonly MAX_PENDING_REQUESTS = 100; // Prevent request accumulation
 
   constructor() {}
 
@@ -116,11 +115,6 @@ export class IndexerClient {
       throw new Error('Java indexer process not started');
     }
 
-    // Prevent request queue from growing unbounded
-    if (this.pendingRequests.size >= this.MAX_PENDING_REQUESTS) {
-      throw new Error(`Too many pending requests (${this.pendingRequests.size}). Java process may be stuck.`);
-    }
-
     const id = this.nextRequestId++;
     const request = { id, method, params };
 
@@ -183,13 +177,5 @@ export class IndexerClient {
       pendingRequests: this.pendingRequests.size,
       bufferSize: this.messageBuffer.length
     };
-  }
-  
-  // Clear message buffer (call after batch processing to prevent OOM)
-  clearBuffer(): void {
-    // Only clear if no pending requests (safe to clear)
-    if (this.pendingRequests.size === 0) {
-      this.messageBuffer = '';
-    }
   }
 }

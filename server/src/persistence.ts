@@ -9,7 +9,7 @@ const gunzip = promisify(zlib.gunzip);
 
 export class Persistence {
   private indexDir: string;
-  private readonly CHUNK_SIZE = 5000; // Optimal chunk size from testing
+  private readonly CHUNK_SIZE = 5000; // Save in chunks to avoid memory issues
 
   constructor(indexDir: string) {
     this.indexDir = indexDir;
@@ -30,27 +30,21 @@ export class Persistence {
 
     const data = memoryIndex.toJSON();
     
-    // Skip save if storage backend is enabled
-    if (data && (data as any)._storageBackend) {
-      console.error('⚠️  Skipping JSON persistence - storage backend handles it');
-      return;
-    }
-    
     try {
       // Save metadata separately
       const metadata = {
         version: '1.0',
         timestamp: Date.now(),
         stats: {
-          symbols: data.symbols?.length || 0,
-          files: data.files?.length || 0,
-          indexedFiles: data.indexedFiles?.length || 0,
-          references: data.references?.length || 0,
-          referencesByFile: data.referencesByFile?.length || 0,
-          callGraph: data.callGraph?.length || 0,
-          reverseCallGraph: data.reverseCallGraph?.length || 0,
-          inheritance: data.inheritance?.length || 0,
-          reverseInheritance: data.reverseInheritance?.length || 0
+          symbols: data.symbols.length,
+          files: data.files.length,
+          indexedFiles: data.indexedFiles.length,
+          references: data.references.length,
+          referencesByFile: data.referencesByFile.length,
+          callGraph: data.callGraph.length,
+          reverseCallGraph: data.reverseCallGraph.length,
+          inheritance: data.inheritance.length,
+          reverseInheritance: data.reverseInheritance.length
         }
       };
       
@@ -84,8 +78,7 @@ export class Persistence {
     }
   }
 
-  // PERFORMANCE: Save array data in chunks WITHOUT compression for 3-5x faster I/O
-  // Modern SSDs have plenty of bandwidth, compression CPU cost > I/O savings
+  // Save array data in chunks with compression
   private async saveChunked(name: string, data: any[]): Promise<void> {
     const totalChunks = Math.ceil(data.length / this.CHUNK_SIZE);
     
@@ -95,10 +88,10 @@ export class Persistence {
       const chunk = data.slice(start, end);
       
       const chunkData = JSON.stringify(chunk);
-      // Skip compression - raw I/O is faster on modern hardware
+      const compressed = await gzip(chunkData);
       
-      const chunkPath = path.join(this.indexDir, `${name}_${i}.json`);
-      await fs.writeFile(chunkPath, chunkData, 'utf-8');
+      const chunkPath = path.join(this.indexDir, `${name}_${i}.json.gz`);
+      await fs.writeFile(chunkPath, compressed);
     }
     
     // Save chunk count
@@ -186,7 +179,7 @@ export class Persistence {
     }
   }
 
-  // PERFORMANCE: Load chunked array data WITHOUT decompression
+  // Load chunked array data
   private async loadChunkedArray(name: string): Promise<any[]> {
     try {
       const chunksPath = path.join(this.indexDir, `${name}_chunks.txt`);
@@ -196,20 +189,11 @@ export class Persistence {
       const result: any[] = [];
       
       for (let i = 0; i < totalChunks; i++) {
-        // Try new uncompressed format first
-        let chunkPath = path.join(this.indexDir, `${name}_${i}.json`);
-        try {
-          const content = await fs.readFile(chunkPath, 'utf-8');
-          const chunk = JSON.parse(content);
-          result.push(...chunk);
-        } catch {
-          // Fallback to old compressed format
-          chunkPath = path.join(this.indexDir, `${name}_${i}.json.gz`);
-          const compressed = await fs.readFile(chunkPath);
-          const decompressed = await gunzip(compressed);
-          const chunk = JSON.parse(decompressed.toString('utf-8'));
-          result.push(...chunk);
-        }
+        const chunkPath = path.join(this.indexDir, `${name}_${i}.json.gz`);
+        const compressed = await fs.readFile(chunkPath);
+        const decompressed = await gunzip(compressed);
+        const chunk = JSON.parse(decompressed.toString('utf-8'));
+        result.push(...chunk);
       }
       
       return result;

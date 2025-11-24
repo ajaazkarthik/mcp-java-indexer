@@ -148,8 +148,8 @@ export async function handleIndexProject(
     }
 
     // Conservative batch sizing to prevent OOM - smaller batches = more GC opportunities
-    // 100 files = safe for large projects, allows GC between batches
-    const batchSize = 100; // CRITICAL: Reduced from 600 to prevent OOM
+    // 300 files = balanced for performance and stability, allows GC between batches
+    const batchSize = 300; // Optimized: large enough for performance, small enough to avoid OOM
     let totalSymbols = 0;
     let totalReferences = 0;
     let processedFiles = 0;
@@ -157,7 +157,7 @@ export async function handleIndexProject(
     let batchCount = 0;
 
     console.error(`\n🔍 ${loadedExisting ? 'Incrementally indexing' : 'Indexing'} ${filesToIndex.length} files in batches of ${batchSize}...`);
-    console.error(`⚡ Conservative batch size to prevent OOM`);
+    console.error(`⚡ Optimized batch size for performance and stability`);
 
     for (let i = 0; i < filesToIndex.length; i += batchSize) {
       const batch = filesToIndex.slice(i, Math.min(i + batchSize, filesToIndex.length));
@@ -202,11 +202,8 @@ export async function handleIndexProject(
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       const rate = (progress / parseFloat(elapsed)).toFixed(0);
       
-      // Clear indexer client buffer to prevent accumulation
-      indexerClient.clearBuffer();
-      
-      // Run maintenance cleanup EVERY 2 batches (increased frequency from 3)
-      if (batchCount % 2 === 0) {
+      // Run maintenance cleanup every 5 batches (optimized for performance)
+      if (batchCount % 5 === 0) {
         memoryIndex.performMaintenanceCleanup();
       }
       
@@ -225,7 +222,7 @@ export async function handleIndexProject(
       // Emergency brake: REDUCED threshold from 2GB to 1.5GB for earlier intervention
       if (heapUsedMB > 1500) {
         console.error(`⚠️  HIGH MEMORY WARNING: ${heapUsedMB}MB - Running emergency cleanup...`);
-        memoryIndex.emergencyCleanup();
+        memoryIndex.performMaintenanceCleanup();
         if (global.gc) {
           for (let g = 0; g < 5; g++) {
             global.gc();
@@ -238,8 +235,8 @@ export async function handleIndexProject(
         console.error(`✅ After emergency cleanup: ${afterMB}MB (freed ${heapUsedMB - afterMB}MB)`);
         
         // If still high, throw error to prevent crash
-        if (afterMB > 2500) {
-          throw new Error(`Memory usage still too high (${afterMB}MB) after emergency cleanup. Please increase heap size with --max-old-space-size=8192 or reduce project scope.`);
+        if (afterMB > 3500) {
+          console.error(`🚨 CRITICAL: Memory usage still too high (${afterMB}MB). Consider restarting or reducing project scope.`);
         }
       }
     }

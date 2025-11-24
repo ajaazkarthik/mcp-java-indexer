@@ -35,7 +35,8 @@ export async function handleCompactIndex(
     if (emergency) {
       mode = 'EMERGENCY';
       console.error(`🚨 Starting EMERGENCY index compaction...`);
-      memoryIndex.emergencyCleanup();
+      memoryIndex.performMaintenanceCleanup();
+      memoryIndex.performMaintenanceCleanup();
     } else {
       mode = aggressive ? 'AGGRESSIVE' : 'standard';
       console.error(`🔧 Starting ${mode} index compaction...`);

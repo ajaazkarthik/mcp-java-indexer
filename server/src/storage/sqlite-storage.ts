@@ -247,9 +247,10 @@ export class SqliteStorage implements IIndexStorage {
 
   async saveReferences(refs: Reference[]): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
+    if (refs.length === 0) return;
 
     const stmt = this.db.prepare(`
-      INSERT OR IGNORE INTO references (from_fqn, to_fqn, file, line, col, kind)
+      INSERT OR IGNORE INTO refs (from_fqn, to_fqn, file, line, col, kind)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 

@@ -5,66 +5,6 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.5.4] - 2025-11-24
-
-### Fixed - Critical OOM (Out of Memory) Issue 🔧
-Resolved fatal OOM crashes that occurred after ~3 minutes of indexing large projects.
-
-**Problem**:
-- Extension crashed with "JavaScript heap out of memory" error (exit code 134)
-- Occurred during indexing of large projects (2,000+ files)
-- GC unable to reclaim memory due to unbounded growth
-- Previous performance optimizations increased batch size too aggressively (100 → 600 files)
-
-**Root Causes Identified**:
-1. **Batch size too large** - 600 files/batch held too much data in memory
-2. **Unbounded references array** - Millions of reference objects accumulated
-3. **No reference deduplication** - Duplicates consumed 30-50% extra memory
-4. **Insufficient GC frequency** - Only ran every 2,000 files
-5. **Buffer accumulation** - IndexerClient buffer never cleared
-6. **Heap limit too small** - Default 4GB insufficient for large projects
-7. **No emergency brake** - No protection when memory exceeded safe thresholds
-
-**Fixes Applied**:
-1. ✅ **Batch size reduced** - 600 → 100 files (6x safer, reverted to v1.5.0 level)
-2. ✅ **Reference deduplication** - Check for duplicates before insertion
-3. ✅ **Aggressive GC** - Force GC after every batch (20x more frequent)
-4. ✅ **Buffer clearing** - Clear IndexerClient buffer after each batch
-5. ✅ **Enhanced cleanup** - Remove orphaned references every 5 batches
-6. ✅ **Heap limit increase** - 4GB → 8GB with `--max-old-space-size=8192`
-7. ✅ **Emergency brake** - Double GC + cleanup when heap exceeds 3.5GB
-8. ✅ **Memory monitoring** - Real-time heap usage in progress logs
-
-**Performance Impact**:
-- Peak memory usage: 4GB+ (OOM) → **15MB** for 500 files (99.6% improvement)
-- Memory leaks: Growing → **Stable** (0MB increase on reindex)
-- Max project size: ~2,000 files → **10,000+ files** supported
-- Indexing stability: Crashes after 3 min → **No crashes**
-
-**Testing**:
-- ✅ 36 automated tests passed (OOM: 10/10, Features: 26/26)
-- ✅ 100% pass rate, zero regressions
-- ✅ Memory monitoring validated (peak 15MB, cleanup executed)
-- ✅ All 13 MCP tools verified working
-- ✅ Incremental indexing preserved
-
-**Files Modified**:
-- `server/src/tools/index_project.ts`: Batch size, cleanup, monitoring
-- `server/src/memory-index.ts`: Deduplication, aggressive cleanup
-- `server/src/indexer-client.ts`: Buffer clearing method
-- `src/extension.ts`: Heap limit configuration (8GB + expose GC)
-
-**Documentation**:
-- `OOM_FIX_CRITICAL.md`: Technical analysis and fixes
-- `OOM_FIX_VALIDATION.md`: Quick summary with test results
-- `TEST_VALIDATION_REPORT.md`: Comprehensive test report
-- `TESTING_INSTRUCTIONS.md`: User testing guide
-
-**New Test Suites**:
-- `test-oom-fix.js`: OOM fix validation (10 tests)
-- `test-all-suites.js`: Comprehensive test runner
-- New npm scripts: `test:oom`, `test:quick`, `test:all`
-
 ## [1.4.2] - 2025-11-23
 
 ### Fixed - Critical Memory Leak 🔧

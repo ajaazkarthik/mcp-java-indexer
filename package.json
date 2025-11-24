@@ -2,7 +2,7 @@
   "name": "java-indexer-mcp",
   "displayName": "Java Indexer MCP",
   "description": "Complete Java code intelligence: indexing, AI explanations, test coverage, refactoring suggestions, code generation. 13 tools, zero setup!",
-  "version": "2.2.1",
+  "version": "1.4.2",
   "publisher": "ubanishathanvenkatesan",
   "author": {
     "name": "Ubanishath Anvenkatesan",
@@ -116,11 +116,6 @@
     "watch": "tsc -watch -p ./tsconfig.json",
     "pretest": "npm run compile",
     "test": "node ./out/test/runTest.js",
-    "test:oom": "node test-oom-fix.js",
-    "test:features": "node test-feature-preservation.js",
-    "test:large": "node test-large-project.js",
-    "test:all": "node test-all-suites.js",
-    "test:quick": "npm run test:oom && npm run test:features",
     "package": "vsce package",
     "publish": "vsce publish"
   },

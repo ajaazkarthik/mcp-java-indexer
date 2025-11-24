@@ -101,8 +101,18 @@ export class MemoryIndexWithStorage {
   private writeQueue: Array<() => Promise<void>> = [];
   private isProcessingWrites = false;
   
+  // Batch pending references for bulk insert
+  private pendingRefs: Reference[] = [];
+  private pendingEdges: Array<{ edge: CallGraphEdge; direction: 'forward' | 'reverse' }> = [];
+  private readonly BULK_INSERT_THRESHOLD = 500; // Flush when we have 500+ pending
+  
   private indexDir: string = '';
   private useStorage = true; // Can disable for testing
+  
+  // Track counts for getStats() (updated synchronously)
+  private referenceCount: number = 0;
+  private callGraphEdgeCount: number = 0;
+  private inheritanceCount: number = 0;
 
   constructor() {}
 
@@ -291,35 +301,76 @@ export class MemoryIndexWithStorage {
   }
 
   /**
-   * Add reference - SYNCHRONOUS (queue storage write)
+   * Add reference - SYNCHRONOUS (track count + batch for bulk storage)
    */
   addReference(ref: Reference): void {
+    // Track count immediately for getStats()
+    this.referenceCount++;
+    
+    // Track call graph edges
+    if (ref.kind === 'method_call' || ref.kind === 'instantiation') {
+      this.callGraphEdgeCount++;
+    }
+    
+    // Track inheritance
+    if (ref.kind === 'inheritance') {
+      this.inheritanceCount++;
+    }
+    
     // Invalidate cache for this symbol
     this.referenceCache.delete(ref.toFqn);
 
-    // Queue storage write
+    // Batch references for bulk insert (much faster than individual writes)
     if (this.useStorage) {
-      this.queueWrite(async () => {
-        if (!this.storage) return;
-        await this.storage.saveReference(ref);
-
-        // Build call graph if applicable
-        if (ref.kind === 'method_call' || ref.kind === 'instantiation') {
-          const edge: CallGraphEdge = {
-            caller: ref.fromFqn,
-            callee: ref.toFqn,
-            locations: [{ file: ref.file, line: ref.line, column: ref.column }]
-          };
-          
-          await this.storage.saveCallEdge(edge, 'forward');
-          await this.storage.saveCallEdge(edge, 'reverse');
-          
-          // Invalidate call graph caches
-          this.callGraphCache.delete(ref.fromFqn);
-          this.reverseCallGraphCache.delete(ref.toFqn);
-        }
-      });
+      this.pendingRefs.push(ref);
+      
+      // Build call graph edges
+      if (ref.kind === 'method_call' || ref.kind === 'instantiation') {
+        const edge: CallGraphEdge = {
+          caller: ref.fromFqn,
+          callee: ref.toFqn,
+          locations: [{ file: ref.file, line: ref.line, column: ref.column }]
+        };
+        
+        this.pendingEdges.push({ edge, direction: 'forward' });
+        this.pendingEdges.push({ edge, direction: 'reverse' });
+        
+        // Invalidate call graph caches
+        this.callGraphCache.delete(ref.fromFqn);
+        this.reverseCallGraphCache.delete(ref.toFqn);
+      }
+      
+      // Flush when threshold reached (non-blocking)
+      if (this.pendingRefs.length >= this.BULK_INSERT_THRESHOLD) {
+        this.flushPendingWrites();
+      }
     }
+  }
+
+  /**
+   * Flush pending writes to storage (called periodically and at end)
+   */
+  private flushPendingWrites(): void {
+    if (this.pendingRefs.length === 0 && this.pendingEdges.length === 0) return;
+    
+    const refsToWrite = [...this.pendingRefs];
+    const edgesToWrite = [...this.pendingEdges];
+    this.pendingRefs = [];
+    this.pendingEdges = [];
+    
+    this.queueWrite(async () => {
+      if (!this.storage) return;
+      
+      // Bulk insert references
+      if (refsToWrite.length > 0) {
+        await this.storage.saveReferences(refsToWrite);
+      }
+      
+      // Bulk insert edges
+      for (const { edge, direction } of edgesToWrite) {
+        await this.storage.saveCallEdge(edge, direction);
+      }
+    });
   }
 
   /**
@@ -636,16 +687,16 @@ export class MemoryIndexWithStorage {
   }
 
   /**
-   * Get stats - SYNCHRONOUS
+   * Get stats - SYNCHRONOUS (uses tracked counts)
    */
   getStats() {
     return {
-      symbols: this.symbolCache.size, // Note: only cached symbols
+      symbols: this.symbolCache.size,
       indexedFiles: this.indexedFiles.size,
       allFiles: this.files.size,
-      references: this.referenceCache.size,
-      callGraphEdges: this.callGraphCache.size,
-      inheritanceRelations: 0 // Not tracked in cache
+      references: this.referenceCount,
+      callGraphEdges: this.callGraphEdgeCount,
+      inheritanceRelations: this.inheritanceCount
     };
   }
 
@@ -659,6 +710,11 @@ export class MemoryIndexWithStorage {
     this.reverseCallGraphCache.clear();
     this.files.clear();
     this.indexedFiles.clear();
+    
+    // Reset counts
+    this.referenceCount = 0;
+    this.callGraphEdgeCount = 0;
+    this.inheritanceCount = 0;
 
     // Queue storage clear
     if (this.useStorage) {
@@ -713,12 +769,18 @@ export class MemoryIndexWithStorage {
    * Persistence methods (legacy compatibility - not needed with storage)
    */
   toJSON() {
-    // Return minimal structure for compatibility
-    // Storage backend handles persistence automatically
+    // Return compatible structure for Persistence.save() 
+    // Storage backend handles actual persistence, but this avoids errors
     return {
       symbols: [],
       files: Array.from(this.files.values()),
       indexedFiles: Array.from(this.indexedFiles),
+      references: [],           // Storage handles these
+      referencesByFile: [],     // Storage handles these
+      callGraph: [],            // Storage handles these
+      reverseCallGraph: [],     // Storage handles these
+      inheritance: [],          // Storage handles these
+      reverseInheritance: [],   // Storage handles these
       _storageBackend: true
     };
   }
@@ -752,7 +814,7 @@ export class MemoryIndexWithStorage {
     this.isProcessingWrites = true;
 
     while (this.writeQueue.length > 0) {
-      const batch = this.writeQueue.splice(0, 10); // Process 10 at a time
+      const batch = this.writeQueue.splice(0, 50); // Process 50 at a time (increased from 10)
       
       try {
         if (this.storage) {
@@ -771,9 +833,9 @@ export class MemoryIndexWithStorage {
         }
       }
 
-      // Small delay to avoid blocking
+      // Only yield if there's more work (no fixed delay)
       if (this.writeQueue.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise(resolve => setImmediate(resolve));
       }
     }
 
@@ -796,9 +858,12 @@ export class MemoryIndexWithStorage {
     // First wait for init to complete
     await this.waitForInit();
     
-    // Then wait for writes
+    // Flush any pending batched writes
+    this.flushPendingWrites();
+    
+    // Then wait for write queue to drain
     while (this.writeQueue.length > 0 || this.isProcessingWrites) {
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 10));
     }
   }
 
