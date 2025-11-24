@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "java-indexer-memory": {
+      "command": "node",
+      "args": ["D:\\workspace\\repo\\github-playground\\mcp-java-indexer\\server\\dist\\index.js"],
+      "env": {},
+      "disabled": false,
+      "alwaysAllow": []
+    },
+    "java-indexer-storage": {
+      "command": "node",
+      "args": ["D:\\workspace\\repo\\github-playground\\mcp-java-indexer\\server\\dist\\index.js"],
+      "env": {
+        "ENABLE_STORAGE": "1"
+      },
+      "disabled": false,
+      "alwaysAllow": []
+    }
+  }
+}
