@@ -10,7 +10,12 @@
     "start": "node --max-old-space-size=4096 dist/index.js",
     "dev": "tsc && node --max-old-space-size=4096 dist/index.js"
   },
-  "keywords": ["mcp", "java", "indexer", "call-graph"],
+  "keywords": [
+    "mcp",
+    "java",
+    "indexer",
+    "call-graph"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -19,10 +24,14 @@
     "glob": "^10.3.10"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.0",
     "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.4.6"
   }
 }

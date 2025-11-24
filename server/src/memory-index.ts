@@ -57,10 +57,10 @@ export class MemoryIndex {
 
   private indexDir: string = '';
   
-  // Memory management thresholds
-  private readonly MAX_SYMBOLS = 300000; // Evict LRU symbols beyond this
-  private readonly MAX_DEPENDENCIES = 100000; // Clean up old dependencies
-  private readonly DEPENDENCY_TTL = 1000 * 60 * 30; // 30 minutes
+  // Memory management thresholds (AGGRESSIVE for large projects)
+  private readonly MAX_SYMBOLS = 50000; // Reduced from 300k - evict LRU symbols beyond this
+  private readonly MAX_DEPENDENCIES = 20000; // Reduced from 100k - clean up old dependencies
+  private readonly DEPENDENCY_TTL = 1000 * 60 * 10; // 10 minutes (reduced from 30)
 
   constructor() {}
 
@@ -606,6 +606,21 @@ export class MemoryIndex {
       this.removeFile(filePath);
     }
     
+    // STAGE 1.5: If still over dependency limit, remove oldest dependencies regardless of TTL
+    if (this.dependencyFiles.size > this.MAX_DEPENDENCIES) {
+      const sortedDeps = Array.from(this.dependencyFiles)
+        .map(filePath => ({
+          path: filePath,
+          lastIndexed: this.files.get(filePath)?.lastIndexed || 0
+        }))
+        .sort((a, b) => a.lastIndexed - b.lastIndexed); // Oldest first
+      
+      const toRemove = this.dependencyFiles.size - this.MAX_DEPENDENCIES;
+      for (let i = 0; i < toRemove && i < sortedDeps.length; i++) {
+        this.removeFile(sortedDeps[i].path);
+      }
+    }
+    
     // STAGE 2: LRU eviction if symbol count exceeds threshold
     if (this.symbols.size > this.MAX_SYMBOLS) {
       // Get all dependency symbols (not from indexed files)
@@ -698,13 +713,17 @@ export class MemoryIndex {
       }
     }
     
+    // STAGE 7: Explicit nulling for better GC (helps V8 optimizer)
+    // Clear temporary collections to allow immediate GC
     const afterSymbols = this.symbols.size;
     const afterRefs = this.references.length;
     const symbolsRemoved = beforeSymbols - afterSymbols;
     const refsRemoved = beforeRefs - afterRefs;
     
-    // Triple GC for maximum cleanup
+    // Quintuple GC for maximum cleanup (critical for large projects)
     if (global.gc) {
+      global.gc();
+      global.gc();
       global.gc();
       global.gc();
       global.gc();
@@ -713,9 +732,79 @@ export class MemoryIndex {
     const afterMem = process.memoryUsage().heapUsed / 1024 / 1024;
     const memFreed = beforeMem - afterMem;
     
-    if (symbolsRemoved > 0 || refsRemoved > 0 || memFreed > 10) {
-      console.error(`🧹 Cleanup: -${symbolsRemoved} symbols, -${refsRemoved} refs, -${oldDeps.length} old deps, freed ${memFreed.toFixed(1)}MB`);
+    if (symbolsRemoved > 0 || refsRemoved > 0 || memFreed > 5) {
+      console.error(`🧹 Cleanup: -${symbolsRemoved} symbols, -${refsRemoved} refs, -${oldDeps.length} old deps, freed ${memFreed.toFixed(1)}MB (heap: ${afterMem.toFixed(0)}MB)`);
     }
+  }
+  
+  /**
+   * Ultra-aggressive cleanup for emergency OOM situations
+   * Removes ALL dependency symbols and old references
+   */
+  emergencyCleanup(): void {
+    console.error(`🚨 EMERGENCY CLEANUP - removing all dependency data...`);
+    
+    const beforeMem = process.memoryUsage().heapUsed / 1024 / 1024;
+    
+    // Remove ALL dependency files
+    const depFiles = Array.from(this.dependencyFiles);
+    for (const filePath of depFiles) {
+      this.removeFile(filePath);
+    }
+    
+    // Keep only symbols from indexed files
+    const indexedSymbols = new Set<string>();
+    for (const filePath of this.indexedFiles) {
+      const fileInfo = this.files.get(filePath);
+      if (fileInfo) {
+        for (const fqn of fileInfo.symbols) {
+          indexedSymbols.add(fqn);
+        }
+      }
+    }
+    
+    // Remove all non-indexed symbols
+    const symbolsToRemove: string[] = [];
+    for (const [fqn] of this.symbols) {
+      if (!indexedSymbols.has(fqn)) {
+        symbolsToRemove.push(fqn);
+      }
+    }
+    
+    for (const fqn of symbolsToRemove) {
+      this.symbols.delete(fqn);
+      this.symbolAccessTime.delete(fqn);
+      this.callGraph.delete(fqn);
+      this.reverseCallGraph.delete(fqn);
+      this.inheritance.delete(fqn);
+      this.reverseInheritance.delete(fqn);
+    }
+    
+    // Remove references to deleted symbols
+    this.references = this.references.filter(ref =>
+      indexedSymbols.has(ref.fromFqn) && indexedSymbols.has(ref.toFqn)
+    );
+    
+    // Rebuild referencesByFile
+    this.referencesByFile.clear();
+    for (const ref of this.references) {
+      if (!this.referencesByFile.has(ref.file)) {
+        this.referencesByFile.set(ref.file, []);
+      }
+      this.referencesByFile.get(ref.file)!.push(ref);
+    }
+    
+    // Extreme GC
+    if (global.gc) {
+      for (let i = 0; i < 10; i++) {
+        global.gc();
+      }
+    }
+    
+    const afterMem = process.memoryUsage().heapUsed / 1024 / 1024;
+    const memFreed = beforeMem - afterMem;
+    
+    console.error(`✅ Emergency cleanup complete: ${symbolsToRemove.length} symbols removed, freed ${memFreed.toFixed(1)}MB (heap: ${afterMem.toFixed(0)}MB)`);
   }
 
   // Serialization for persistence

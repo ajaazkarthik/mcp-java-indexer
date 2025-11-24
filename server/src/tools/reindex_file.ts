@@ -74,6 +74,12 @@ export async function handleReindexFile(
 
     // Persist changes
     const persistence = new Persistence(memoryIndex.getIndexDir());
+    
+    // CRITICAL: Flush all pending writes to storage
+    if ((memoryIndex as any).flush) {
+      await (memoryIndex as any).flush();
+    }
+    
     await persistence.save(memoryIndex);
 
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);

@@ -205,14 +205,15 @@ export async function handleIndexProject(
       // Clear indexer client buffer to prevent accumulation
       indexerClient.clearBuffer();
       
-      // Run maintenance cleanup EVERY 3 batches (increased frequency)
-      if (batchCount % 3 === 0) {
+      // Run maintenance cleanup EVERY 2 batches (increased frequency from 3)
+      if (batchCount % 2 === 0) {
         memoryIndex.performMaintenanceCleanup();
       }
       
       // Force GC after every batch (critical for large projects)
       if (global.gc) {
         global.gc();
+        global.gc(); // Double GC
       }
       
       const memUsage = process.memoryUsage();
@@ -221,20 +222,25 @@ export async function handleIndexProject(
       
       console.error(`📊 Batch ${batchCount}: ${progress}/${filesToIndex.length} (${percentage}%) - ${totalSymbols} symbols - ${rate} files/s - Heap: ${heapUsedMB}/${heapTotalMB}MB`);
       
-      // Emergency brake: REDUCED threshold from 3.5GB to 2GB for earlier intervention
-      if (heapUsedMB > 2000) {
+      // Emergency brake: REDUCED threshold from 2GB to 1.5GB for earlier intervention
+      if (heapUsedMB > 1500) {
         console.error(`⚠️  HIGH MEMORY WARNING: ${heapUsedMB}MB - Running emergency cleanup...`);
-        memoryIndex.performMaintenanceCleanup();
+        memoryIndex.emergencyCleanup();
         if (global.gc) {
-          global.gc();
-          global.gc();
-          global.gc(); // Triple GC for aggressive cleanup
+          for (let g = 0; g < 5; g++) {
+            global.gc();
+          }
         }
         
         // Log stats after cleanup
         const afterCleanup = process.memoryUsage();
         const afterMB = Math.round(afterCleanup.heapUsed / 1024 / 1024);
-        console.error(`✅ After cleanup: ${afterMB}MB (freed ${heapUsedMB - afterMB}MB)`);
+        console.error(`✅ After emergency cleanup: ${afterMB}MB (freed ${heapUsedMB - afterMB}MB)`);
+        
+        // If still high, throw error to prevent crash
+        if (afterMB > 2500) {
+          throw new Error(`Memory usage still too high (${afterMB}MB) after emergency cleanup. Please increase heap size with --max-old-space-size=8192 or reduce project scope.`);
+        }
       }
     }
 
@@ -245,6 +251,13 @@ export async function handleIndexProject(
     // Persist index (only if we made changes)
     if (filesToIndex.length > 0) {
       console.error(`\n💾 Persisting index to disk...`);
+      
+      // CRITICAL: Flush all pending writes to storage before marking complete
+      if ((memoryIndex as any).flush) {
+        console.error(`   ⏳ Flushing to storage...`);
+        await (memoryIndex as any).flush();
+      }
+      
       await persistence.save(memoryIndex);
       console.error(`✅ Index persisted successfully`);
     }

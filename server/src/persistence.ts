@@ -30,21 +30,27 @@ export class Persistence {
 
     const data = memoryIndex.toJSON();
     
+    // Skip save if storage backend is enabled
+    if (data && (data as any)._storageBackend) {
+      console.error('⚠️  Skipping JSON persistence - storage backend handles it');
+      return;
+    }
+    
     try {
       // Save metadata separately
       const metadata = {
         version: '1.0',
         timestamp: Date.now(),
         stats: {
-          symbols: data.symbols.length,
-          files: data.files.length,
-          indexedFiles: data.indexedFiles.length,
-          references: data.references.length,
-          referencesByFile: data.referencesByFile.length,
-          callGraph: data.callGraph.length,
-          reverseCallGraph: data.reverseCallGraph.length,
-          inheritance: data.inheritance.length,
-          reverseInheritance: data.reverseInheritance.length
+          symbols: data.symbols?.length || 0,
+          files: data.files?.length || 0,
+          indexedFiles: data.indexedFiles?.length || 0,
+          references: data.references?.length || 0,
+          referencesByFile: data.referencesByFile?.length || 0,
+          callGraph: data.callGraph?.length || 0,
+          reverseCallGraph: data.reverseCallGraph?.length || 0,
+          inheritance: data.inheritance?.length || 0,
+          reverseInheritance: data.reverseInheritance?.length || 0
         }
       };
       

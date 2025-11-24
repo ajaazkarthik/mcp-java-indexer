@@ -326,9 +326,39 @@ The file watcher automatically:
 
 ### Performance Issues
 
-- **Large projects**: Index in batches of 50 files
-- **Memory**: Increase Node.js heap with `--max-old-space-size=4096`
+- **Large projects**: Index in batches of 100 files (automatic)
+- **Memory**: See [MEMORY_OPTIMIZATION.md](MEMORY_OPTIMIZATION.md) for comprehensive guide
+  - Quick fix: Increase heap with `--max-old-space-size=8192`
+  - Use `@java-indexer compact_index` after indexing
 - **Disk I/O**: Use SSD for better performance
+
+### Memory Issues (OOM/Crashes)
+
+**For projects with 10,000+ Java files:**
+
+👉 **Read the complete guide**: [MEMORY_OPTIMIZATION.md](MEMORY_OPTIMIZATION.md)
+
+**Quick fixes:**
+1. Increase heap size to 8GB in MCP config
+2. Use `@java-indexer compact_index with aggressive: true` after indexing
+3. Enable incremental indexing (don't force full rebuilds)
+4. Use `--expose-gc` flag for garbage collection
+
+**Example MCP config for large projects:**
+```json
+{
+  "mcpServers": {
+    "java-indexer": {
+      "command": "node",
+      "args": [
+        "--max-old-space-size=8192",
+        "--expose-gc",
+        "C:\\path\\to\\server\\dist\\index.js"
+      ]
+    }
+  }
+}
+```
 
 ## 🏗️ Development
 

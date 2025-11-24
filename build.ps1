@@ -7,28 +7,30 @@ Write-Host ""
 Write-Host "Checking prerequisites..." -ForegroundColor Yellow
 
 # Check Java
-try {
-    $javaVersion = java -version 2>&1 | Select-String "version" | ForEach-Object { $_.ToString() }
+$javaCheck = java -version 2>&1
+if ($LASTEXITCODE -eq 0) {
+    $javaVersion = $javaCheck | Select-String "version" | Select-Object -First 1
     Write-Host "✓ Java found: $javaVersion" -ForegroundColor Green
-} catch {
+} else {
     Write-Host "✗ Java not found. Please install Java 11 or higher." -ForegroundColor Red
     exit 1
 }
 
 # Check Maven
-try {
-    $mavenVersion = mvn -version | Select-String "Apache Maven" | ForEach-Object { $_.ToString() }
+$mavenCheck = mvn -version 2>&1
+if ($LASTEXITCODE -eq 0) {
+    $mavenVersion = $mavenCheck | Select-String "Apache Maven" | Select-Object -First 1
     Write-Host "✓ Maven found: $mavenVersion" -ForegroundColor Green
-} catch {
+} else {
     Write-Host "✗ Maven not found. Please install Maven 3.6 or higher." -ForegroundColor Red
     exit 1
 }
 
 # Check Node.js
-try {
-    $nodeVersion = node --version
-    Write-Host "✓ Node.js found: $nodeVersion" -ForegroundColor Green
-} catch {
+$nodeCheck = node --version 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "✓ Node.js found: $nodeCheck" -ForegroundColor Green
+} else {
     Write-Host "✗ Node.js not found. Please install Node.js 18 or higher." -ForegroundColor Red
     exit 1
 }
@@ -38,11 +40,12 @@ Write-Host "📦 Building Java Indexer..." -ForegroundColor Cyan
 
 Set-Location java-indexer
 
-try {
-    mvn clean package -q
+mvn clean package -q
+if ($LASTEXITCODE -eq 0) {
     Write-Host "✓ Java Indexer built successfully" -ForegroundColor Green
-} catch {
+} else {
     Write-Host "✗ Java Indexer build failed" -ForegroundColor Red
+    Set-Location ..
     exit 1
 }
 
@@ -53,16 +56,17 @@ Write-Host "📦 Building Node.js Server..." -ForegroundColor Cyan
 
 Set-Location server
 
-try {
-    if (-not (Test-Path "node_modules")) {
-        Write-Host "Installing dependencies..." -ForegroundColor Yellow
-        npm install --silent
-    }
-    
-    npm run build --silent
+if (-not (Test-Path "node_modules")) {
+    Write-Host "Installing dependencies..." -ForegroundColor Yellow
+    npm install --silent
+}
+
+npm run build --silent
+if ($LASTEXITCODE -eq 0) {
     Write-Host "✓ Node.js Server built successfully" -ForegroundColor Green
-} catch {
+} else {
     Write-Host "✗ Node.js Server build failed" -ForegroundColor Red
+    Set-Location ..
     exit 1
 }
 
@@ -88,4 +92,4 @@ Write-Host ""
 Write-Host "3. Restart VS Code"
 Write-Host ""
 Write-Host "4. Test in Copilot Chat:"
-Write-Host '   @java-indexer index_project with rootDir: "C:/path/to/java/project"' -ForegroundColor Gray
+Write-Host "   @java-indexer index_project with rootDir: `"C:/path/to/java/project`"" -ForegroundColor Gray
