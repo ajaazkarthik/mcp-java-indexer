@@ -21,6 +21,7 @@ import { explainCodeTool, handleExplainCode } from './tools/explain_code.js';
 import { testCoverageTool, handleTestCoverage } from './tools/test_coverage.js';
 import { refactoringSuggestionsTool, handleRefactoringSuggestions } from './tools/refactoring_suggestions.js';
 import { codeGenerationTool, handleCodeGeneration } from './tools/code_generation.js';
+import { compactIndexTool, handleCompactIndex } from './tools/compact_index.js';
 
 const server = new Server(
   {
@@ -42,7 +43,7 @@ let fsWatcher: FileSystemWatcher | null = null;
 // Memory monitoring and cleanup
 let maintenanceInterval: NodeJS.Timeout | null = null;
 
-// Setup periodic maintenance (every 30 minutes)
+// Setup periodic maintenance (every 15 minutes for aggressive memory management)
 function startMaintenanceSchedule(): void {
   if (maintenanceInterval) return;
   
@@ -50,12 +51,27 @@ function startMaintenanceSchedule(): void {
     console.error('Running periodic maintenance cleanup...');
     
     try {
+      const beforeMem = process.memoryUsage().heapUsed / 1024 / 1024;
+      
+      // Skip cleanup if there are pending indexer requests (avoid interference)
+      const clientStats = indexerClient.getMemoryStats();
+      if (clientStats.pendingRequests > 0) {
+        console.error(`Skipping maintenance cleanup: ${clientStats.pendingRequests} pending requests`);
+        return;
+      }
+      
       // Cleanup orphaned data
       memoryIndex.performMaintenanceCleanup();
       
+      // Force GC if available
+      if (global.gc) {
+        global.gc();
+      }
+      
+      const afterMem = process.memoryUsage().heapUsed / 1024 / 1024;
+      
       // Log memory stats
       const stats = memoryIndex.getStats();
-      const clientStats = indexerClient.getMemoryStats();
       const memUsage = process.memoryUsage();
       
       console.error('Memory stats:', {
@@ -63,22 +79,36 @@ function startMaintenanceSchedule(): void {
         heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
         rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
         symbols: stats.symbols,
+        indexedFiles: stats.indexedFiles,
+        allFiles: stats.allFiles,
         references: stats.references,
         pendingRequests: clientStats.pendingRequests,
-        bufferSize: `${Math.round(clientStats.bufferSize / 1024)}KB`
+        bufferSize: `${Math.round(clientStats.bufferSize / 1024)}KB`,
+        cleanupFreed: `${(beforeMem - afterMem).toFixed(1)}MB`
       });
       
-      // Warn if memory is high
+      // Warn if memory is high (reduced threshold to 2.5GB)
       const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
-      if (heapUsedMB > 3072) { // 3GB warning threshold
+      if (heapUsedMB > 2560) { // 2.5GB warning threshold
         console.error(`⚠️  WARNING: High memory usage (${Math.round(heapUsedMB)}MB). Consider restarting.`);
+      }
+      
+      // CRITICAL: Force aggressive cleanup if approaching limit
+      if (heapUsedMB > 4096) { // 4GB critical threshold
+        console.error(`\ud83d\udea8 CRITICAL: Memory at ${Math.round(heapUsedMB)}MB - forcing aggressive cleanup`);
+        memoryIndex.performMaintenanceCleanup(); // Second pass
+        if (global.gc) {
+          global.gc();
+          global.gc();
+          global.gc();
+        }
       }
     } catch (error) {
       console.error('Maintenance cleanup error:', error);
     }
-  }, 30 * 60 * 1000); // 30 minutes
+  }, 15 * 60 * 1000); // 15 minutes (increased frequency)
   
-  console.error('Maintenance schedule started (runs every 30 minutes)');
+  console.error('Maintenance schedule started (runs every 15 minutes)');
 }
 
 // Cleanup on shutdown
@@ -113,7 +143,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     explainCodeTool,
     testCoverageTool,
     refactoringSuggestionsTool,
-    codeGenerationTool
+    codeGenerationTool,
+    compactIndexTool
   ];
 
   return { tools };
@@ -165,6 +196,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'code_generation':
         return await handleCodeGeneration(args, memoryIndex);
+
+      case 'compact_index':
+        return await handleCompactIndex(args, memoryIndex);
 
       default:
         throw new Error(`Unknown tool: ${name}`);

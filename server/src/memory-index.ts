@@ -46,6 +46,8 @@ export class MemoryIndex {
   private symbols: Map<string, SymbolStub> = new Map(); // FQN -> SymbolStub
   private files: Map<string, FileInfo> = new Map(); // file path -> FileInfo
   private indexedFiles: Set<string> = new Set(); // Only files we explicitly indexed (not dependencies)
+  private dependencyFiles: Set<string> = new Set(); // Dependency files (can be cleaned up)
+  private symbolAccessTime: Map<string, number> = new Map(); // FQN -> last access timestamp (LRU)
   private references: Reference[] = []; // All references
   private referencesByFile: Map<string, Reference[]> = new Map(); // file -> references (for efficient cleanup)
   private callGraph: Map<string, CallGraphEdge[]> = new Map(); // caller FQN -> edges
@@ -54,6 +56,11 @@ export class MemoryIndex {
   private reverseInheritance: Map<string, string[]> = new Map(); // parent -> children
 
   private indexDir: string = '';
+  
+  // Memory management thresholds
+  private readonly MAX_SYMBOLS = 300000; // Evict LRU symbols beyond this
+  private readonly MAX_DEPENDENCIES = 100000; // Clean up old dependencies
+  private readonly DEPENDENCY_TTL = 1000 * 60 * 30; // 30 minutes
 
   constructor() {}
 
@@ -89,7 +96,12 @@ export class MemoryIndex {
 
   // Get symbol by FQN
   getSymbol(fqn: string): SymbolStub | undefined {
-    return this.symbols.get(fqn);
+    const symbol = this.symbols.get(fqn);
+    if (symbol) {
+      // Track access time for LRU eviction
+      this.symbolAccessTime.set(fqn, Date.now());
+    }
+    return symbol;
   }
 
   // Get all symbols (for semantic search and code explanation)
@@ -458,6 +470,9 @@ export class MemoryIndex {
     });
     if (isIndexedFile) {
       this.indexedFiles.add(filePath);
+      this.dependencyFiles.delete(filePath); // Remove from deps if promoted to indexed
+    } else {
+      this.dependencyFiles.add(filePath);
     }
   }
 
@@ -564,6 +579,8 @@ export class MemoryIndex {
     this.symbols.clear();
     this.files.clear();
     this.indexedFiles.clear();
+    this.dependencyFiles.clear();
+    this.symbolAccessTime.clear();
     this.references = [];
     this.referencesByFile.clear();
     this.callGraph.clear();
@@ -575,11 +592,57 @@ export class MemoryIndex {
   // Aggressive cleanup to prevent memory bloat and OOM
   performMaintenanceCleanup(): void {
     const beforeMem = process.memoryUsage().heapUsed / 1024 / 1024;
+    const beforeSymbols = this.symbols.size;
+    const beforeRefs = this.references.length;
     
-    // Remove orphaned references (where fromFqn or toFqn no longer exist)
+    // STAGE 1: Remove old dependency files (not accessed recently)
+    const now = Date.now();
+    const oldDeps = Array.from(this.dependencyFiles).filter(filePath => {
+      const fileInfo = this.files.get(filePath);
+      return fileInfo && (now - fileInfo.lastIndexed) > this.DEPENDENCY_TTL;
+    });
+    
+    for (const filePath of oldDeps) {
+      this.removeFile(filePath);
+    }
+    
+    // STAGE 2: LRU eviction if symbol count exceeds threshold
+    if (this.symbols.size > this.MAX_SYMBOLS) {
+      // Get all dependency symbols (not from indexed files)
+      const indexedSymbols = new Set<string>();
+      for (const filePath of this.indexedFiles) {
+        const fileInfo = this.files.get(filePath);
+        if (fileInfo) {
+          for (const fqn of fileInfo.symbols) {
+            indexedSymbols.add(fqn);
+          }
+        }
+      }
+      
+      // Sort dependency symbols by access time (LRU)
+      const depSymbols = Array.from(this.symbols.keys())
+        .filter(fqn => !indexedSymbols.has(fqn))
+        .map(fqn => ({
+          fqn,
+          accessTime: this.symbolAccessTime.get(fqn) || 0
+        }))
+        .sort((a, b) => a.accessTime - b.accessTime); // Oldest first
+      
+      // Evict oldest dependency symbols
+      const toEvict = this.symbols.size - this.MAX_SYMBOLS;
+      for (let i = 0; i < Math.min(toEvict, depSymbols.length); i++) {
+        const fqn = depSymbols[i].fqn;
+        this.symbols.delete(fqn);
+        this.symbolAccessTime.delete(fqn);
+        this.callGraph.delete(fqn);
+        this.reverseCallGraph.delete(fqn);
+        this.inheritance.delete(fqn);
+        this.reverseInheritance.delete(fqn);
+      }
+    }
+    
+    // STAGE 3: Remove orphaned references (where fromFqn or toFqn no longer exist)
     const validFqns = new Set(this.symbols.keys());
-    const beforeCount = this.references.length;
-    
     this.references = this.references.filter(ref => 
       validFqns.has(ref.fromFqn) && validFqns.has(ref.toFqn)
     );
@@ -593,22 +656,21 @@ export class MemoryIndex {
       this.referencesByFile.get(ref.file)!.push(ref);
     }
     
-    // Clean up empty call graph entries
+    // STAGE 4: Clean up empty call graph entries
     for (const [fqn, edges] of this.callGraph.entries()) {
-      if (edges.length === 0) {
+      if (edges.length === 0 || !validFqns.has(fqn)) {
         this.callGraph.delete(fqn);
       }
     }
     for (const [fqn, edges] of this.reverseCallGraph.entries()) {
-      if (edges.length === 0) {
+      if (edges.length === 0 || !validFqns.has(fqn)) {
         this.reverseCallGraph.delete(fqn);
       }
     }
     
-    // Trim call graph edges with duplicate locations
+    // STAGE 5: Trim call graph edges with duplicate locations (memory efficiency)
     for (const [caller, edges] of this.callGraph.entries()) {
       for (const edge of edges) {
-        // Deduplicate locations
         const uniqueLocations = new Map<string, typeof edge.locations[0]>();
         for (const loc of edge.locations) {
           const key = `${loc.file}:${loc.line}:${loc.column}`;
@@ -628,11 +690,22 @@ export class MemoryIndex {
       }
     }
     
-    const afterCount = this.references.length;
-    const removed = beforeCount - afterCount;
+    // STAGE 6: Clear access time for evicted symbols
+    const currentSymbols = new Set(this.symbols.keys());
+    for (const fqn of this.symbolAccessTime.keys()) {
+      if (!currentSymbols.has(fqn)) {
+        this.symbolAccessTime.delete(fqn);
+      }
+    }
     
-    // Double GC for aggressive cleanup
+    const afterSymbols = this.symbols.size;
+    const afterRefs = this.references.length;
+    const symbolsRemoved = beforeSymbols - afterSymbols;
+    const refsRemoved = beforeRefs - afterRefs;
+    
+    // Triple GC for maximum cleanup
     if (global.gc) {
+      global.gc();
       global.gc();
       global.gc();
     }
@@ -640,8 +713,8 @@ export class MemoryIndex {
     const afterMem = process.memoryUsage().heapUsed / 1024 / 1024;
     const memFreed = beforeMem - afterMem;
     
-    if (removed > 0 || memFreed > 0) {
-      console.error(`🧹 Cleanup: removed ${removed} orphaned refs, freed ${memFreed.toFixed(1)}MB`);
+    if (symbolsRemoved > 0 || refsRemoved > 0 || memFreed > 10) {
+      console.error(`🧹 Cleanup: -${symbolsRemoved} symbols, -${refsRemoved} refs, -${oldDeps.length} old deps, freed ${memFreed.toFixed(1)}MB`);
     }
   }
 
@@ -651,6 +724,8 @@ export class MemoryIndex {
       symbols: Array.from(this.symbols.entries()),
       files: Array.from(this.files.entries()),
       indexedFiles: Array.from(this.indexedFiles),
+      dependencyFiles: Array.from(this.dependencyFiles),
+      symbolAccessTime: Array.from(this.symbolAccessTime.entries()),
       references: this.references,
       referencesByFile: Array.from(this.referencesByFile.entries()),
       callGraph: Array.from(this.callGraph.entries()),
@@ -666,6 +741,8 @@ export class MemoryIndex {
     this.symbols = new Map(data.symbols);
     this.files = new Map(data.files);
     this.indexedFiles = new Set(data.indexedFiles || []);
+    this.dependencyFiles = new Set(data.dependencyFiles || []);
+    this.symbolAccessTime = new Map(data.symbolAccessTime || []);
     this.references = data.references || [];
     this.referencesByFile = new Map(data.referencesByFile || []);
     this.callGraph = new Map(data.callGraph || []);

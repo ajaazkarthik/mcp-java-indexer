@@ -10,6 +10,9 @@ export class FileSystemWatcher {
   private persistence: Persistence;
   private rootDir: string;
   private sourceRoots: string[];
+  private pendingChanges: Set<string> = new Set();
+  private persistTimer: NodeJS.Timeout | null = null;
+  private reindexInProgress: Set<string> = new Set();
 
   constructor(
     rootDir: string,
@@ -59,6 +62,11 @@ export class FileSystemWatcher {
   private async handleFileChange(relativePath: string): Promise<void> {
     const fullPath = `${this.rootDir}/${relativePath}`.replace(/\\/g, '/');
     
+    // Prevent duplicate reindex for the same file
+    if (this.reindexInProgress.has(fullPath)) {
+      return;
+    }
+    
     try {
       // Check if file needs reindexing
       const needsReindex = await this.memoryIndex.needsReindex(fullPath);
@@ -66,6 +74,8 @@ export class FileSystemWatcher {
         return;
       }
 
+      // Mark as in progress
+      this.reindexInProgress.add(fullPath);
       console.error(`Reindexing changed file: ${fullPath}`);
 
       // Remove old data
@@ -91,14 +101,19 @@ export class FileSystemWatcher {
       }
 
       const hash = await MemoryIndex.calculateFileHash(fullPath);
-      this.memoryIndex.addFile(fullPath, hash, symbolFqns);
+      // CRITICAL FIX: Mark as indexed file to prevent it from being treated as dependency
+      this.memoryIndex.addFile(fullPath, hash, symbolFqns, true);
 
-      // Persist changes
-      await this.persistence.save(this.memoryIndex);
+      // Add to pending changes for batched persistence
+      this.pendingChanges.add(fullPath);
+      this.schedulePersist();
 
       console.error(`Reindexed ${fullPath}: ${result.symbols.length} symbols, ${result.references.length} references`);
     } catch (error) {
       console.error(`Error reindexing ${fullPath}:`, error);
+    } finally {
+      // Remove from in-progress set
+      this.reindexInProgress.delete(fullPath);
     }
   }
 
@@ -110,11 +125,35 @@ export class FileSystemWatcher {
       console.error(`Removing deleted file from index: ${fullPath}`);
       
       this.memoryIndex.removeFile(fullPath);
-      await this.persistence.save(this.memoryIndex);
+      
+      // Add to pending changes for batched persistence
+      this.pendingChanges.add(fullPath);
+      this.schedulePersist();
       
       console.error(`Removed ${fullPath} from index`);
     } catch (error) {
       console.error(`Error removing ${fullPath}:`, error);
     }
+  }
+
+  // Schedule batched persistence (debounced to 5 seconds)
+  private schedulePersist(): void {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+    }
+
+    this.persistTimer = setTimeout(async () => {
+      if (this.pendingChanges.size > 0) {
+        console.error(`Persisting ${this.pendingChanges.size} file changes...`);
+        try {
+          await this.persistence.save(this.memoryIndex);
+          this.pendingChanges.clear();
+          console.error(`Persistence complete`);
+        } catch (error) {
+          console.error('Failed to persist changes:', error);
+        }
+      }
+      this.persistTimer = null;
+    }, 5000); // 5 second debounce
   }
 }

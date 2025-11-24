@@ -20,6 +20,7 @@ export class IndexerClient {
   private nextRequestId: number = 1;
   private readonly REQUEST_TIMEOUT = 1800000; // 30 minutes
   private readonly MAX_BUFFER_SIZE = 50 * 1024 * 1024; // 50MB max buffer
+  private readonly MAX_PENDING_REQUESTS = 100; // Prevent request accumulation
 
   constructor() {}
 
@@ -113,6 +114,11 @@ export class IndexerClient {
   private async sendRequest(method: string, params: any): Promise<any> {
     if (!this.javaProcess || !this.javaProcess.stdin) {
       throw new Error('Java indexer process not started');
+    }
+
+    // Prevent request queue from growing unbounded
+    if (this.pendingRequests.size >= this.MAX_PENDING_REQUESTS) {
+      throw new Error(`Too many pending requests (${this.pendingRequests.size}). Java process may be stuck.`);
     }
 
     const id = this.nextRequestId++;

@@ -205,8 +205,8 @@ export async function handleIndexProject(
       // Clear indexer client buffer to prevent accumulation
       indexerClient.clearBuffer();
       
-      // Run maintenance cleanup to remove orphaned references
-      if (batchCount % 5 === 0) {
+      // Run maintenance cleanup EVERY 3 batches (increased frequency)
+      if (batchCount % 3 === 0) {
         memoryIndex.performMaintenanceCleanup();
       }
       
@@ -221,14 +221,20 @@ export async function handleIndexProject(
       
       console.error(`📊 Batch ${batchCount}: ${progress}/${filesToIndex.length} (${percentage}%) - ${totalSymbols} symbols - ${rate} files/s - Heap: ${heapUsedMB}/${heapTotalMB}MB`);
       
-      // Emergency brake: if heap usage > 3.5GB, trigger aggressive cleanup
-      if (heapUsedMB > 3500) {
+      // Emergency brake: REDUCED threshold from 3.5GB to 2GB for earlier intervention
+      if (heapUsedMB > 2000) {
         console.error(`⚠️  HIGH MEMORY WARNING: ${heapUsedMB}MB - Running emergency cleanup...`);
         memoryIndex.performMaintenanceCleanup();
         if (global.gc) {
           global.gc();
-          global.gc(); // Double GC for aggressive cleanup
+          global.gc();
+          global.gc(); // Triple GC for aggressive cleanup
         }
+        
+        // Log stats after cleanup
+        const afterCleanup = process.memoryUsage();
+        const afterMB = Math.round(afterCleanup.heapUsed / 1024 / 1024);
+        console.error(`✅ After cleanup: ${afterMB}MB (freed ${heapUsedMB - afterMB}MB)`);
       }
     }
 
