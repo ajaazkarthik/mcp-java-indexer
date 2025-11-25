@@ -19,7 +19,7 @@ export class IndexerClient {
   private pendingRequests: Map<number, { resolve: (value: any) => void; reject: (error: any) => void; timeout: NodeJS.Timeout }> = new Map();
   private nextRequestId: number = 1;
   private readonly REQUEST_TIMEOUT = 600000; // 10 minutes
-  private readonly MAX_BUFFER_SIZE = 50 * 1024 * 1024; // 50MB max buffer
+  private readonly MAX_BUFFER_SIZE = 500 * 1024 * 1024; // 500MB max buffer - increased for large projects
 
   constructor() {}
 
@@ -36,14 +36,16 @@ export class IndexerClient {
     this.javaProcess.stdout!.on('data', (data: Buffer) => {
       this.messageBuffer += data.toString();
       
-      // Prevent buffer overflow
-      if (this.messageBuffer.length > this.MAX_BUFFER_SIZE) {
-        console.error('Message buffer exceeded limit, clearing...');
-        this.messageBuffer = '';
-        this.rejectAllPending('Buffer overflow');
-      }
-      
+      // Process messages BEFORE checking buffer size to prevent premature rejection
       this.processMessages();
+      
+      // Only reject if buffer is still too large after processing (incomplete malformed data)
+      if (this.messageBuffer.length > this.MAX_BUFFER_SIZE) {
+        console.error(`Buffer overflow: ${Math.round(this.messageBuffer.length / 1024 / 1024)}MB - clearing incomplete data`);
+        // Only clear the incomplete buffer, don't reject pending requests
+        // The pending request will timeout naturally if no response comes
+        this.messageBuffer = '';
+      }
     });
 
     // Handle stderr (logs)

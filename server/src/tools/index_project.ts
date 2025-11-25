@@ -147,9 +147,9 @@ export async function handleIndexProject(
       filesToIndex = javaFiles;
     }
 
-    // Conservative batch sizing to prevent OOM - smaller batches = more GC opportunities
-    // 300 files = balanced for performance and stability, allows GC between batches
-    const batchSize = 300; // Optimized: large enough for performance, small enough to avoid OOM
+    // Conservative batch sizing to prevent OOM and buffer overflow
+    // 100 files = safer for large projects, prevents JSON response buffer overflow
+    const batchSize = 100; // Reduced for stability - prevents buffer overflow on large projects
     let totalSymbols = 0;
     let totalReferences = 0;
     let processedFiles = 0;

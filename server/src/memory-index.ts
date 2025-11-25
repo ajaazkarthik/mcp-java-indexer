@@ -286,9 +286,84 @@ export class MemoryIndex {
     }
   }
 
-  // Find all usages of a symbol
+  // Find all usages of a symbol - uses fuzzy matching for better results
   findUsages(fqn: string): Reference[] {
-    return this.references.filter(ref => ref.toFqn === fqn);
+    // First try exact match
+    const exactMatches = this.references.filter(ref => ref.toFqn === fqn);
+    if (exactMatches.length > 0) {
+      return exactMatches;
+    }
+    
+    // Extract method/field name for fuzzy matching
+    // FQN format: com.example.ClassName.methodName(params) or com.example.ClassName.fieldName
+    const lastDot = fqn.lastIndexOf('.');
+    const parenIndex = fqn.indexOf('(');
+    
+    let simpleName: string;
+    let className: string | null = null;
+    
+    if (parenIndex > 0) {
+      // Method: extract name and params
+      const methodWithParams = fqn.substring(lastDot + 1);
+      simpleName = methodWithParams; // e.g., getSessionFactory()
+      
+      // Also extract just the method name for partial matching
+      const methodName = fqn.substring(lastDot + 1, parenIndex);
+      
+      // Try to match: className.methodName pattern in toFqn
+      if (lastDot > 0) {
+        const beforeMethod = fqn.substring(0, lastDot);
+        const classNameIndex = beforeMethod.lastIndexOf('.');
+        className = classNameIndex > 0 ? beforeMethod.substring(classNameIndex + 1) : beforeMethod;
+      }
+      
+      // Fuzzy match: find references where toFqn ends with .methodName( or matches className.methodName
+      return this.references.filter(ref => {
+        const toFqn = ref.toFqn;
+        // Match patterns like: varName.methodName, ClassName.methodName, or package.Class.methodName
+        if (toFqn.endsWith('.' + methodName) || toFqn.endsWith('.' + methodName + '()')) {
+          return true;
+        }
+        // Match if className matches (e.g., HibernateUtils.getSessionFactory)
+        if (className && toFqn.includes(className + '.' + methodName)) {
+          return true;
+        }
+        // Match if just the method name matches (for unqualified calls)
+        if (toFqn === methodName || toFqn.endsWith('.' + methodName)) {
+          return true;
+        }
+        return false;
+      });
+    } else if (lastDot > 0) {
+      // Field or class reference
+      simpleName = fqn.substring(lastDot + 1);
+      const beforeField = fqn.substring(0, lastDot);
+      const classNameIndex = beforeField.lastIndexOf('.');
+      className = classNameIndex > 0 ? beforeField.substring(classNameIndex + 1) : beforeField;
+      
+      // Fuzzy match for fields and classes
+      return this.references.filter(ref => {
+        const toFqn = ref.toFqn;
+        // Match patterns like: varName.fieldName, ClassName.fieldName
+        if (toFqn.endsWith('.' + simpleName)) {
+          return true;
+        }
+        // Match if className is present
+        if (className && toFqn.includes(className + '.' + simpleName)) {
+          return true;
+        }
+        // Match by simple name for class references (instantiation, inheritance)
+        if (toFqn === simpleName || toFqn.endsWith('.' + simpleName)) {
+          return true;
+        }
+        return false;
+      });
+    }
+    
+    // Fallback: match by simple name anywhere in toFqn
+    return this.references.filter(ref => 
+      ref.toFqn.includes(fqn) || ref.toFqn.endsWith('.' + fqn)
+    );
   }
 
   // Add call graph edge
@@ -320,12 +395,96 @@ export class MemoryIndex {
 
   // Get outbound calls (what this method calls)
   getOutboundCalls(fqn: string): CallGraphEdge[] {
-    return this.callGraph.get(fqn) || [];
+    // Try exact match first
+    const exact = this.callGraph.get(fqn);
+    if (exact && exact.length > 0) {
+      return exact;
+    }
+    
+    // Fuzzy match: find calls from methods with matching name
+    const results: CallGraphEdge[] = [];
+    const lastDot = fqn.lastIndexOf('.');
+    const parenIndex = fqn.indexOf('(');
+    
+    if (lastDot > 0) {
+      // Extract method name for matching
+      const methodName = parenIndex > 0 ? fqn.substring(lastDot + 1, parenIndex) : fqn.substring(lastDot + 1);
+      
+      for (const [caller, edges] of this.callGraph.entries()) {
+        // Match callers that end with the method signature or method name
+        if (caller.endsWith('.' + methodName + '(') || caller.includes('.' + methodName + '(')) {
+          const callerParen = caller.indexOf('(');
+          if (callerParen > 0) {
+            const callerMethod = caller.substring(caller.lastIndexOf('.', callerParen) + 1, callerParen);
+            if (callerMethod === methodName) {
+              results.push(...edges);
+            }
+          }
+        }
+      }
+    }
+    
+    return results;
   }
 
-  // Get inbound calls (who calls this method)
+  // Get inbound calls (who calls this method) - uses fuzzy matching
   getInboundCalls(fqn: string): CallGraphEdge[] {
-    return this.reverseCallGraph.get(fqn) || [];
+    // Try exact match first
+    const exact = this.reverseCallGraph.get(fqn);
+    if (exact && exact.length > 0) {
+      return exact;
+    }
+    
+    // Fuzzy match: find calls to methods with matching name
+    const results: CallGraphEdge[] = [];
+    const lastDot = fqn.lastIndexOf('.');
+    const parenIndex = fqn.indexOf('(');
+    
+    let methodName: string;
+    let className: string | null = null;
+    
+    if (parenIndex > 0) {
+      methodName = fqn.substring(lastDot + 1, parenIndex);
+    } else if (lastDot > 0) {
+      methodName = fqn.substring(lastDot + 1);
+    } else {
+      methodName = fqn;
+    }
+    
+    // Extract class name for better matching
+    if (lastDot > 0) {
+      const beforeMethod = fqn.substring(0, lastDot);
+      const classNameIndex = beforeMethod.lastIndexOf('.');
+      className = classNameIndex > 0 ? beforeMethod.substring(classNameIndex + 1) : beforeMethod;
+    }
+    
+    // Search through all reverse call graph entries for fuzzy matches
+    for (const [callee, edges] of this.reverseCallGraph.entries()) {
+      // Match patterns: varName.methodName, ClassName.methodName, etc.
+      const calleeLastDot = callee.lastIndexOf('.');
+      const calleeMethod = calleeLastDot > 0 ? callee.substring(calleeLastDot + 1) : callee;
+      
+      if (calleeMethod === methodName) {
+        // If class name is known, prefer matches that include it
+        if (className && callee.includes(className)) {
+          results.push(...edges);
+        } else if (!className) {
+          results.push(...edges);
+        } else {
+          // Still include even without className match (different variable names)
+          results.push(...edges);
+        }
+      }
+    }
+    
+    // Deduplicate results
+    const seen = new Set<string>();
+    return results.filter(edge => {
+      const key = `${edge.caller}:${edge.callee}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   // Add inheritance relationship
