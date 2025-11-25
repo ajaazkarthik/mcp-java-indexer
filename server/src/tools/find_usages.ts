@@ -3,13 +3,29 @@ import { MemoryIndex } from '../memory-index.js';
 
 export const findUsagesTool: Tool = {
   name: 'find_usages',
-  description: 'Find all reference locations where a symbol (class, method, field) is used. Returns file locations with line and column numbers.',
+  description: `Find all places where a symbol is referenced (method calls, field access, instantiation).
+
+**Input:** Fully Qualified Name (FQN) of a class, method, or field.
+
+**Examples:**
+- Class: "com.example.UserService"
+- Method: "com.example.UserService.save(User)"  
+- Field: "com.example.UserService.repository"
+
+**Returns:** File locations grouped by file, with line numbers and reference type.
+
+**Use cases:**
+- Finding all callers before refactoring
+- Understanding code dependencies
+- Checking if a symbol is used before removal
+
+**Tip:** Use find_symbol first to get the exact FQN.`,
   inputSchema: {
     type: 'object',
     properties: {
       fqn: {
         type: 'string',
-        description: 'Fully qualified name (FQN) of the symbol to find usages for'
+        description: 'Fully Qualified Name of the symbol (e.g., "com.example.UserService.save(User)")'
       }
     },
     required: ['fqn']

@@ -617,12 +617,49 @@ export class MemoryIndex {
   getStats() {
     return {
       symbols: this.symbols.size,
+      files: this.indexedFiles.size,
       indexedFiles: this.indexedFiles.size,
       allFiles: this.files.size,
       references: this.references.length,
       callGraphEdges: Array.from(this.callGraph.values()).reduce((sum, edges) => sum + edges.length, 0),
       inheritanceRelations: this.inheritance.size
     };
+  }
+
+  // Get summary of symbols by kind (for resources API)
+  getSymbolSummary(): { byKind: Record<string, number>; packages: string[]; topClasses: string[] } {
+    const byKind = new Map<string, number>();
+    const packages = new Set<string>();
+    const topClasses: string[] = [];
+    
+    for (const [fqn, stub] of this.symbols) {
+      // Use Map to avoid reserved property names like 'constructor'
+      byKind.set(stub.kind, (byKind.get(stub.kind) || 0) + 1);
+      if (stub.packageName) {
+        packages.add(stub.packageName);
+      }
+      // Track top-level classes (not inner classes)
+      if (stub.kind === 'class' && !stub.declaringClass && topClasses.length < 50) {
+        topClasses.push(fqn);
+      }
+    }
+    
+    // Convert Map to plain object for JSON serialization
+    const byKindObj: Record<string, number> = {};
+    for (const [kind, count] of byKind) {
+      byKindObj[kind] = count;
+    }
+    
+    return {
+      byKind: byKindObj,
+      packages: Array.from(packages).slice(0, 50),
+      topClasses
+    };
+  }
+
+  // Get list of indexed files (for resources API)
+  getIndexedFiles(): string[] {
+    return Array.from(this.indexedFiles);
   }
 
   // Clear all data

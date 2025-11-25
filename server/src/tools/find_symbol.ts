@@ -3,13 +3,25 @@ import { MemoryIndex } from '../memory-index.js';
 
 export const findSymbolTool: Tool = {
   name: 'find_symbol',
-  description: 'Find symbol definition by name or fully qualified name (FQN). Returns file location, line, column, and stub information.',
+  description: `Find Java symbol (class, method, field, constructor) by name or FQN.
+
+**Examples:**
+- Simple name: "UserService" (matches any class named UserService)
+- Full FQN: "com.example.service.UserService" (exact match)
+- Method: "UserService.save" (finds save methods in UserService)
+- With params: "UserService.save(User)" (exact method signature)
+
+**Returns:** Symbol location, modifiers, inheritance, signature.
+
+**Use before:** call_graph, find_usages, analyze_impact, explain_code
+
+**Tip:** Start with simple name search, then use FQN for precise queries.`,
   inputSchema: {
     type: 'object',
     properties: {
       name: {
         type: 'string',
-        description: 'Symbol name or fully qualified name (FQN) to search for. Supports partial matching.'
+        description: 'Symbol name (e.g., "UserService") or FQN (e.g., "com.example.UserService")'
       }
     },
     required: ['name']

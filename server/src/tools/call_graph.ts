@@ -3,13 +3,32 @@ import { MemoryIndex } from '../memory-index.js';
 
 export const callGraphTool: Tool = {
   name: 'call_graph',
-  description: 'Get call graph for a method: inbound calls (who calls this) and outbound calls (what this calls). Supports polymorphism resolution.',
+  description: `Analyze method call relationships: who calls this method (inbound) and what it calls (outbound).
+
+**Input:** Method FQN with or without parameter signature.
+
+**Examples:**
+- "com.example.UserService.save(User)" - Exact method
+- "com.example.UserService.save" - All save() overloads
+
+**Returns:**
+- **Outbound calls**: Methods this method invokes
+- **Inbound calls**: Methods that call this method
+- **Polymorphic calls**: Calls to overridden methods in subclasses
+
+**Use cases:**
+- Understanding code flow before modification
+- Finding entry points to a piece of code
+- Impact analysis for refactoring
+- Debugging call chains
+
+**Tip:** Combine with find_usages for comprehensive dependency analysis.`,
   inputSchema: {
     type: 'object',
     properties: {
       fqn: {
         type: 'string',
-        description: 'Fully qualified name (FQN) of the method to analyze'
+        description: 'Method FQN (e.g., "com.example.UserService.save(User)" or just "UserService.save")'
       }
     },
     required: ['fqn']
