@@ -12,6 +12,8 @@ import {
 import { MemoryIndex } from './memory-index.js';
 import { IndexerClient } from './indexer-client.js';
 import { FileSystemWatcher } from './fs-watcher.js';
+import { getIndexValidator } from './index-validator.js';
+import { Persistence } from './persistence.js';
 import { serverInstructions } from './server-instructions.js';
 import { annotateTools } from './tool-annotations.js';
 import { indexProjectTool, handleIndexProject } from './tools/index_project.js';
@@ -34,7 +36,7 @@ import { batchQueryTool, handleBatchQuery } from './tools/batch_query.js';
 const server = new Server(
   {
     name: 'mcp-java-indexer',
-    version: '2.3.0',
+    version: '2.3.1',
   },
   {
     capabilities: {
@@ -48,6 +50,8 @@ const server = new Server(
 // Global state
 const memoryIndex = new MemoryIndex();
 const indexerClient = new IndexerClient();
+const indexValidator = getIndexValidator();
+let persistence: Persistence | null = null;
 let fsWatcher: FileSystemWatcher | null = null;
 
 // Memory monitoring and cleanup
@@ -351,42 +355,121 @@ Start by finding the method.`
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  // Helper function for on-demand index validation (query tools only)
+  const ensureFreshIndex = async (): Promise<string | null> => {
+    if (!persistence) return null;
+    
+    try {
+      const result = await indexValidator.ensureFresh(memoryIndex, indexerClient, persistence);
+      if (result.wasStale && result.refreshResult && !result.refreshResult.skipped) {
+        const r = result.refreshResult;
+        return `🔄 Auto-refreshed index: ${r.filesUpdated} updated, ${r.filesAdded} added, ${r.filesDeleted} deleted (${r.duration}ms)\n\n`;
+      } else if (result.wasStale && result.refreshResult?.skipped) {
+        return `⚠️ Index may be stale: ${result.refreshResult.reason}\n\n`;
+      }
+    } catch (error) {
+      console.error('[ensureFreshIndex] Error:', error);
+    }
+    return null;
+  };
+
   try {
     switch (name) {
       case 'index_project':
-        return await handleIndexProject(args, memoryIndex, indexerClient, (watcher) => {
+        const indexResult = await handleIndexProject(args, memoryIndex, indexerClient, (watcher, newPersistence) => {
           fsWatcher = watcher;
+          persistence = newPersistence;
+          // Configure the validator with project info
+          const rootDir = args?.rootDir as string;
+          const sourceRoots = (args?.sourceRoots as string[]) || ['src/main/java', 'src'];
+          indexValidator.configure(rootDir, sourceRoots);
+          indexValidator.resetCooldowns();
         });
+        return indexResult;
 
       case 'reindex_file':
         return await handleReindexFile(args, memoryIndex, indexerClient);
 
-      case 'find_symbol':
-        return await handleFindSymbol(args, memoryIndex);
+      case 'find_symbol': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleFindSymbol(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
-      case 'find_usages':
-        return await handleFindUsages(args, memoryIndex);
+      case 'find_usages': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleFindUsages(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
-      case 'call_graph':
-        return await handleCallGraph(args, memoryIndex);
+      case 'call_graph': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleCallGraph(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
-      case 'goto_definition':
-        return await handleGotoDefinition(args, memoryIndex);
+      case 'goto_definition': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleGotoDefinition(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
-      case 'search_text':
-        return await handleSearchText(args, memoryIndex);
+      case 'search_text': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleSearchText(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
-      case 'analyze_impact':
-        return await handleAnalyzeImpact(args, memoryIndex);
+      case 'analyze_impact': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleAnalyzeImpact(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
-      case 'semantic_search':
-        return await handleSemanticSearch(args, memoryIndex);
+      case 'semantic_search': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleSemanticSearch(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
-      case 'explain_code':
-        return await handleExplainCode(args, memoryIndex);
+      case 'explain_code': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleExplainCode(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
-      case 'test_coverage':
-        return await handleTestCoverage(args, memoryIndex);
+      case 'test_coverage': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleTestCoverage(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
       case 'refactoring_suggestions':
         return await handleRefactoringSuggestions(args, memoryIndex);
@@ -397,11 +480,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'compact_index':
         return await handleCompactIndex(args, memoryIndex);
 
-      case 'explore_class':
-        return await handleExploreClass(args, memoryIndex);
+      case 'explore_class': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleExploreClass(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
-      case 'batch_query':
-        return await handleBatchQuery(args, memoryIndex);
+      case 'batch_query': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleBatchQuery(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
 
       default:
         throw new Error(`Unknown tool: ${name}`);

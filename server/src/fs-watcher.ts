@@ -1,8 +1,23 @@
 import chokidar from 'chokidar';
+import * as fs from 'fs/promises';
 import { MemoryIndex } from './memory-index.js';
 import { IndexerClient } from './indexer-client.js';
 import { Persistence } from './persistence.js';
 
+/**
+ * FileSystemWatcher - Optional file watcher with heavy debouncing
+ * 
+ * IMPORTANT: This watcher is designed to be NON-AGGRESSIVE to prevent
+ * CPU/memory spikes during builds (like `mvn clean build`).
+ * 
+ * Features:
+ * - Heavy debouncing (30 seconds) to batch changes
+ * - Uses mtime (fast) instead of hash for initial change detection
+ * - Maximum pending changes threshold to skip bulk operations
+ * - Can be disabled entirely (recommended for large projects)
+ * 
+ * For most use cases, the IndexValidator's on-demand checking is preferred.
+ */
 export class FileSystemWatcher {
   private watcher: chokidar.FSWatcher | null = null;
   private memoryIndex: MemoryIndex;
@@ -10,9 +25,26 @@ export class FileSystemWatcher {
   private persistence: Persistence;
   private rootDir: string;
   private sourceRoots: string[];
+  
+  // Pending changes for batch processing
   private pendingChanges: Set<string> = new Set();
+  private pendingDeletes: Set<string> = new Set();
+  
+  // Debounce timers
+  private debounceTimer: NodeJS.Timeout | null = null;
   private persistTimer: NodeJS.Timeout | null = null;
-  private reindexInProgress: Set<string> = new Set();
+  
+  // Processing state
+  private isProcessing: boolean = false;
+  private enabled: boolean = true;
+  
+  // Configuration - HEAVY debouncing to prevent build interference
+  private readonly DEBOUNCE_MS = 30000; // 30 seconds - wait for build to complete
+  private readonly PERSIST_DEBOUNCE_MS = 10000; // 10 seconds for persistence
+  private readonly MAX_PENDING_CHANGES = 50; // Skip if too many changes (likely a build)
+  private readonly BULK_CHANGE_COOLDOWN_MS = 60000; // 1 minute cooldown after bulk change detection
+
+  private lastBulkChangeDetected: number = 0;
 
   constructor(
     rootDir: string,
@@ -28,7 +60,10 @@ export class FileSystemWatcher {
     this.persistence = persistence;
   }
 
-  // Start watching
+  /**
+   * Start watching for file changes
+   * Note: Watching is optional - IndexValidator handles on-demand checking
+   */
   start(): void {
     if (this.watcher) {
       return;
@@ -38,122 +73,284 @@ export class FileSystemWatcher {
       cwd: this.rootDir,
       ignored: ['**/node_modules/**', '**/.git/**', '**/target/**', '**/build/**', '**/.mcp-index/**'],
       persistent: true,
-      ignoreInitial: true
+      ignoreInitial: true,
+      // Additional stability settings
+      awaitWriteFinish: {
+        stabilityThreshold: 2000, // Wait 2s after last write
+        pollInterval: 500
+      },
+      // Don't follow symlinks to avoid loops
+      followSymlinks: false
     });
 
     this.watcher
-      .on('add', (path) => this.handleFileChange(path))
-      .on('change', (path) => this.handleFileChange(path))
-      .on('unlink', (path) => this.handleFileDelete(path));
+      .on('add', (path) => this.queueChange(path))
+      .on('change', (path) => this.queueChange(path))
+      .on('unlink', (path) => this.queueDelete(path));
 
-    console.error(`File watcher started for ${this.rootDir}`);
+    console.error(`[FileWatcher] Started for ${this.rootDir} (30s debounce, max ${this.MAX_PENDING_CHANGES} pending)`);
   }
 
-  // Stop watching
+  /**
+   * Stop watching
+   */
   stop(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
     if (this.watcher) {
       this.watcher.close();
       this.watcher = null;
-      console.error('File watcher stopped');
+      console.error('[FileWatcher] Stopped');
     }
   }
 
-  // Handle file change
-  private async handleFileChange(relativePath: string): Promise<void> {
+  /**
+   * Temporarily disable the watcher (useful during known bulk operations)
+   */
+  disable(): void {
+    this.enabled = false;
+    console.error('[FileWatcher] Disabled');
+  }
+
+  /**
+   * Re-enable the watcher
+   */
+  enable(): void {
+    this.enabled = true;
+    console.error('[FileWatcher] Enabled');
+  }
+
+  /**
+   * Queue a file change for batch processing
+   */
+  private queueChange(relativePath: string): void {
+    if (!this.enabled) return;
+
     const fullPath = `${this.rootDir}/${relativePath}`.replace(/\\/g, '/');
     
-    // Prevent duplicate reindex for the same file
-    if (this.reindexInProgress.has(fullPath)) {
+    // Remove from deletes if it was there (file recreated)
+    this.pendingDeletes.delete(fullPath);
+    
+    // Add to pending changes
+    this.pendingChanges.add(fullPath);
+    
+    // Check for bulk changes
+    this.checkBulkChanges();
+    
+    // Schedule debounced processing
+    this.scheduleProcessing();
+  }
+
+  /**
+   * Queue a file deletion for batch processing
+   */
+  private queueDelete(relativePath: string): void {
+    if (!this.enabled) return;
+
+    const fullPath = `${this.rootDir}/${relativePath}`.replace(/\\/g, '/');
+    
+    // Remove from changes if it was there
+    this.pendingChanges.delete(fullPath);
+    
+    // Add to pending deletes
+    this.pendingDeletes.add(fullPath);
+    
+    // Check for bulk changes
+    this.checkBulkChanges();
+    
+    // Schedule debounced processing
+    this.scheduleProcessing();
+  }
+
+  /**
+   * Check if we're seeing bulk changes (like a build)
+   * If so, clear pending and wait for things to settle
+   */
+  private checkBulkChanges(): void {
+    const totalPending = this.pendingChanges.size + this.pendingDeletes.size;
+    
+    if (totalPending > this.MAX_PENDING_CHANGES) {
+      console.error(`[FileWatcher] Bulk change detected (${totalPending} pending). Clearing queue and waiting...`);
+      
+      // Clear pending changes
+      this.pendingChanges.clear();
+      this.pendingDeletes.clear();
+      
+      // Record bulk change time
+      this.lastBulkChangeDetected = Date.now();
+      
+      // Clear debounce timer
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+    }
+  }
+
+  /**
+   * Schedule debounced processing of pending changes
+   */
+  private scheduleProcessing(): void {
+    // Check cooldown after bulk change
+    if (Date.now() - this.lastBulkChangeDetected < this.BULK_CHANGE_COOLDOWN_MS) {
+      // Still in cooldown after bulk change, don't schedule
       return;
     }
-    
+
+    // Clear existing timer
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+
+    // Schedule new timer with heavy debounce
+    this.debounceTimer = setTimeout(() => {
+      this.processChanges();
+    }, this.DEBOUNCE_MS);
+  }
+
+  /**
+   * Process all pending changes
+   */
+  private async processChanges(): Promise<void> {
+    if (this.isProcessing) {
+      // Already processing, reschedule
+      this.scheduleProcessing();
+      return;
+    }
+
+    // Check cooldown again
+    if (Date.now() - this.lastBulkChangeDetected < this.BULK_CHANGE_COOLDOWN_MS) {
+      return;
+    }
+
+    const changesToProcess = new Set(this.pendingChanges);
+    const deletesToProcess = new Set(this.pendingDeletes);
+
+    // Clear pending
+    this.pendingChanges.clear();
+    this.pendingDeletes.clear();
+
+    const totalToProcess = changesToProcess.size + deletesToProcess.size;
+    if (totalToProcess === 0) {
+      return;
+    }
+
+    // Final check for bulk changes
+    if (totalToProcess > this.MAX_PENDING_CHANGES) {
+      console.error(`[FileWatcher] Too many changes (${totalToProcess}). Use index_project to rebuild.`);
+      return;
+    }
+
+    this.isProcessing = true;
+    console.error(`[FileWatcher] Processing ${changesToProcess.size} changes, ${deletesToProcess.size} deletes`);
+
     try {
-      // Check if file needs reindexing
-      const needsReindex = await this.memoryIndex.needsReindex(fullPath);
-      if (!needsReindex) {
+      // Process deletes first
+      for (const deletedPath of deletesToProcess) {
+        this.memoryIndex.removeFile(deletedPath);
+        console.error(`[FileWatcher] Removed: ${deletedPath}`);
+      }
+
+      // Process changes (with mtime check)
+      const filesToReindex: string[] = [];
+      
+      for (const changedPath of changesToProcess) {
+        try {
+          const stats = await fs.stat(changedPath);
+          const currentMtime = stats.mtimeMs;
+          
+          const fileInfo = this.memoryIndex.getFile(changedPath);
+          if (!fileInfo) {
+            // New file
+            filesToReindex.push(changedPath);
+          } else if (currentMtime > (fileInfo.mtime || fileInfo.lastIndexed)) {
+            // Actually changed
+            filesToReindex.push(changedPath);
+          }
+          // else: mtime unchanged, skip
+        } catch {
+          // File doesn't exist or can't be read, skip
+        }
+      }
+
+      if (filesToReindex.length === 0) {
+        console.error('[FileWatcher] No files actually changed (mtime check)');
         return;
       }
 
-      // Mark as in progress
-      this.reindexInProgress.add(fullPath);
-      console.error(`Reindexing changed file: ${fullPath}`);
+      console.error(`[FileWatcher] Reindexing ${filesToReindex.length} files...`);
 
-      // Remove old data
-      this.memoryIndex.removeFile(fullPath);
+      // Reindex in batch
+      const absoluteSourceRoots = this.sourceRoots.map(sr => 
+        `${this.rootDir}/${sr}`.replace(/\\/g, '/')
+      );
 
-      // Reindex file
-      const result = await this.indexerClient.indexFile(fullPath, this.sourceRoots);
+      const results = await this.indexerClient.indexFiles(filesToReindex, absoluteSourceRoots);
 
-      if (result.error) {
-        console.error(`Failed to reindex ${fullPath}: ${result.error}`);
-        return;
+      for (const result of results) {
+        if (result.error) {
+          console.error(`[FileWatcher] Error indexing ${result.file}: ${result.error}`);
+          continue;
+        }
+
+        // Remove old data
+        this.memoryIndex.removeFile(result.file);
+
+        // Add new data
+        const symbolFqns: string[] = [];
+        for (const symbol of result.symbols) {
+          this.memoryIndex.addSymbol(symbol);
+          symbolFqns.push(symbol.fqn);
+        }
+
+        for (const ref of result.references) {
+          this.memoryIndex.addReference(ref);
+        }
+
+        // Get current mtime and hash
+        try {
+          const stats = await fs.stat(result.file);
+          const hash = await MemoryIndex.calculateFileHash(result.file);
+          this.memoryIndex.addFile(result.file, hash, symbolFqns, true, stats.mtimeMs);
+        } catch {
+          // File disappeared, skip
+        }
       }
 
-      // Add new data
-      const symbolFqns: string[] = [];
-      for (const symbol of result.symbols) {
-        this.memoryIndex.addSymbol(symbol);
-        symbolFqns.push(symbol.fqn);
-      }
-
-      for (const ref of result.references) {
-        this.memoryIndex.addReference(ref);
-      }
-
-      const hash = await MemoryIndex.calculateFileHash(fullPath);
-      // CRITICAL FIX: Mark as indexed file to prevent it from being treated as dependency
-      this.memoryIndex.addFile(fullPath, hash, symbolFqns, true);
-
-      // Add to pending changes for batched persistence
-      this.pendingChanges.add(fullPath);
+      // Schedule persistence
       this.schedulePersist();
 
-      console.error(`Reindexed ${fullPath}: ${result.symbols.length} symbols, ${result.references.length} references`);
+      console.error(`[FileWatcher] Reindexed ${results.length} files`);
     } catch (error) {
-      console.error(`Error reindexing ${fullPath}:`, error);
+      console.error('[FileWatcher] Error processing changes:', error);
     } finally {
-      // Remove from in-progress set
-      this.reindexInProgress.delete(fullPath);
+      this.isProcessing = false;
     }
   }
 
-  // Handle file deletion
-  private async handleFileDelete(relativePath: string): Promise<void> {
-    const fullPath = `${this.rootDir}/${relativePath}`.replace(/\\/g, '/');
-    
-    try {
-      console.error(`Removing deleted file from index: ${fullPath}`);
-      
-      this.memoryIndex.removeFile(fullPath);
-      
-      // Add to pending changes for batched persistence
-      this.pendingChanges.add(fullPath);
-      this.schedulePersist();
-      
-      console.error(`Removed ${fullPath} from index`);
-    } catch (error) {
-      console.error(`Error removing ${fullPath}:`, error);
-    }
-  }
-
-  // Schedule batched persistence (debounced to 5 seconds)
+  /**
+   * Schedule debounced persistence
+   */
   private schedulePersist(): void {
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
     }
 
     this.persistTimer = setTimeout(async () => {
-      if (this.pendingChanges.size > 0) {
-        console.error(`Persisting ${this.pendingChanges.size} file changes...`);
-        try {
-          await this.persistence.save(this.memoryIndex);
-          this.pendingChanges.clear();
-          console.error(`Persistence complete`);
-        } catch (error) {
-          console.error('Failed to persist changes:', error);
-        }
+      try {
+        console.error('[FileWatcher] Persisting index...');
+        await this.persistence.save(this.memoryIndex);
+        console.error('[FileWatcher] Index persisted');
+      } catch (error) {
+        console.error('[FileWatcher] Failed to persist:', error);
       }
       this.persistTimer = null;
-    }, 5000); // 5 second debounce
+    }, this.PERSIST_DEBOUNCE_MS);
   }
 }

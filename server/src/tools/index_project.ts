@@ -1,6 +1,7 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { glob } from 'glob';
 import * as path from 'path';
+import * as fs from 'fs/promises';
 import { MemoryIndex } from '../memory-index.js';
 import { IndexerClient } from '../indexer-client.js';
 import { Persistence } from '../persistence.js';
@@ -54,7 +55,7 @@ export async function handleIndexProject(
   args: any,
   memoryIndex: MemoryIndex,
   indexerClient: IndexerClient,
-  setWatcher: (watcher: FileSystemWatcher) => void
+  setWatcher: (watcher: FileSystemWatcher, persistence: Persistence) => void
 ) {
   const rootDir = args.rootDir as string;
   const sourceRoots = (args.sourceRoots as string[]) || ['src/main/java', 'src'];
@@ -140,7 +141,7 @@ export async function handleIndexProject(
         // Still start file watcher
         const watcher = new FileSystemWatcher(rootDir, absoluteSourceRoots, memoryIndex, indexerClient, persistence);
         watcher.start();
-        setWatcher(watcher);
+        setWatcher(watcher, persistence);
         
         return {
           content: [{
@@ -210,8 +211,16 @@ export async function handleIndexProject(
           totalReferences++;
         }
 
+        // Get file hash and mtime for staleness detection
         const hash = await MemoryIndex.calculateFileHash(result.file);
-        memoryIndex.addFile(result.file, hash, symbolFqns, true);
+        let mtime: number | undefined;
+        try {
+          const stats = await fs.stat(result.file);
+          mtime = stats.mtimeMs;
+        } catch {
+          mtime = Date.now();
+        }
+        memoryIndex.addFile(result.file, hash, symbolFqns, true, mtime);
         processedFiles++;
       }
 
@@ -282,7 +291,7 @@ export async function handleIndexProject(
     // Start file watcher
     const watcher = new FileSystemWatcher(rootDir, absoluteSourceRoots, memoryIndex, indexerClient, persistence);
     watcher.start();
-    setWatcher(watcher);
+    setWatcher(watcher, persistence);
 
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
     const stats = memoryIndex.getStats();

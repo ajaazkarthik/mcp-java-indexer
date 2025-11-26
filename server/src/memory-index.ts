@@ -32,6 +32,7 @@ export interface FileInfo {
   path: string;
   hash: string;
   lastIndexed: number;
+  mtime?: number; // File modification time for fast staleness check
   symbols: string[]; // FQNs defined in this file
 }
 
@@ -515,11 +516,12 @@ export class MemoryIndex {
   }
 
   // File management
-  addFile(filePath: string, hash: string, symbols: string[], isIndexedFile: boolean = true): void {
+  addFile(filePath: string, hash: string, symbols: string[], isIndexedFile: boolean = true, mtime?: number): void {
     this.files.set(filePath, {
       path: filePath,
       hash,
       lastIndexed: Date.now(),
+      mtime: mtime || Date.now(),
       symbols
     });
     if (isIndexedFile) {
