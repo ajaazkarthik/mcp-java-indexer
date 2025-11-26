@@ -163,32 +163,136 @@ export async function handleExploreClass(
     }
 
     // Dependencies (who does this class depend on?)
+    // IMPORTANT: We must check ALL reference types, not just method calls!
+    // Same-package classes may not have explicit imports but are still dependencies
     result.push('## 📤 Dependencies (Outbound)');
-    const outboundDeps = new Set<string>();
+    const outboundDeps = new Map<string, Set<string>>(); // class -> reference kinds
+    const currentPackage = classSymbol.packageName;
+    
+    // Helper to check if a name looks like a class name (starts with uppercase)
+    // For FQNs, check the last part (class name part)
+    const isClassName = (name: string): boolean => {
+      if (!name || name.length === 0) return false;
+      // For FQNs like com.example.MyClass, check the last part
+      const lastDot = name.lastIndexOf('.');
+      const className = lastDot >= 0 ? name.substring(lastDot + 1) : name;
+      return className.length > 0 && className[0] === className[0].toUpperCase() && className[0] !== className[0].toLowerCase();
+    };
+    
+    // Helper to resolve simple class name to FQN
+    // If it's already a FQN (has dots), return as-is
+    // If it's a simple name, look it up in the index
+    const resolveToFqn = (name: string): string | null => {
+      if (!name || name === 'String' || name === 'Object' || name === 'void') {
+        return null; // Skip primitives and basic types
+      }
+      
+      // Skip keywords and variable-like names
+      if (name === 'this' || name === 'super' || !isClassName(name)) {
+        return null;
+      }
+      
+      // Already qualified (has dots) - validate it exists in index
+      if (name.includes('.')) {
+        // Check if this FQN exists as a class in the index
+        const symbol = memoryIndex.getSymbol(name);
+        if (symbol && (symbol.kind === 'class' || symbol.kind === 'interface' || symbol.kind === 'enum')) {
+          return name;
+        }
+        return name; // Keep it even if not in index (may be external)
+      }
+      
+      // Simple name - try to resolve from indexed symbols
+      // ONLY return if we find an actual match in the index
+      const matches = memoryIndex.findSymbols(name).filter(s => 
+        (s.kind === 'class' || s.kind === 'interface' || s.kind === 'enum') &&
+        s.name === name // Exact match only
+      );
+      
+      // Prefer same package
+      const samePackageMatch = matches.find(s => s.packageName === currentPackage);
+      if (samePackageMatch) {
+        return samePackageMatch.fqn;
+      }
+      
+      // Fall back to first match
+      if (matches.length > 0) {
+        return matches[0].fqn;
+      }
+      
+      // Not found in index - don't assume it exists
+      return null;
+    };
+    
+    // Helper to add dependency
+    const addDep = (targetClass: string | null | undefined, kind: string) => {
+      if (!targetClass) return;
+      
+      // Resolve to FQN
+      const resolvedFqn = resolveToFqn(targetClass);
+      if (!resolvedFqn) return;
+      
+      // Skip self-references and inner class references
+      if (resolvedFqn === fqn || resolvedFqn.startsWith(fqn + '.') || resolvedFqn.startsWith(fqn + '$')) {
+        return;
+      }
+      // Skip java.lang classes
+      if (resolvedFqn.startsWith('java.lang.')) {
+        return;
+      }
+      if (!outboundDeps.has(resolvedFqn)) {
+        outboundDeps.set(resolvedFqn, new Set());
+      }
+      outboundDeps.get(resolvedFqn)!.add(kind);
+    };
+    
+    // 1. Check method calls from call graph
     methods.forEach(m => {
       const calls = memoryIndex.getOutboundCalls(m.fqn);
       calls.forEach(c => {
-        // Extract class from callee FQN (e.g., "com.example.UserRepo.save(User)" -> "com.example.UserRepo")
         const calleeFqn = c.callee;
-        // Find the method/constructor name (last part before parenthesis or last part with dot)
         const parenIndex = calleeFqn.indexOf('(');
         const fqnWithoutParams = parenIndex > 0 ? calleeFqn.substring(0, parenIndex) : calleeFqn;
         const lastDotIndex = fqnWithoutParams.lastIndexOf('.');
         if (lastDotIndex > 0) {
           const calleeClass = fqnWithoutParams.substring(0, lastDotIndex);
-          // Only add if it looks like a class FQN (has dots and doesn't equal current class)
-          if (calleeClass.includes('.') && calleeClass !== fqn && !calleeClass.startsWith(fqn + '.')) {
-            outboundDeps.add(calleeClass);
-          }
+          addDep(calleeClass, 'method_call');
         }
       });
     });
     
+    // 2. Check ALL references from this class's file for type_reference, instantiation, field_access
+    // This captures same-package dependencies that don't require imports
+    const allRefs = memoryIndex.findReferencesFromClass(fqn);
+    allRefs.forEach(ref => {
+      let targetClass = ref.toFqn;
+      
+      // For method_call and field_access, extract the class part
+      if (ref.kind === 'method_call' || ref.kind === 'field_access') {
+        const parenIndex = targetClass.indexOf('(');
+        const fqnWithoutParams = parenIndex > 0 ? targetClass.substring(0, parenIndex) : targetClass;
+        const lastDotIndex = fqnWithoutParams.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+          targetClass = fqnWithoutParams.substring(0, lastDotIndex);
+        } else {
+          // No dot means it's a call like `doSomething()` on `this` - skip
+          return;
+        }
+      }
+      
+      // Add the dependency - addDep will resolve simple names to FQN
+      addDep(targetClass, ref.kind);
+    });
+    
     if (outboundDeps.size > 0) {
-      Array.from(outboundDeps).slice(0, 10).forEach(dep => {
-        result.push(`- \`${dep}\``);
+      const sortedDeps = Array.from(outboundDeps.entries())
+        .sort((a, b) => b[1].size - a[1].size); // Sort by number of reference types
+      
+      sortedDeps.slice(0, 15).forEach(([dep, kinds]) => {
+        const kindList = Array.from(kinds).join(', ');
+        result.push(`- \`${dep}\` (${kindList})`);
       });
-      if (outboundDeps.size > 10) result.push(`- ... and ${outboundDeps.size - 10} more`);
+      if (sortedDeps.length > 15) result.push(`- ... and ${sortedDeps.length - 15} more`);
     } else {
       result.push('- No external dependencies found');
     }
@@ -199,7 +303,7 @@ export async function handleExploreClass(
     const usages = memoryIndex.findUsages(fqn);
     const dependentClasses = new Set<string>();
     usages.forEach(u => {
-      if (u.fromFqn && !u.fromFqn.startsWith(fqn)) {
+      if (u.fromFqn && typeof u.fromFqn === 'string' && !u.fromFqn.startsWith(fqn)) {
         const fromParts = u.fromFqn.split('.');
         if (fromParts.length > 1) {
           // Extract class name from method FQN

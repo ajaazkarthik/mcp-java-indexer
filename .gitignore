@@ -30,8 +30,12 @@ mvnw.cmd
 # Index files
 .mcp-index/
 
+# Test projects
+test-same-package/
+
 # Build
 *.tsbuildinfo
+vsix-temp/
 
 # OS
 Thumbs.db

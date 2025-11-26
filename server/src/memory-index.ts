@@ -2,6 +2,11 @@ import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+// Normalize file paths to use forward slashes for consistent comparison
+function normalizePath(filePath: string): string {
+  return filePath.replace(/\\/g, '/');
+}
+
 export interface SymbolStub {
   fqn: string; // Fully Qualified Name
   name: string;
@@ -60,7 +65,7 @@ export class MemoryIndex {
 
   // Initialize index directory
   setIndexDir(dir: string): void {
-    this.indexDir = path.join(dir, '.mcp-index');
+    this.indexDir = normalizePath(path.join(dir, '.mcp-index'));
   }
 
   getIndexDir(): string {
@@ -69,20 +74,22 @@ export class MemoryIndex {
 
   // Add symbol
   addSymbol(stub: SymbolStub): void {
-    this.symbols.set(stub.fqn, stub);
+    // Normalize file path in symbol
+    const normalizedStub = { ...stub, file: normalizePath(stub.file) };
+    this.symbols.set(normalizedStub.fqn, normalizedStub);
 
     // Track inheritance ONLY for class/interface/enum (not methods/fields/constructors)
     // This prevents massive overhead with large projects
-    if (stub.kind === 'class' || stub.kind === 'interface' || stub.kind === 'enum') {
+    if (normalizedStub.kind === 'class' || normalizedStub.kind === 'interface' || normalizedStub.kind === 'enum') {
       // Check both old and new property names for backward compatibility
-      const extendsClass = stub.extends || stub.extendsClass;
+      const extendsClass = normalizedStub.extends || normalizedStub.extendsClass;
       if (extendsClass) {
-        this.addInheritance(stub.fqn, extendsClass);
+        this.addInheritance(normalizedStub.fqn, extendsClass);
       }
-      const implementsInterfaces = stub.implements || stub.implementsInterfaces;
+      const implementsInterfaces = normalizedStub.implements || normalizedStub.implementsInterfaces;
       if (implementsInterfaces) {
         for (const iface of implementsInterfaces) {
-          this.addInheritance(stub.fqn, iface);
+          this.addInheritance(normalizedStub.fqn, iface);
         }
       }
     }
@@ -273,17 +280,19 @@ export class MemoryIndex {
 
   // Add reference
   addReference(ref: Reference): void {
-    this.references.push(ref);
+    // Normalize file path
+    const normalizedRef = { ...ref, file: normalizePath(ref.file) };
+    this.references.push(normalizedRef);
     
     // Track by file for efficient cleanup
-    if (!this.referencesByFile.has(ref.file)) {
-      this.referencesByFile.set(ref.file, []);
+    if (!this.referencesByFile.has(normalizedRef.file)) {
+      this.referencesByFile.set(normalizedRef.file, []);
     }
-    this.referencesByFile.get(ref.file)!.push(ref);
+    this.referencesByFile.get(normalizedRef.file)!.push(normalizedRef);
 
     // Build call graph for method calls
     if (ref.kind === 'method_call') {
-      this.addCallGraphEdge(ref.fromFqn, ref.toFqn, ref.file, ref.line, ref.column);
+      this.addCallGraphEdge(ref.fromFqn, ref.toFqn, normalizedRef.file, ref.line, ref.column);
     }
   }
 
@@ -365,6 +374,19 @@ export class MemoryIndex {
     return this.references.filter(ref => 
       ref.toFqn.includes(fqn) || ref.toFqn.endsWith('.' + fqn)
     );
+  }
+
+  // Find all references FROM a class (what this class uses)
+  // This catches same-package dependencies that don't need explicit imports
+  findReferencesFromClass(classFqn: string): Reference[] {
+    // Find references where fromFqn starts with the class FQN
+    // This includes references from all methods, constructors, and fields of the class
+    return this.references.filter(ref => {
+      // Match if fromFqn is exactly the class, or starts with class. (methods/fields)
+      return ref.fromFqn === classFqn || 
+             ref.fromFqn.startsWith(classFqn + '.') ||
+             ref.fromFqn.startsWith(classFqn + '('); // constructors
+    });
   }
 
   // Add call graph edge
@@ -517,20 +539,21 @@ export class MemoryIndex {
 
   // File management
   addFile(filePath: string, hash: string, symbols: string[], isIndexedFile: boolean = true, mtime?: number): void {
-    this.files.set(filePath, {
-      path: filePath,
+    const normalizedPath = normalizePath(filePath);
+    this.files.set(normalizedPath, {
+      path: normalizedPath,
       hash,
       lastIndexed: Date.now(),
       mtime: mtime || Date.now(),
       symbols
     });
     if (isIndexedFile) {
-      this.indexedFiles.add(filePath);
+      this.indexedFiles.add(normalizedPath);
     }
   }
 
   getFile(filePath: string): FileInfo | undefined {
-    return this.files.get(filePath);
+    return this.files.get(normalizePath(filePath));
   }
 
   getAllFiles(): FileInfo[] {
@@ -539,7 +562,8 @@ export class MemoryIndex {
 
   // Remove file and its symbols
   removeFile(filePath: string): void {
-    const fileInfo = this.files.get(filePath);
+    const normalizedPath = normalizePath(filePath);
+    const fileInfo = this.files.get(normalizedPath);
     if (!fileInfo) return;
 
     // Remove symbols
@@ -552,27 +576,28 @@ export class MemoryIndex {
     }
 
     // Efficiently remove references using file index
-    const fileRefs = this.referencesByFile.get(filePath);
+    const fileRefs = this.referencesByFile.get(normalizedPath);
     if (fileRefs) {
       // Remove from main references array
-      this.references = this.references.filter(ref => ref.file !== filePath);
-      this.referencesByFile.delete(filePath);
+      this.references = this.references.filter(ref => normalizePath(ref.file) !== normalizedPath);
+      this.referencesByFile.delete(normalizedPath);
     }
     
     // Clean up call graph edges for this file
-    this.cleanupCallGraphForFile(filePath);
+    this.cleanupCallGraphForFile(normalizedPath);
 
-    this.files.delete(filePath);
-    this.indexedFiles.delete(filePath);
+    this.files.delete(normalizedPath);
+    this.indexedFiles.delete(normalizedPath);
   }
   
   // Clean up call graph edges for a file
   private cleanupCallGraphForFile(filePath: string): void {
+    const normalizedPath = normalizePath(filePath);
     // Remove edges with locations in this file
     for (const [caller, edges] of this.callGraph.entries()) {
       const filteredEdges = edges.map(edge => ({
         ...edge,
-        locations: edge.locations.filter(loc => loc.file !== filePath)
+        locations: edge.locations.filter(loc => normalizePath(loc.file) !== normalizedPath)
       })).filter(edge => edge.locations.length > 0);
       
       if (filteredEdges.length === 0) {
@@ -585,7 +610,7 @@ export class MemoryIndex {
     for (const [callee, edges] of this.reverseCallGraph.entries()) {
       const filteredEdges = edges.map(edge => ({
         ...edge,
-        locations: edge.locations.filter(loc => loc.file !== filePath)
+        locations: edge.locations.filter(loc => normalizePath(loc.file) !== normalizedPath)
       })).filter(edge => edge.locations.length > 0);
       
       if (filteredEdges.length === 0) {
@@ -604,7 +629,8 @@ export class MemoryIndex {
 
   // Check if file needs reindexing
   async needsReindex(filePath: string): Promise<boolean> {
-    const fileInfo = this.files.get(filePath);
+    const normalizedPath = normalizePath(filePath);
+    const fileInfo = this.files.get(normalizedPath);
     if (!fileInfo) return true;
 
     try {

@@ -7,6 +7,12 @@ import { IndexerClient } from '../indexer-client.js';
 import { Persistence } from '../persistence.js';
 import { FileSystemWatcher } from '../fs-watcher.js';
 
+// Normalize paths to use forward slashes consistently (needed for Windows compatibility)
+// Also resolves to absolute path to ensure consistent storage across sessions
+function normalizePath(p: string): string {
+  return path.resolve(p).replace(/\\/g, '/');
+}
+
 export const indexProjectTool: Tool = {
   name: 'index_project',
   description: `Build/update the Java code index for a project directory. **Must be called first before any other tool.**
@@ -57,7 +63,8 @@ export async function handleIndexProject(
   indexerClient: IndexerClient,
   setWatcher: (watcher: FileSystemWatcher, persistence: Persistence) => void
 ) {
-  const rootDir = args.rootDir as string;
+  // Normalize rootDir to use forward slashes consistently (critical for Windows)
+  const rootDir = normalizePath(args.rootDir as string);
   const sourceRoots = (args.sourceRoots as string[]) || ['src/main/java', 'src'];
   const forceFullIndex = (args.forceFullIndex as boolean) || false;
 
@@ -92,11 +99,13 @@ export async function handleIndexProject(
     // Start Java indexer process
     await indexerClient.start();
 
-    // Find all Java files
+    // Find all Java files and normalize paths to forward slashes for consistent comparison
     const pattern = path.join(rootDir, '**/*.java').replace(/\\/g, '/');
-    const javaFiles = await glob(pattern, {
+    const javaFilesRaw = await glob(pattern, {
       ignore: ['**/node_modules/**', '**/.git/**', '**/target/**', '**/build/**', '**/.mcp-index/**']
     });
+    // Normalize all paths to use forward slashes (critical for Windows compatibility)
+    const javaFiles = javaFilesRaw.map(normalizePath);
 
     if (javaFiles.length === 0) {
       return {
@@ -126,8 +135,9 @@ export async function handleIndexProject(
       
       // Remove files that no longer exist
       const indexedFiles = memoryIndex.getAllFiles();
-      const currentFileSet = new Set(javaFiles);
-      const deletedFiles = indexedFiles.filter(f => !currentFileSet.has(f.path));
+      // Create normalized set for comparison
+      const currentFileSet = new Set(javaFiles.map(normalizePath));
+      const deletedFiles = indexedFiles.filter(f => !currentFileSet.has(normalizePath(f.path)));
       
       for (const deletedFile of deletedFiles) {
         console.error(`🗑️  Removing deleted file: ${deletedFile.path}`);

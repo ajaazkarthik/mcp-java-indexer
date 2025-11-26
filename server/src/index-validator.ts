@@ -87,7 +87,9 @@ export class IndexValidator {
     try {
       // Get all currently indexed files
       const indexedFiles = memoryIndex.getAllFiles();
-      const indexedFileMap = new Map(indexedFiles.map(f => [f.path, f]));
+      // Normalize paths for consistent comparison
+      const normalizePath = (p: string) => p.replace(/\\/g, '/');
+      const indexedFileMap = new Map(indexedFiles.map(f => [normalizePath(f.path), f]));
 
       // Find all current Java files on disk
       const pattern = path.join(this.rootDir, '**/*.java').replace(/\\/g, '/');
@@ -95,17 +97,20 @@ export class IndexValidator {
         ignore: ['**/node_modules/**', '**/.git/**', '**/target/**', '**/build/**', '**/.mcp-index/**']
       });
 
-      const currentFileSet = new Set(currentFiles);
+      // Normalize glob results for consistent comparison
+      const normalizedCurrentFiles = currentFiles.map(normalizePath);
+      const currentFileSet = new Set(normalizedCurrentFiles);
 
       // Check for deleted files
       for (const indexedFile of indexedFiles) {
-        if (!currentFileSet.has(indexedFile.path)) {
+        const normalizedPath = normalizePath(indexedFile.path);
+        if (!currentFileSet.has(normalizedPath)) {
           result.deletedFiles.push(indexedFile.path);
         }
       }
 
       // Check for new and changed files using mtime
-      const mtimeChecks = currentFiles.map(async (filePath) => {
+      const mtimeChecks = normalizedCurrentFiles.map(async (filePath) => {
         try {
           const stats = await fs.stat(filePath);
           const currentMtime = stats.mtimeMs;

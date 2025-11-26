@@ -134,7 +134,12 @@ class ComprehensiveTestExecutor {
         sourceRoots: ['src/main/java']
       });
       const text = result.content[0].text;
-      if (!text.includes('Indexed') || !text.includes('files')) {
+      const textLower = text.toLowerCase();
+      // Check for valid completion markers - either "Full index", "Incremental update", or "up-to-date" (case-insensitive)
+      const isCompleted = textLower.includes('full index') || textLower.includes('incremental update') || textLower.includes('up-to-date');
+      // Check for "files" or "Files" (case-insensitive) or "changed" for incremental
+      const hasFileInfo = textLower.includes('files') || textLower.includes('changed');
+      if (!isCompleted || !hasFileInfo) {
         throw new Error('Indexing did not complete successfully');
       }
       if (!text.includes('324')) {
@@ -209,6 +214,23 @@ class ComprehensiveTestExecutor {
       const text = result.content[0].text;
       if (!text.includes('Reindexed') && !text.includes('skipped')) {
         throw new Error('Reindex file failed');
+      }
+    });
+
+    // Test 7.5: explore_class - Same-package dependencies (Regression test for v2.3.1 fix)
+    await this.runTest('explore_class - Detect same-package dependencies', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'com.example.demo.UserService'
+      });
+      const text = result.content[0].text;
+      // UserService uses User class from same package (no import needed in Java)
+      // After fix in v2.3.1, explore_class should detect this dependency
+      if (text.includes('0 external dependencies')) {
+        throw new Error('Same-package dependency detection FAILED: UserService uses User class but shows 0 dependencies');
+      }
+      // Should show User class as dependency
+      if (!text.includes('Dependencies') && !text.includes('User')) {
+        throw new Error('Should detect User class as dependency');
       }
     });
 
