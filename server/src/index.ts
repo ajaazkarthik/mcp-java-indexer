@@ -37,7 +37,7 @@ import { scanMigrationCandidatesTool, handleScanMigrationCandidates } from './to
 const server = new Server(
   {
     name: 'mcp-java-indexer',
-    version: '2.4.0',
+    version: '2.4.1',
   },
   {
     capabilities: {

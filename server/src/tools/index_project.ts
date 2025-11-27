@@ -71,27 +71,46 @@ export async function handleIndexProject(
   try {
     const startTime = Date.now();
 
+    // Diagnostic logging for debugging incremental index issues
+    console.error(`\n📍 [index_project] Called with:`);
+    console.error(`   rootDir: ${rootDir}`);
+    console.error(`   forceFullIndex: ${forceFullIndex}`);
+    console.error(`   Current memoryIndex stats: ${JSON.stringify(memoryIndex.getStats())}`);
+
     // Set index directory first
     memoryIndex.setIndexDir(rootDir);
+    const indexDirPath = memoryIndex.getIndexDir();
+    console.error(`   Index directory: ${indexDirPath}`);
 
     // Try to load existing index
-    const persistence = new Persistence(memoryIndex.getIndexDir());
+    const persistence = new Persistence(indexDirPath);
     let loadedExisting = false;
+    
+    // Check if index directory exists
+    const indexExists = await persistence.exists();
+    console.error(`   Index exists on disk: ${indexExists}`);
     
     if (!forceFullIndex) {
       try {
         const loaded = await persistence.load(memoryIndex);
         if (loaded) {
           loadedExisting = true;
+          const stats = memoryIndex.getStats();
           console.error(`✅ Loaded existing index from disk`);
+          console.error(`   Loaded ${stats.symbols} symbols, ${stats.files} files`);
+        } else {
+          console.error(`⚠️  persistence.load() returned false - no valid index found`);
         }
       } catch (error) {
         console.error(`⚠️  Could not load existing index, will do full reindex: ${error}`);
       }
+    } else {
+      console.error(`🔄 forceFullIndex=true, skipping persistence load`);
     }
 
     if (!loadedExisting) {
       // Clear for full index
+      console.error(`🔄 Starting fresh index (loadedExisting=false)`);
       memoryIndex.clear();
       memoryIndex.setIndexDir(rootDir);
     }
