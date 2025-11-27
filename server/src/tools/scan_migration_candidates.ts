@@ -24,7 +24,7 @@ export interface ScanMigrationInput {
   includeSubpackages?: boolean;    // Default: true
   maxSafeExternalDeps?: number;    // Default: 0 (strict isolation)
   groupBySubpackage?: boolean;     // Group results by sub-package
-  outputFormat?: "summary" | "detailed" | "migration-plan";
+  outputFormat?: "summary" | "detailed" | "json" | "migration-plan";
 }
 
 export interface DependencyInfo {
@@ -165,8 +165,8 @@ scan_migration_candidates({
       },
       outputFormat: {
         type: 'string',
-        enum: ['summary', 'detailed', 'migration-plan'],
-        description: 'Output format: summary (quick), detailed (full), migration-plan (with batches)',
+        enum: ['summary', 'detailed', 'json', 'migration-plan'],
+        description: 'Output format: summary (quick), detailed (full), json (structured), migration-plan (with batches)',
         default: 'migration-plan'
       }
     },
@@ -418,10 +418,16 @@ export async function handleScanMigrationCandidates(
         continue;
       }
       
+      // Extract package name from FQN if not available
+      const packageName = stub.packageName || (() => {
+        const lastDot = fqn.lastIndexOf('.');
+        return lastDot > 0 ? fqn.substring(0, lastDot) : '';
+      })();
+      
       // Check if in source package
       const inSourcePackage = input.includeSubpackages
-        ? (stub.packageName === input.sourcePackage || stub.packageName.startsWith(sourcePackagePrefix))
-        : stub.packageName === input.sourcePackage;
+        ? (packageName === input.sourcePackage || packageName.startsWith(sourcePackagePrefix))
+        : packageName === input.sourcePackage;
       
       if (inSourcePackage) {
         packageClasses.push(stub);
@@ -617,6 +623,28 @@ function buildRiskAssessment(categories: ScanMigrationResult['categories']): str
  * Format the output based on requested format
  */
 function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): string {
+  // JSON format - return raw structured data
+  if (input.outputFormat === 'json') {
+    return JSON.stringify({
+      summary: result.summary,
+      classes: [...result.categories.safe, ...result.categories.review, ...result.categories.blocked].map(c => ({
+        fqn: c.fqn,
+        className: c.className,
+        type: c.type,
+        risk: c.migrationRisk,
+        blockedCount: c.blockedCount,
+        blockedDeps: c.blockedDeps,
+        suggestion: c.suggestion
+      })),
+      migrationPlan: result.migrationPlan,
+      meta: {
+        sourcePackage: input.sourcePackage,
+        blockedPatterns: input.blockedPatterns,
+        includeSubpackages: input.includeSubpackages
+      }
+    }, null, 2);
+  }
+  
   const lines: string[] = [];
   
   // Header
