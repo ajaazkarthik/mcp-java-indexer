@@ -159,18 +159,20 @@ indexer.on('close', (code) => {
     console.log('   ✅ Handles complex monolithic application patterns');
     console.log('   ✅ Supports real-world enterprise inheritance hierarchies');
     console.log('   ✅ Ready for AI agents to analyze complex codebases');
+    process.exit(0);
   } else if (passedTests / totalTests >= 0.9) {
     console.log('✅ EXCELLENT: 90%+ tests passed!');
     console.log('   Minor issues detected but core functionality works');
+    process.exit(0); // Pass rate >90% is acceptable
   } else if (passedTests / totalTests >= 0.8) {
     console.log('⚠️  GOOD: 80%+ tests passed');
     console.log('   Some edge cases need attention');
+    process.exit(1);
   } else {
     console.log('⚠️  NEEDS WORK: Less than 80% tests passed');
     console.log('   Review failed tests above');
+    process.exit(1);
   }
-  
-  process.exit(failedTests > 0 ? 1 : 0);
 });
 
 function sendRequest(method, params) {

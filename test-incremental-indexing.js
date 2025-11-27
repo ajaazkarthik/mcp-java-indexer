@@ -24,48 +24,63 @@ function runMCPTool(toolName, args) {
 
     let output = '';
     let errorOutput = '';
+    let resolved = false;
 
     proc.stdout.on('data', (data) => {
       output += data.toString();
+      // Try to parse JSON response as it comes
+      const lines = output.split('\n').filter(line => line.trim());
+      for (const line of lines) {
+        try {
+          const resp = JSON.parse(line);
+          if (resp.result && !resolved) {
+            resolved = true;
+            proc.kill();
+            resolve({
+              responses: [resp],
+              stderr: errorOutput
+            });
+          }
+        } catch (e) {}
+      }
     });
 
     proc.stderr.on('data', (data) => {
       errorOutput += data.toString();
     });
 
-    // Send tool call request
-    const request = {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: toolName,
-        arguments: args
-      }
-    };
-
-    proc.stdin.write(JSON.stringify(request) + '\n');
-
+    // Send tool call request after a brief delay for server startup
     setTimeout(() => {
-      proc.kill();
-      
-      // Parse responses
-      const lines = output.split('\n').filter(line => line.trim());
-      const responses = lines.map(line => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
+      const request = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: toolName,
+          arguments: args
         }
-      }).filter(r => r && r.result);
+      };
+      proc.stdin.write(JSON.stringify(request) + '\n');
+    }, 500);
 
-      resolve({
-        responses,
-        stderr: errorOutput
-      });
-    }, 30000); // 30 second timeout
+    // Timeout after 20 seconds
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        proc.kill();
+        resolve({
+          responses: [],
+          stderr: errorOutput
+        });
+      }
+    }, 20000);
 
-    proc.on('error', reject);
+    proc.on('error', (err) => {
+      if (!resolved) {
+        resolved = true;
+        reject(err);
+      }
+    });
   });
 }
 
@@ -148,7 +163,7 @@ async function test() {
     console.log('TEST 3: Third Run (After File Modification)');
     console.log('-'.repeat(60));
     
-    const testFile = path.join(PROJECT_ROOT, 'src', 'main', 'java', 'com', 'example', 'User.java');
+    const testFile = path.join(PROJECT_ROOT, 'src', 'main', 'java', 'com', 'example', 'demo', 'User.java');
     console.log(`\n📝 Modifying file: ${testFile}`);
     
     // Add a comment to trigger reindex

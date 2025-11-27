@@ -234,6 +234,240 @@ class ComprehensiveTestExecutor {
       }
     });
 
+    // Test 7.6: explore_class - Interface exploration
+    await this.runTest('explore_class - Interface exploration', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'IUserService'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('interface')) {
+        throw new Error('Should identify IUserService as interface');
+      }
+      if (!text.includes('Methods')) {
+        throw new Error('Should list interface methods');
+      }
+      // IUserService should have createUser, getUser, deleteUser methods
+      if (!text.includes('createUser') || !text.includes('getUser') || !text.includes('deleteUser')) {
+        throw new Error('Should list all interface methods');
+      }
+    });
+
+    // Test 7.7: explore_class - Enum exploration
+    await this.runTest('explore_class - Enum exploration', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'Status'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('enum')) {
+        throw new Error('Should identify Status as enum');
+      }
+      if (!text.includes('Overview')) {
+        throw new Error('Should have Overview section');
+      }
+    });
+
+    // Test 7.8: explore_class - Class with inheritance (extends)
+    await this.runTest('explore_class - Class with inheritance', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'Employee'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('Inheritance')) {
+        throw new Error('Should have Inheritance section');
+      }
+      if (!text.includes('Person')) {
+        throw new Error('Should show Employee extends Person');
+      }
+    });
+
+    // Test 7.9: explore_class - Class with implements
+    await this.runTest('explore_class - Class with implements', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'UserService'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('IUserService')) {
+        throw new Error('Should show UserService implements IUserService');
+      }
+    });
+
+    // Test 7.10: explore_class - Lookup by FQN
+    await this.runTest('explore_class - Lookup by FQN', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'com.example.demo.Dog'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('Dog')) {
+        throw new Error('Should find Dog by FQN');
+      }
+      if (!text.includes('com.example.demo')) {
+        throw new Error('Should show package for Dog');
+      }
+    });
+
+    // Test 7.11: explore_class - Class structure (methods and fields)
+    await this.runTest('explore_class - Class structure details', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'User'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('Structure')) {
+        throw new Error('Should have Structure section');
+      }
+      if (!text.includes('Fields')) {
+        throw new Error('Should have Fields listed');
+      }
+      if (!text.includes('Methods')) {
+        throw new Error('Should have Methods listed');
+      }
+      // User has getId, setId, getName, setName, getEmail, setEmail
+      if (!text.includes('getId') || !text.includes('getName') || !text.includes('getEmail')) {
+        throw new Error('Should list getter methods');
+      }
+    });
+
+    // Test 7.12: explore_class - Subclasses detection
+    await this.runTest('explore_class - Subclasses detection', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'Person'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('Inheritance')) {
+        throw new Error('Should have Inheritance section');
+      }
+      // Person should have Employee as subclass
+      if (!text.includes('Subclasses') || !text.includes('Employee')) {
+        throw new Error('Should detect Employee as subclass of Person');
+      }
+    });
+
+    // Test 7.13: explore_class - Non-existent class handling
+    await this.runTest('explore_class - Non-existent class handling', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'NonExistentClass123'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('not found')) {
+        throw new Error('Should indicate class was not found');
+      }
+      if (!text.includes('Suggestions')) {
+        throw new Error('Should provide suggestions for finding the class');
+      }
+    });
+
+    // Test 7.14: explore_class - Dependents (Inbound) section exists
+    await this.runTest('explore_class - Dependents section exists', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'UserRepository'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('Dependents') || !text.includes('Inbound')) {
+        throw new Error('Should have Dependents (Inbound) section');
+      }
+      // Should have Unique dependents stat
+      if (!text.includes('Unique dependents')) {
+        throw new Error('Should show Unique dependents in Quick Stats');
+      }
+    });
+
+    // Test 7.15: explore_class - includeMethodDetails parameter
+    await this.runTest('explore_class - includeMethodDetails parameter', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'UserService',
+        includeMethodDetails: true
+      });
+      const text = result.content[0].text;
+      // Should still work with includeMethodDetails=true
+      if (!text.includes('UserService')) {
+        throw new Error('Should work with includeMethodDetails=true');
+      }
+      if (!text.includes('Methods')) {
+        throw new Error('Should include methods section');
+      }
+    });
+
+    // Test 7.16: explore_class - Quick stats validation
+    await this.runTest('explore_class - Quick stats validation', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'UserService'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('Quick Stats')) {
+        throw new Error('Should have Quick Stats section');
+      }
+      if (!text.includes('Total usages') || !text.includes('Unique dependents') || !text.includes('Unique dependencies')) {
+        throw new Error('Quick Stats should include usages, dependents, and dependencies counts');
+      }
+    });
+
+    // Test 7.17: explore_class - Suggested next actions
+    await this.runTest('explore_class - Suggested next actions', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'UserService'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('Suggested Next Actions')) {
+        throw new Error('Should have Suggested Next Actions section');
+      }
+      if (!text.includes('explain_code') || !text.includes('analyze_impact')) {
+        throw new Error('Should suggest explain_code and analyze_impact');
+      }
+    });
+
+    // Test 7.18: explore_class - Deep inheritance hierarchy (Dog -> DomesticAnimal -> Animal -> LivingThing)
+    await this.runTest('explore_class - Deep inheritance hierarchy', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'Dog'
+      });
+      const text = result.content[0].text;
+      if (!text.includes('Inheritance')) {
+        throw new Error('Should have Inheritance section');
+      }
+      // Dog extends DomesticAnimal
+      if (!text.includes('DomesticAnimal')) {
+        throw new Error('Should show Dog extends DomesticAnimal');
+      }
+    });
+
+    // Test 7.19: explore_class - Partial name matching (case-insensitive)
+    await this.runTest('explore_class - Partial name matching', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'userservice'  // lowercase
+      });
+      const text = result.content[0].text;
+      // Should still find UserService
+      if (!text.includes('UserService') || text.includes('not found')) {
+        throw new Error('Should find UserService with lowercase name');
+      }
+    });
+
+    // Test 7.20: explore_class - File location info
+    await this.runTest('explore_class - File location info', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'User'
+      });
+      const text = result.content[0].text;
+      // Should include file path and line number (format: **File**: path:line)
+      if (!text.includes('**File**:')) {
+        throw new Error('Should show File location');
+      }
+      if (!text.includes('.java')) {
+        throw new Error('Should show .java file path');
+      }
+    });
+
+    // Test 7.21: explore_class - Constructors count
+    await this.runTest('explore_class - Constructors count', async () => {
+      const result = await this.callTool('explore_class', {
+        className: 'UserService'
+      });
+      const text = result.content[0].text;
+      // Should show constructor count in Structure section
+      if (!text.includes('Constructors')) {
+        throw new Error('Should show Constructors count');
+      }
+    });
+
     console.log(`${colors.magenta}${colors.bold}PHASE 2: AI-Friendly Tools (v1.3.0)${colors.reset}\n`);
 
     // Test 8: explain_code

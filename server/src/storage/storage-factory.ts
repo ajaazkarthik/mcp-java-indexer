@@ -4,7 +4,6 @@
  */
 
 import { IIndexStorage } from './index-storage.js';
-import { SqliteStorage } from './sqlite-storage.js';
 import { FileShardStorage } from './file-shard-storage.js';
 
 export type StorageType = 'sqlite' | 'file-shard';
@@ -20,6 +19,8 @@ export class StorageFactory {
     
     if (type === 'sqlite') {
       console.error('🚀 Using SQLite storage (high performance)');
+      // Dynamic import to avoid loading better-sqlite3 when not available
+      const { SqliteStorage } = await import('./sqlite-storage.js');
       const storage = new SqliteStorage(indexDir);
       await storage.initialize();
       return storage;

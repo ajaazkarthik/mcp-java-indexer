@@ -180,7 +180,7 @@ export async function handleIndexProject(
 
     // Conservative batch sizing to prevent OOM and buffer overflow
     // 100 files = safer for large projects, prevents JSON response buffer overflow
-    const batchSize = 100; // Reduced for stability - prevents buffer overflow on large projects
+    const batchSize = 300; // Reduced for stability - prevents buffer overflow on large projects
     let totalSymbols = 0;
     let totalReferences = 0;
     let processedFiles = 0;

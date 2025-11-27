@@ -1,0 +1,921 @@
+[36mStarting MCP server...[0m
+[32m✓ Server started[0m
+
+
+[35m============================================================[0m
+[35mTEST 1: Index Example Project[0m
+[35m============================================================[0m
+
+Index result: ✅ Index is up-to-date (completed in 0.14s)
+
+📊 Statistics:
+  • Symbols: 324
+  • Indexed Files: 55
+  • All Files (including dependencies): 55
+  • References: 290
+  • Call Graph Edges: 70
+  • Inheritance Relations: 33
+
+💾 Index location: D:/workspace/repo/github-playground/mcp-java-indexer/example-java-project/.mcp-index
+👁️ File watcher enabled for incremental updates
+[32m✓ Project indexed successfully[0m
+✅ Index is up-to-date (completed in 0.14s)
+
+📊 Statistics:
+  • Symbols: 324
+  • Indexed Files: 55
+  • All Files (including dependencies): 55
+  • References: 290
+  • Call Graph Edges: 70
+  • Inheritance Relations: 33
+
+💾 Index location: D:/workspace/repo/github-playground/mcp-java-indexer/example-jav...
+
+
+[35m============================================================[0m
+[35mTEST 2: Explain Code - UserService Class[0m
+[35m============================================================[0m
+
+# Code Explanation: UserService
+
+**Type**: class
+**Package**: com.example.demo
+**Location**: UserService.java:9
+
+**Access & Modifiers**: public
+- Publicly accessible from anywhere. 
+
+## Purpose
+
+This is a **Service** class - contains business logic and orchestrates operations.
+
+**Implements**: `com.example.demo.IUserService`
+- Must provide implementations for all interface methods
+
+## Structure
+
+- **2** fields (data members)
+- **1** constructor(s)
+- **5** methods
+
+## Public API
+
+- `createUser` → User
+- `getUser` → User
+- `getAllUsers` → List<User>
+- `deleteUser` → void
+
+
+[32m✓ Code explanation generated successfully
+[0m
+
+[35m============================================================[0m
+[35mTEST 3: Explain Code - saveUser Method[0m
+[35m============================================================[0m
+
+Symbol not found: com.example.demo.UserService.saveUser(User)
+
+Try using find_symbol first to get the exact FQN.
+
+[35m============================================================[0m
+[35mTEST 4: Semantic Search - "database save methods"[0m
+[35m============================================================[0m
+
+# Semantic Search Results
+
+**Query**: "database save methods"
+**Scope**: all
+**Found**: 20 relevant symbols (showing top 20 of 31)
+
+**Detected Patterns**: repository, database
+
+## 📊 Scoring System
+
+- **Name match** (50 pts): Symbol name contains query
+- **FQN match** (30 pts): Full qualified name contains query
+- **Word matches** (15 pts each): Individual query words found
+- **Signature match** (40 pts): Method signature contains query
+- **Pattern match** (20 pts each): Design pattern keywords found
+- **Modifiers** (10-25 pts): static, abstract, final, etc.
+- **Inheritance** (30 pts): extends/implements matches query
+
+---
+
+## method: `save`
+
+**Relevance**: 🟢⚪⚪ 55 pts
+**Match Reasons**: 1 word match, repository pattern (2 matches)
+**Location**: UserRepository.java:7
+**FQN**: `com.example.demo.UserRepository.save(User)`
+**Signature**: `User save(User)`
+**Modifiers**: public
+
+## method: `save`
+
+**Relevance**: 🟢⚪⚪ 55 pts
+**Match Reasons**: 1 word match, repository pattern (2 matches)
+**Location**: UserRepository.java:12
+**FQN**: `com.example.demo.advanced.UserRepository.save(String)`
+**Signature**: `void save(String)`
+**Modifiers**: public
+
+## method: `saveAll`
+
+**Relevance**: 🟢⚪⚪ 55 pts
+**Match Reasons**: 1 word match, repository pattern (2 matches)
+**Location**: UserRepository.java:36
+**FQN**: `com.example.demo.advanced.UserRepository.saveAll(List<String>)`
+**Signature**: `void saveAll(List<String>)`
+**Modifiers**: public
+
+## method: `save`
+
+**Relevance**: 🟢⚪⚪ 55 pts
+**Match Reasons**: 1 word match, repository pattern (2 matches)
+**Location**: BaseRepository.java:14
+**FQN**: `com.example.demo.advanced.BaseRepository.save(T)`
+**Signature**: `void save(T)`
+**Modifiers**: public, abstract
+
+## method: `saveAll`
+
+**Relevance**: 🟢⚪⚪ 55 pts
+**Match Reasons**: 1 word match, repository pattern (2 matches)
+**Location**: AbstractCrudRepository.java:10
+**FQN**: `com.example.demo.advanced.AbstractCrudRepository.saveAll(List<T>)`
+**Signature**: `void saveAll(List<T>)`
+**Modifiers**: public, abstract
+
+## method: `findById`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: repository pattern (2 matches)
+**Location**: UserRepository.java:13
+**FQN**: `com.example.demo.UserRepository.findById(Long)`
+**Signature**: `User findById(Long)`
+**Modifiers**: public
+
+## method: `delete`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: repository pattern (2 matches)
+**Location**: UserRepository.java:26
+**FQN**: `com.example.demo.UserRepository.delete(Long)`
+**Signature**: `void delete(Long)`
+**Modifiers**: public
+
+## method: `findById`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: repository pattern (2 matches)
+**Location**: UserRepository.java:21
+**FQN**: `com.example.demo.advanced.UserRepository.findById(Long)`
+**Signature**: `String findById(Long)`
+**Modifiers**: public
+
+## method: `delete`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: repository pattern (2 matches)
+**Location**: UserRepository.java:26
+**FQN**: `com.example.demo.advanced.UserRepository.delete(String)`
+**Signature**: `void delete(String)`
+**Modifiers**: public
+
+## method: `findById`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: repository pattern (2 matches)
+**Location**: BaseRepository.java:15
+**FQN**: `com.example.demo.advanced.BaseRepository.findById(Long)`
+**Signature**: `T findById(Long)`
+**Modifiers**: public, abstract
+
+## method: `delete`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: repository pattern (2 matches)
+**Location**: BaseRepository.java:16
+**FQN**: `com.example.demo.advanced.BaseRepository.delete(T)`
+**Signature**: `void delete(T)`
+**Modifiers**: public, abstract
+
+## method: `deleteUser`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: repository pattern (1 matches)
+**Location**: UserService.java:39
+**FQN**: `com.example.demo.UserService.deleteUser(Long)`
+**Signature**: `void deleteUser(Long)`
+**Modifiers**: public
+
+## field: `repository`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: repository pattern (1 matches)
+**Location**: UserService.java:11
+**FQN**: `com.example.demo.UserService.repository`
+**Signature**: `UserRepository repository`
+**Modifiers**: private
+
+## constructor: `UserService`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: repository pattern (1 matches)
+**Location**: UserService.java:14
+**FQN**: `com.example.demo.UserService.UserService(UserRepository, AuditLogger)`
+**Signature**: `UserService(UserRepository, AuditLogger)`
+**Modifiers**: public
+
+## class: `UserRepository`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: repository pattern (1 matches)
+**Location**: UserRepository.java:5
+**FQN**: `com.example.demo.UserRepository`
+**Modifiers**: public
+
+## method: `findAll`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: repository pattern (1 matches)
+**Location**: UserRepository.java:18
+**FQN**: `com.example.demo.UserRepository.findAll()`
+**Signature**: `List<User> findAll()`
+**Modifiers**: public
+
+## field: `DELETED`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: repository pattern (1 matches)
+**Location**: Status.java:7
+**FQN**: `com.example.demo.Status.DELETED`
+**Signature**: `Status DELETED`
+**Modifiers**: public, static, final
+
+## method: `deleteUser`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: repository pattern (1 matches)
+**Location**: IUserService.java:6
+**FQN**: `com.example.demo.IUserService.deleteUser(Long)`
+**Signature**: `void deleteUser(Long)`
+
+## class: `UserRepository`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: repository pattern (1 matches)
+**Location**: UserRepository.java:10
+**FQN**: `com.example.demo.advanced.UserRepository`
+**Modifiers**: public
+**Extends**: `com.example.demo.advanced.AbstractCrudRepository`
+
+## method: `findAll`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: repository pattern (1 matches)
+**Location**: UserRepository.java:31
+**FQN**: `com.example.demo.advanced.UserRepository.findAll()`
+**Signature**: `List<String> findAll()`
+**Modifiers**: public
+
+
+
+[35m============================================================[0m
+[35mTEST 5: Semantic Search - "validation logic"[0m
+[35m============================================================[0m
+
+# Semantic Search Results
+
+**Query**: "validation logic"
+**Scope**: all
+**Found**: 20 relevant symbols (showing top 20 of 23)
+
+**Detected Patterns**: logger
+
+## 📊 Scoring System
+
+- **Name match** (50 pts): Symbol name contains query
+- **FQN match** (30 pts): Full qualified name contains query
+- **Word matches** (15 pts each): Individual query words found
+- **Signature match** (40 pts): Method signature contains query
+- **Pattern match** (20 pts each): Design pattern keywords found
+- **Modifiers** (10-25 pts): static, abstract, final, etc.
+- **Inheritance** (30 pts): extends/implements matches query
+
+---
+
+## field: `logger`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: logger pattern (2 matches)
+**Location**: UserService.java:12
+**FQN**: `com.example.demo.UserService.logger`
+**Signature**: `AuditLogger logger`
+**Modifiers**: private
+
+## constructor: `UserService`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: logger pattern (2 matches)
+**Location**: UserService.java:14
+**FQN**: `com.example.demo.UserService.UserService(UserRepository, AuditLogger)`
+**Signature**: `UserService(UserRepository, AuditLogger)`
+**Modifiers**: public
+
+## class: `AuditLogger`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: logger pattern (2 matches)
+**Location**: AuditLogger.java:3
+**FQN**: `com.example.demo.AuditLogger`
+**Modifiers**: public
+
+## method: `log`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: logger pattern (2 matches)
+**Location**: AuditLogger.java:5
+**FQN**: `com.example.demo.AuditLogger.log(String)`
+**Signature**: `void log(String)`
+**Modifiers**: public
+
+## method: `logValidation`
+
+**Relevance**: 🟡⚪⚪ 35 pts
+**Match Reasons**: 1 word match, logger pattern (1 matches)
+**Location**: AbstractValidator.java:15
+**FQN**: `com.example.demo.util.AbstractValidator.logValidation(String)`
+**Signature**: `void logValidation(String)`
+**Modifiers**: protected
+
+## field: `LOG_EXCEPTIONS`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: logger pattern (1 matches)
+**Location**: BaseException.java:9
+**FQN**: `com.example.demo.exception.BaseException.LOG_EXCEPTIONS`
+**Signature**: `boolean LOG_EXCEPTIONS`
+**Modifiers**: public, static, final
+
+## method: `logActivity`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: logger pattern (1 matches)
+**Location**: ServiceManager.java:9
+**FQN**: `com.example.demo.edge.ServiceManager.logActivity()`
+**Signature**: `void logActivity()`
+**Modifiers**: public
+
+## interface: `Loggable`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: logger pattern (1 matches)
+**Location**: Loggable.java:3
+**FQN**: `com.example.demo.edge.Loggable`
+**Modifiers**: public
+
+## field: `LOG_LEVEL_DEBUG`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: logger pattern (1 matches)
+**Location**: Loggable.java:4
+**FQN**: `com.example.demo.edge.Loggable.LOG_LEVEL_DEBUG`
+**Signature**: `String LOG_LEVEL_DEBUG`
+
+## field: `LOG_LEVEL_INFO`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: logger pattern (1 matches)
+**Location**: Loggable.java:5
+**FQN**: `com.example.demo.edge.Loggable.LOG_LEVEL_INFO`
+**Signature**: `String LOG_LEVEL_INFO`
+
+## field: `LOG_LEVEL_ERROR`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: logger pattern (1 matches)
+**Location**: Loggable.java:6
+**FQN**: `com.example.demo.edge.Loggable.LOG_LEVEL_ERROR`
+**Signature**: `String LOG_LEVEL_ERROR`
+
+## field: `LOG_CHAIN`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: logger pattern (1 matches)
+**Location**: Handler.java:9
+**FQN**: `com.example.demo.advanced.Handler.LOG_CHAIN`
+**Signature**: `boolean LOG_CHAIN`
+**Modifiers**: public, static, final
+
+## method: `log`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: logger pattern (1 matches)
+**Location**: AbstractService.java:14
+**FQN**: `com.example.demo.advanced.AbstractService.log(String)`
+**Signature**: `void log(String)`
+**Modifiers**: protected
+
+## method: `logHandling`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: logger pattern (1 matches)
+**Location**: AbstractHandler.java:7
+**FQN**: `com.example.demo.advanced.AbstractHandler.logHandling(String)`
+**Signature**: `void logHandling(String)`
+**Modifiers**: protected
+
+## method: `logOperation`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: logger pattern (1 matches)
+**Location**: AbstractCrudRepository.java:12
+**FQN**: `com.example.demo.advanced.AbstractCrudRepository.logOperation(String)`
+**Signature**: `void logOperation(String)`
+**Modifiers**: protected
+
+## field: `VALIDATION_FAILED`
+
+**Relevance**: ⚪⚪⚪ 15 pts
+**Match Reasons**: 1 word match
+**Location**: AbstractValidator.java:8
+**FQN**: `com.example.demo.util.AbstractValidator.VALIDATION_FAILED`
+**Signature**: `String VALIDATION_FAILED`
+**Modifiers**: public, static, final
+
+## field: `VALIDATION_SUCCESS`
+
+**Relevance**: ⚪⚪⚪ 15 pts
+**Match Reasons**: 1 word match
+**Location**: AbstractValidator.java:9
+**FQN**: `com.example.demo.util.AbstractValidator.VALIDATION_SUCCESS`
+**Signature**: `String VALIDATION_SUCCESS`
+**Modifiers**: public, static, final
+
+## class: `ValidationException`
+
+**Relevance**: ⚪⚪⚪ 15 pts
+**Match Reasons**: 1 word match
+**Location**: ValidationException.java:7
+**FQN**: `com.example.demo.exception.ValidationException`
+**Modifiers**: public
+**Extends**: `com.example.demo.exception.BaseException`
+
+## method: `getFullErrorCode`
+
+**Relevance**: ⚪⚪⚪ 15 pts
+**Match Reasons**: 1 word match
+**Location**: ValidationException.java:19
+**FQN**: `com.example.demo.exception.ValidationException.getFullErrorCode()`
+**Signature**: `String getFullErrorCode()`
+**Modifiers**: public
+
+## field: `VALIDATION_ERROR_CODE`
+
+**Relevance**: ⚪⚪⚪ 15 pts
+**Match Reasons**: 1 word match
+**Location**: ValidationException.java:8
+**FQN**: `com.example.demo.exception.ValidationException.VALIDATION_ERROR_CODE`
+**Signature**: `int VALIDATION_ERROR_CODE`
+**Modifiers**: public, static, final
+
+
+
+[35m============================================================[0m
+[35mTEST 6: Semantic Search - "builder pattern classes"[0m
+[35m============================================================[0m
+
+# Semantic Search Results
+
+**Query**: "builder pattern classes"
+**Scope**: all
+**Found**: 14 relevant symbols
+
+**Detected Patterns**: builder
+
+## 📊 Scoring System
+
+- **Name match** (50 pts): Symbol name contains query
+- **FQN match** (30 pts): Full qualified name contains query
+- **Word matches** (15 pts each): Individual query words found
+- **Signature match** (40 pts): Method signature contains query
+- **Pattern match** (20 pts each): Design pattern keywords found
+- **Modifiers** (10-25 pts): static, abstract, final, etc.
+- **Inheritance** (30 pts): extends/implements matches query
+
+---
+
+## method: `withName`
+
+**Relevance**: 🟢⚪⚪ 55 pts
+**Match Reasons**: 1 word match, builder pattern (2 matches)
+**Location**: UserBuilder.java:14
+**FQN**: `com.example.demo.advanced.UserBuilder.withName(String)`
+**Signature**: `UserBuilder withName(String)`
+**Modifiers**: public
+
+## method: `withAge`
+
+**Relevance**: 🟢⚪⚪ 55 pts
+**Match Reasons**: 1 word match, builder pattern (2 matches)
+**Location**: UserBuilder.java:19
+**FQN**: `com.example.demo.advanced.UserBuilder.withAge(int)`
+**Signature**: `UserBuilder withAge(int)`
+**Modifiers**: public
+
+## method: `build`
+
+**Relevance**: 🟢⚪⚪ 55 pts
+**Match Reasons**: 1 word match, builder pattern (2 matches)
+**Location**: UserBuilder.java:24
+**FQN**: `com.example.demo.advanced.UserBuilder.build()`
+**Signature**: `String build()`
+**Modifiers**: public
+
+## method: `build`
+
+**Relevance**: 🟢⚪⚪ 55 pts
+**Match Reasons**: 1 word match, builder pattern (2 matches)
+**Location**: BaseBuilder.java:10
+**FQN**: `com.example.demo.advanced.BaseBuilder.build()`
+**Signature**: `T build()`
+**Modifiers**: public, abstract
+
+## method: `validateBuild`
+
+**Relevance**: 🟢⚪⚪ 55 pts
+**Match Reasons**: 1 word match, builder pattern (2 matches)
+**Location**: BaseBuilder.java:12
+**FQN**: `com.example.demo.advanced.BaseBuilder.validateBuild()`
+**Signature**: `void validateBuild()`
+**Modifiers**: protected
+
+## class: `UserBuilder`
+
+**Relevance**: 🟡⚪⚪ 35 pts
+**Match Reasons**: 1 word match, builder pattern (1 matches)
+**Location**: UserBuilder.java:7
+**FQN**: `com.example.demo.advanced.UserBuilder`
+**Modifiers**: public
+**Extends**: `com.example.demo.advanced.BaseBuilder`
+
+## field: `DEFAULT_AGE`
+
+**Relevance**: 🟡⚪⚪ 35 pts
+**Match Reasons**: 1 word match, builder pattern (1 matches)
+**Location**: UserBuilder.java:8
+**FQN**: `com.example.demo.advanced.UserBuilder.DEFAULT_AGE`
+**Signature**: `int DEFAULT_AGE`
+**Modifiers**: public, static, final
+
+## field: `DEFAULT_ROLE`
+
+**Relevance**: 🟡⚪⚪ 35 pts
+**Match Reasons**: 1 word match, builder pattern (1 matches)
+**Location**: UserBuilder.java:9
+**FQN**: `com.example.demo.advanced.UserBuilder.DEFAULT_ROLE`
+**Signature**: `String DEFAULT_ROLE`
+**Modifiers**: public, static, final
+
+## field: `name`
+
+**Relevance**: 🟡⚪⚪ 35 pts
+**Match Reasons**: 1 word match, builder pattern (1 matches)
+**Location**: UserBuilder.java:11
+**FQN**: `com.example.demo.advanced.UserBuilder.name`
+**Signature**: `String name`
+**Modifiers**: private
+
+## field: `age`
+
+**Relevance**: 🟡⚪⚪ 35 pts
+**Match Reasons**: 1 word match, builder pattern (1 matches)
+**Location**: UserBuilder.java:12
+**FQN**: `com.example.demo.advanced.UserBuilder.age`
+**Signature**: `int age`
+**Modifiers**: private
+
+## class: `BaseBuilder`
+
+**Relevance**: 🟡⚪⚪ 35 pts
+**Match Reasons**: 1 word match, builder pattern (1 matches)
+**Location**: BaseBuilder.java:6
+**FQN**: `com.example.demo.advanced.BaseBuilder`
+**Modifiers**: public, abstract
+
+## field: `BUILDER_VERSION`
+
+**Relevance**: 🟡⚪⚪ 35 pts
+**Match Reasons**: 1 word match, builder pattern (1 matches)
+**Location**: BaseBuilder.java:7
+**FQN**: `com.example.demo.advanced.BaseBuilder.BUILDER_VERSION`
+**Signature**: `String BUILDER_VERSION`
+**Modifiers**: public, static, final
+
+## field: `VALIDATE_ON_BUILD`
+
+**Relevance**: 🟡⚪⚪ 35 pts
+**Match Reasons**: 1 word match, builder pattern (1 matches)
+**Location**: BaseBuilder.java:8
+**FQN**: `com.example.demo.advanced.BaseBuilder.VALIDATE_ON_BUILD`
+**Signature**: `boolean VALIDATE_ON_BUILD`
+**Modifiers**: public, static, final
+
+## field: `EMAIL_PATTERN`
+
+**Relevance**: ⚪⚪⚪ 15 pts
+**Match Reasons**: 1 word match
+**Location**: EmailValidator.java:10
+**FQN**: `com.example.demo.service.EmailValidator.EMAIL_PATTERN`
+**Signature**: `String EMAIL_PATTERN`
+**Modifiers**: public, static, final
+
+
+
+[35m============================================================[0m
+[35mTEST 7: Impact Analysis - UserRepository[0m
+[35m============================================================[0m
+
+# Impact Analysis: UserRepository
+
+**Type**: class
+**Location**: D:/workspace/repo/github-playground/mcp-java-indexer/example-java-project/src/main/java/com/example/demo/UserRepository.java:5
+**FQN**: com.example.demo.UserRepository
+
+## 🎯 Risk Assessment
+
+**Risk Level**: 🟢 LOW (0/100)
+**Direct Dependencies**: 0 references, 0 callers
+**Indirect Impact**: 1 symbols across 1 levels
+
+✅ **LOW RISK**: Limited dependencies. Changes are relatively safe.
+
+## 💡 Recommendations
+
+- ✅ Verify behavior with existing tests
+- ✅ Consider edge cases in the few affected areas
+
+[32m✓ Impact analysis completed for UserRepository
+[0m
+
+[35m============================================================[0m
+[35mTEST 8: Impact Analysis - UserService.saveUser Method[0m
+[35m============================================================[0m
+
+Symbol not found: com.example.demo.UserService.saveUser(User)
+
+Try searching first with find_symbol to get the exact FQN.
+
+[35m============================================================[0m
+[35mTEST 9: Semantic Search - "public methods that throw exceptions"[0m
+[35m============================================================[0m
+
+# Semantic Search Results
+
+**Query**: "public methods that throw exceptions"
+**Scope**: all
+**Found**: 20 relevant symbols (showing top 20 of 242)
+
+**Detected Patterns**: exception
+
+## 📊 Scoring System
+
+- **Name match** (50 pts): Symbol name contains query
+- **FQN match** (30 pts): Full qualified name contains query
+- **Word matches** (15 pts each): Individual query words found
+- **Signature match** (40 pts): Method signature contains query
+- **Pattern match** (20 pts each): Design pattern keywords found
+- **Modifiers** (10-25 pts): static, abstract, final, etc.
+- **Inheritance** (30 pts): extends/implements matches query
+
+---
+
+## field: `LOG_EXCEPTIONS`
+
+**Relevance**: 🟢🟢⚪ 75 pts
+**Match Reasons**: 1 word match, throws exceptions, exception pattern (1 matches)
+**Location**: BaseException.java:9
+**FQN**: `com.example.demo.exception.BaseException.LOG_EXCEPTIONS`
+**Signature**: `boolean LOG_EXCEPTIONS`
+**Modifiers**: public, static, final
+
+## constructor: `ValidationException`
+
+**Relevance**: 🟢⚪⚪ 60 pts
+**Match Reasons**: throws exceptions, exception pattern (1 matches)
+**Location**: ValidationException.java:13
+**FQN**: `com.example.demo.exception.ValidationException.ValidationException(String, String)`
+**Signature**: `ValidationException(String, String)`
+**Modifiers**: public
+
+## constructor: `BaseException`
+
+**Relevance**: 🟢⚪⚪ 60 pts
+**Match Reasons**: throws exceptions, exception pattern (1 matches)
+**Location**: BaseException.java:13
+**FQN**: `com.example.demo.exception.BaseException.BaseException(String)`
+**Signature**: `BaseException(String)`
+**Modifiers**: public
+
+## method: `getFullErrorCode`
+
+**Relevance**: 🟢⚪⚪ 50 pts
+**Match Reasons**: exception pattern (2 matches)
+**Location**: ValidationException.java:19
+**FQN**: `com.example.demo.exception.ValidationException.getFullErrorCode()`
+**Signature**: `String getFullErrorCode()`
+**Modifiers**: public
+
+## field: `VALIDATION_ERROR_CODE`
+
+**Relevance**: 🟢⚪⚪ 50 pts
+**Match Reasons**: exception pattern (2 matches)
+**Location**: ValidationException.java:8
+**FQN**: `com.example.demo.exception.ValidationException.VALIDATION_ERROR_CODE`
+**Signature**: `int VALIDATION_ERROR_CODE`
+**Modifiers**: public, static, final
+
+## method: `getErrorCode`
+
+**Relevance**: 🟢⚪⚪ 50 pts
+**Match Reasons**: exception pattern (2 matches)
+**Location**: BaseException.java:18
+**FQN**: `com.example.demo.exception.BaseException.getErrorCode()`
+**Signature**: `int getErrorCode()`
+**Modifiers**: public
+
+## field: `ERROR_PREFIX`
+
+**Relevance**: 🟢⚪⚪ 50 pts
+**Match Reasons**: exception pattern (2 matches)
+**Location**: BaseException.java:7
+**FQN**: `com.example.demo.exception.BaseException.ERROR_PREFIX`
+**Signature**: `String ERROR_PREFIX`
+**Modifiers**: public, static, final
+
+## field: `DEFAULT_ERROR_CODE`
+
+**Relevance**: 🟢⚪⚪ 50 pts
+**Match Reasons**: exception pattern (2 matches)
+**Location**: BaseException.java:8
+**FQN**: `com.example.demo.exception.BaseException.DEFAULT_ERROR_CODE`
+**Signature**: `int DEFAULT_ERROR_CODE`
+**Modifiers**: public, static, final
+
+## field: `errorCode`
+
+**Relevance**: 🟡⚪⚪ 40 pts
+**Match Reasons**: exception pattern (2 matches)
+**Location**: BaseException.java:11
+**FQN**: `com.example.demo.exception.BaseException.errorCode`
+**Signature**: `int errorCode`
+**Modifiers**: protected
+
+## class: `ValidationException`
+
+**Relevance**: 🟡⚪⚪ 30 pts
+**Match Reasons**: exception pattern (1 matches)
+**Location**: ValidationException.java:7
+**FQN**: `com.example.demo.exception.ValidationException`
+**Modifiers**: public
+**Extends**: `com.example.demo.exception.BaseException`
+
+## field: `VALIDATION_TYPE`
+
+**Relevance**: 🟡⚪⚪ 30 pts
+**Match Reasons**: exception pattern (1 matches)
+**Location**: ValidationException.java:9
+**FQN**: `com.example.demo.exception.ValidationException.VALIDATION_TYPE`
+**Signature**: `String VALIDATION_TYPE`
+**Modifiers**: public, static, final
+
+## class: `BaseException`
+
+**Relevance**: 🟡⚪⚪ 30 pts
+**Match Reasons**: exception pattern (1 matches)
+**Location**: BaseException.java:6
+**FQN**: `com.example.demo.exception.BaseException`
+**Modifiers**: public
+**Extends**: `com.example.demo.exception.RuntimeException`
+
+## field: `ERROR`
+
+**Relevance**: 🟡⚪⚪ 30 pts
+**Match Reasons**: exception pattern (1 matches)
+**Location**: HttpStatus.java:9
+**FQN**: `com.example.demo.edge.HttpStatus.ERROR`
+**Signature**: `HttpStatus ERROR`
+**Modifiers**: public, static, final
+
+## method: `getAllMethods`
+
+**Relevance**: ⚪⚪⚪ 25 pts
+**Match Reasons**: 1 word match
+**Location**: ReflectionExample.java:26
+**FQN**: `com.example.demo.reflection.ReflectionExample.getAllMethods()`
+**Signature**: `Method[] getAllMethods()`
+**Modifiers**: public
+
+## field: `fieldName`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: exception pattern (1 matches)
+**Location**: ValidationException.java:11
+**FQN**: `com.example.demo.exception.ValidationException.fieldName`
+**Signature**: `String fieldName`
+**Modifiers**: private
+
+## field: `ERROR_CODE`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: exception pattern (1 matches)
+**Location**: StatusCode.java:9
+**FQN**: `com.example.demo.edge.StatusCode.ERROR_CODE`
+**Signature**: `int ERROR_CODE`
+
+## field: `LOG_LEVEL_ERROR`
+
+**Relevance**: ⚪⚪⚪ 20 pts
+**Match Reasons**: exception pattern (1 matches)
+**Location**: Loggable.java:6
+**FQN**: `com.example.demo.edge.Loggable.LOG_LEVEL_ERROR`
+**Signature**: `String LOG_LEVEL_ERROR`
+
+## class: `UserService`
+
+**Relevance**: ⚪⚪⚪ 10 pts
+**Match Reasons**: 
+**Location**: UserService.java:9
+**FQN**: `com.example.demo.UserService`
+**Modifiers**: public
+**Implements**: `com.example.demo.IUserService`
+
+## method: `createUser`
+
+**Relevance**: ⚪⚪⚪ 10 pts
+**Match Reasons**: 
+**Location**: UserService.java:19
+**FQN**: `com.example.demo.UserService.createUser(String, String)`
+**Signature**: `User createUser(String, String)`
+**Modifiers**: public
+
+## method: `getUser`
+
+**Relevance**: ⚪⚪⚪ 10 pts
+**Match Reasons**: 
+**Location**: UserService.java:29
+**FQN**: `com.example.demo.UserService.getUser(Long)`
+**Signature**: `User getUser(Long)`
+**Modifiers**: public
+
+
+
+[35m============================================================[0m
+[35mTEST 10: Explain Code - IUserService Interface[0m
+[35m============================================================[0m
+
+# Code Explanation: IUserService
+
+**Type**: interface
+**Package**: com.example.demo
+**Location**: IUserService.java:3
+
+**Access & Modifiers**: public
+- Publicly accessible from anywhere. 
+
+## Purpose
+
+This is a **Service** class - contains business logic and orchestrates operations.
+
+## Structure
+
+- **0** fields (data members)
+- **0** constructor(s)
+- **3** methods
+
+## Dependencies
+
+- **Used by**: 0 other classes
+- **References**: 1 total usages in codebase
+
+## Recommendations
+
+- ✅ Code looks well-structured
+
+
+[35m============================================================[0m
+[35mADVANCED TOOLS TEST SUMMARY[0m
+[35m============================================================[0m
+
+[32m✓ All 10 advanced tool tests completed successfully![0m
+
+Key Features Tested:
+  • Code Explanation (classes, methods, interfaces)
+  • Semantic Search (intent-based queries)
+  • Impact Analysis (risk assessment & dependencies)
+  • Pattern Detection (builder, repository, service, etc.)
+  • Natural Language Understanding
+
+
+[36mServer stopped[0m

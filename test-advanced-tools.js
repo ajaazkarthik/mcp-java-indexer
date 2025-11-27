@@ -129,7 +129,8 @@ class AdvancedToolsTest {
       const indexText = indexResult.content[0].text;
       console.log('Index result:', indexText.substring(0, 500));
       
-      if (indexText.includes('symbols') || indexText.includes('files')) {
+      // Check if index is valid (can be "up-to-date" or newly indexed)
+      if (indexText.includes('up-to-date') || indexText.includes('Indexed') || indexText.includes('Statistics') || indexText.includes('Symbols')) {
         this.printSuccess('Project indexed successfully');
         console.log(indexText.substring(0, 300) + '...\n');
       } else {
@@ -280,13 +281,20 @@ class AdvancedToolsTest {
 // Run tests
 (async () => {
   const tester = new AdvancedToolsTest();
+  let exitCode = 0;
   try {
     await tester.start();
     await tester.runTests();
+    await tester.stop();
+    exitCode = 0;
   } catch (error) {
     console.error(`${colors.red}Fatal error: ${error.message}${colors.reset}`);
-    process.exit(1);
-  } finally {
     await tester.stop();
+    exitCode = 1;
   }
+  
+  // Ensure stdout is flushed before exit
+  process.stdout.write('', () => {
+    process.exit(exitCode);
+  });
 })();

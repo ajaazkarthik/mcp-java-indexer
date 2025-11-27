@@ -5,6 +5,158 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2025-11-28
+
+### 🚀 New Feature: Migration Scanner Tool
+
+#### `scan_migration_candidates` - Bulk Migration Analysis (40-60x faster!)
+
+**Problem Solved**: With 12,000+ Java classes and previous tools only analyzing ~10 classes per batch, modularization was too slow.
+
+**Solution**: New bulk analysis tool that scans an entire package in a single API call.
+
+**Performance Improvement**:
+| Metric | Before | After |
+|--------|--------|-------|
+| API calls for 100 classes | 100 | 1 |
+| Time for 100 classes | ~200 seconds | ~5 seconds |
+| Time for 319 util/ classes | ~10 minutes | ~15 seconds |
+| Manual categorization | Required | Automatic |
+| Migration plan | Manual | Auto-generated |
+
+**Features**:
+- **Bulk Package Scanning**: Analyze entire packages with subpackage support
+- **Blocked Pattern Detection**: Define patterns that block migration (e.g., `com.legacy.business`)
+- **Risk Categorization**: 
+  - ✅ SAFE: 0 blocked deps - migrate immediately
+  - ⚠️ LOW/MEDIUM: 1-5 blocked deps - may need minor refactoring
+  - ❌ BLOCKED: 6+ blocked deps - major refactor needed
+- **Migration Batch Ordering**: Topological sort for optimal migration sequence
+  - Pure types (enums, interfaces) first
+  - Utility classes second
+  - Complex classes last
+- **Effort Estimation**: Time estimates based on class complexity
+- **Actionable Suggestions**: "Extract interface", "Use DI", etc.
+
+**Usage Example**:
+```json
+{
+  "sourcePackage": "com.example.util",
+  "blockedPatterns": ["com.example.business", "com.example.legacy"],
+  "outputFormat": "migration-plan"
+}
+```
+
+**Output Formats**:
+- `summary`: Quick overview with counts
+- `detailed`: Full class listings with blocking dependencies
+- `migration-plan`: Complete execution plan with batches
+
+### 📊 Tool Count
+
+- Total MCP tools: 17 (was 16)
+
+---
+
+## [2.3.2] - 2025-11-26
+
+### 📝 Documentation
+
+- Added comprehensive `JAVA_INDEXER_USAGE_GUIDE.md` with best practices
+- Updated CHANGELOG.md with v2.3.0 and v2.3.1 entries
+- User validation: Same-package dependency detection working correctly
+
+---
+
+## [2.3.1] - 2025-11-26
+
+### 🐛 Bug Fixes
+
+#### Same-Package Dependency Detection - FIXED ✅
+**Problem**: `explore_class` reported "0 external dependencies" for classes that use same-package classes without explicit imports (e.g., `CommonUtils` using `XMLUtils`, `FileHelper`, `MiscUtil`)
+
+**Root Cause**: 
+- Only checked call graph (method_call references)
+- Missed type_reference, instantiation, and field_access references
+- Simple class names weren't resolved to FQNs
+
+**Fix**:
+- Added `findReferencesFromClass()` to MemoryIndex - returns ALL references from a class
+- Enhanced `explore_class` dependency detection to check ALL reference types
+- Implemented `resolveToFqn()` with same-package preference
+- Filters out false positives (primitives, variables, `this`, `super`)
+
+#### File Watcher Performance - FIXED ✅
+**Problem**: System became unresponsive during `mvn clean build` due to excessive CPU/memory usage
+
+**Root Cause**:
+- File watcher triggered on EVERY file change immediately
+- Each trigger calculated SHA-256 hash (reads entire file)
+- No rate limiting for bulk changes (build touches 100s of files)
+
+**Fix**:
+- Created `IndexValidator` class for on-demand validation
+  - Uses fast mtime comparison instead of hash
+  - Bulk change detection (>100 files = skip auto-refresh)
+  - Cooldown mechanism (5s check, 10s refresh)
+- Redesigned `FileSystemWatcher` with heavy debouncing
+  - 30-second debounce (waits for build to complete)
+  - Bulk change detection (>50 pending = skip)
+  - 1-minute cooldown after bulk change
+
+#### Path Normalization - FIXED ✅
+**Problem**: Path comparison failures on Windows (forward vs backslash)
+
+**Fix**: Normalized all paths to forward slashes for consistent comparison
+
+### Files Changed
+- NEW: `server/src/index-validator.ts`
+- MODIFIED: `server/src/fs-watcher.ts`
+- MODIFIED: `server/src/memory-index.ts` (added `findReferencesFromClass()`, mtime support)
+- MODIFIED: `server/src/tools/explore_class.ts` (enhanced dependency detection)
+- MODIFIED: `server/src/index.ts` (integrated IndexValidator)
+
+---
+
+## [2.3.0] - 2025-11-25
+
+### 🚀 Agent-Friendly Improvements
+
+#### New MCP Features
+- **Resources API**: 3 resources for index introspection (stats, symbols, files)
+- **Prompts API**: 4 workflow templates (understand-class, refactor-safely, find-pattern, trace-flow)
+- **Server Instructions**: Natural language guidance for AI agents
+- **Tool Annotations**: Safety hints (readOnlyHint, idempotentHint, destructiveHint)
+
+#### New Tools
+- **explore_class**: All-in-one class analysis (reduces 4-5 tool calls to 1)
+  - Structure, inheritance, dependencies, usage patterns
+  - Inbound/outbound calls, field/method listings
+- **batch_query**: Multi-query batching (max 10 queries per call)
+  - Reduces API round trips for agents
+
+#### Enhanced Tool Descriptions
+All 16 tools now include:
+- Clear use cases and examples
+- When to use guidance
+- Tips for better results
+
+#### Documentation
+- NEW: `AGENT_INTEGRATION.md` - Comprehensive agent guide
+- NEW: `server/src/server-instructions.ts` - Natural language guidance
+- NEW: `server/src/tool-annotations.ts` - Tool safety metadata
+
+### Files Changed
+- NEW: `server/src/tools/explore_class.ts`
+- NEW: `server/src/tools/batch_query.ts`
+- NEW: `server/src/server-instructions.ts`
+- NEW: `server/src/tool-annotations.ts`
+- MODIFIED: `server/src/index.ts` (added Resources, Prompts, Instructions APIs)
+- MODIFIED: `server/src/memory-index.ts` (added getSymbolSummary(), getIndexedFiles())
+- MODIFIED: All tool files with enhanced descriptions
+
+---
+
 ## [2.2.3] - 2025-11-25
 
 ### 🔴 Critical Bug Fixes
