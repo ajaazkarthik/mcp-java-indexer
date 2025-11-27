@@ -1,9 +1,9 @@
 $ErrorActionPreference = "Stop"
 
-Write-Host "Creating VSIX for v2.3.1..." -ForegroundColor Cyan
+Write-Host "Creating VSIX for v2.4.0..." -ForegroundColor Cyan
 
 $stagingDir = "vsix-temp"
-$outputVsix = "java-indexer-mcp-2.3.1.vsix"
+$outputVsix = "java-indexer-mcp-2.4.0.vsix"
 
 # Clean staging
 if (Test-Path $stagingDir) { Remove-Item $stagingDir -Recurse -Force }
@@ -25,7 +25,7 @@ $manifest = @"
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
   <Metadata>
-    <Identity Language="en-US" Id="java-indexer-mcp" Version="2.3.1" Publisher="ubanishathanvenkatesan"/>
+    <Identity Language="en-US" Id="java-indexer-mcp" Version="2.4.0" Publisher="ubanishathanvenkatesan"/>
     <DisplayName>Java Indexer MCP</DisplayName>
     <Description>Java code analysis via MCP for AI agents</Description>
   </Metadata>
