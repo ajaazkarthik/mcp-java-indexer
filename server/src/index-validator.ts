@@ -37,6 +37,7 @@ export interface RefreshResult {
 export class IndexValidator {
   private lastCheckTime: number = 0;
   private lastRefreshTime: number = 0;
+  private lastIndexTime: number = 0; // When index_project last completed
   private isRefreshing: boolean = false;
   private rootDir: string = '';
   private sourceRoots: string[] = [];
@@ -46,6 +47,8 @@ export class IndexValidator {
   private readonly REFRESH_COOLDOWN_MS = 10000; // Don't refresh more than once per 10s
   private readonly MAX_BATCH_SIZE = 50; // Max files to reindex in one batch
   private readonly BULK_CHANGE_THRESHOLD = 100; // If more files changed, suggest full reindex
+  private readonly POST_INDEX_GRACE_PERIOD_MS = 30000; // 30s grace period after index_project
+  private readonly MTIME_TOLERANCE_MS = 2000; // 2s tolerance for mtime comparison (filesystem precision)
   
   constructor() {}
 
@@ -75,6 +78,13 @@ export class IndexValidator {
     if (Date.now() - this.lastCheckTime < this.CHECK_COOLDOWN_MS) {
       result.checkDuration = Date.now() - startTime;
       return result; // Return not stale if checked recently
+    }
+
+    // Grace period after index_project - skip stale checks entirely
+    // This prevents false positives right after a fresh full index
+    if (this.lastIndexTime > 0 && Date.now() - this.lastIndexTime < this.POST_INDEX_GRACE_PERIOD_MS) {
+      result.checkDuration = Date.now() - startTime;
+      return result; // Within grace period, assume fresh
     }
 
     this.lastCheckTime = Date.now();
@@ -122,8 +132,9 @@ export class IndexValidator {
           }
           
           // Check if mtime differs (file was modified)
+          // Use tolerance to avoid false positives from filesystem precision issues
           const indexedMtime = indexedFile.mtime || indexedFile.lastIndexed;
-          if (currentMtime > indexedMtime) {
+          if (currentMtime > indexedMtime + this.MTIME_TOLERANCE_MS) {
             return { type: 'changed' as const, path: filePath };
           }
           
@@ -335,11 +346,13 @@ export class IndexValidator {
   }
 
   /**
-   * Reset all cooldowns (useful after explicit index_project call)
+   * Reset all cooldowns and mark index as fresh (after index_project)
+   * This starts a grace period where stale checks are skipped
    */
   resetCooldowns(): void {
     this.lastCheckTime = 0;
     this.lastRefreshTime = 0;
+    this.lastIndexTime = Date.now(); // Start grace period
   }
 }
 

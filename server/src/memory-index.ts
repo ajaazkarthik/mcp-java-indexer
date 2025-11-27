@@ -297,6 +297,8 @@ export class MemoryIndex {
   }
 
   // Find all usages of a symbol - uses fuzzy matching for better results
+  // IMPORTANT: References are stored with variable names (e.g., "session.close") not class FQNs
+  // So we need flexible matching: user queries "Session.close()" but ref has "session.close"
   findUsages(fqn: string): Reference[] {
     // First try exact match
     const exactMatches = this.references.filter(ref => ref.toFqn === fqn);
@@ -319,6 +321,7 @@ export class MemoryIndex {
       
       // Also extract just the method name for partial matching
       const methodName = fqn.substring(lastDot + 1, parenIndex);
+      const methodNameLower = methodName.toLowerCase();
       
       // Try to match: className.methodName pattern in toFqn
       if (lastDot > 0) {
@@ -326,54 +329,93 @@ export class MemoryIndex {
         const classNameIndex = beforeMethod.lastIndexOf('.');
         className = classNameIndex > 0 ? beforeMethod.substring(classNameIndex + 1) : beforeMethod;
       }
+      const classNameLower = className?.toLowerCase() || null;
       
       // Fuzzy match: find references where toFqn ends with .methodName( or matches className.methodName
+      // Key insight: references use variable names (lowercase) but queries use class names (PascalCase)
       return this.references.filter(ref => {
         const toFqn = ref.toFqn;
-        // Match patterns like: varName.methodName, ClassName.methodName, or package.Class.methodName
+        const toFqnLower = toFqn.toLowerCase();
+        
+        // 1. Exact method name match at end (most common case)
+        // Matches: "session.close", "utils.getSessionFactory", etc.
         if (toFqn.endsWith('.' + methodName) || toFqn.endsWith('.' + methodName + '()')) {
           return true;
         }
-        // Match if className matches (e.g., HibernateUtils.getSessionFactory)
-        if (className && toFqn.includes(className + '.' + methodName)) {
+        
+        // 2. Case-insensitive className.methodName match
+        // Matches: "session.close" when querying "Session.close"
+        // This is the KEY fix for the inconsistency issue
+        if (classNameLower && toFqnLower.includes(classNameLower + '.' + methodNameLower)) {
           return true;
         }
-        // Match if just the method name matches (for unqualified calls)
+        
+        // 3. Just the method name (unqualified calls within same class)
         if (toFqn === methodName || toFqn.endsWith('.' + methodName)) {
           return true;
         }
+        
+        // 4. Variable name might be similar to class name (e.g., "hibernateUtils" vs "HibernateUtils")
+        // Check if any word boundary match exists
+        if (classNameLower) {
+          const dotIndex = toFqnLower.lastIndexOf('.');
+          if (dotIndex > 0) {
+            const scopePart = toFqnLower.substring(0, dotIndex);
+            const methodPart = toFqnLower.substring(dotIndex + 1);
+            // Match if: method matches AND scope contains the class name (case-insensitive)
+            if (methodPart === methodNameLower && scopePart.includes(classNameLower)) {
+              return true;
+            }
+            // Or if scope ends with a similar suffix (e.g., "utils" vs "HibernateUtils")
+            if (methodPart === methodNameLower && 
+                (scopePart.endsWith(classNameLower) || classNameLower.endsWith(scopePart))) {
+              return true;
+            }
+          }
+        }
+        
         return false;
       });
     } else if (lastDot > 0) {
       // Field or class reference
       simpleName = fqn.substring(lastDot + 1);
+      const simpleNameLower = simpleName.toLowerCase();
       const beforeField = fqn.substring(0, lastDot);
       const classNameIndex = beforeField.lastIndexOf('.');
       className = classNameIndex > 0 ? beforeField.substring(classNameIndex + 1) : beforeField;
+      const classNameLower = className?.toLowerCase() || null;
       
       // Fuzzy match for fields and classes
       return this.references.filter(ref => {
         const toFqn = ref.toFqn;
+        const toFqnLower = toFqn.toLowerCase();
+        
         // Match patterns like: varName.fieldName, ClassName.fieldName
         if (toFqn.endsWith('.' + simpleName)) {
           return true;
         }
-        // Match if className is present
-        if (className && toFqn.includes(className + '.' + simpleName)) {
+        // Case-insensitive match for className.fieldName
+        if (classNameLower && toFqnLower.includes(classNameLower + '.' + simpleNameLower)) {
           return true;
         }
         // Match by simple name for class references (instantiation, inheritance)
         if (toFqn === simpleName || toFqn.endsWith('.' + simpleName)) {
           return true;
         }
+        // Case-insensitive match for simple names
+        if (toFqnLower === simpleNameLower || toFqnLower.endsWith('.' + simpleNameLower)) {
+          return true;
+        }
         return false;
       });
     }
     
-    // Fallback: match by simple name anywhere in toFqn
-    return this.references.filter(ref => 
-      ref.toFqn.includes(fqn) || ref.toFqn.endsWith('.' + fqn)
-    );
+    // Fallback: match by simple name anywhere in toFqn (case-insensitive)
+    const fqnLower = fqn.toLowerCase();
+    return this.references.filter(ref => {
+      const toFqnLower = ref.toFqn.toLowerCase();
+      return toFqnLower.includes(fqnLower) || toFqnLower.endsWith('.' + fqnLower);
+    });
   }
 
   // Find all references FROM a class (what this class uses)
