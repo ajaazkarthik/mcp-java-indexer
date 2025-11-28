@@ -121,6 +121,7 @@ export const exploreCodebaseTool: Tool = {
 **Timeout**: ~30 minutes for 16000+ classes
 
 Example: explore_codebase(format: "summary")  // Quick overview
+Example: explore_codebase(format: "refactoring-priority")  // Classes grouped by dependency count
 Example: explore_codebase(format: "detailed", packages: ["com.example.core"])  // Detailed for specific packages
 
 This is more efficient than calling explore_class 16000+ times.`,
@@ -129,8 +130,8 @@ This is more efficient than calling explore_class 16000+ times.`,
     properties: {
       format: {
         type: 'string',
-        enum: ['summary', 'detailed', 'json', 'refactoring'],
-        description: 'Output format: summary (quick stats), detailed (full report), json (structured data), refactoring (prioritized issues)',
+        enum: ['summary', 'detailed', 'json', 'refactoring', 'refactoring-priority'],
+        description: 'Output format: summary (quick stats), detailed (full report), json (structured data), refactoring (code smell issues), refactoring-priority (RECOMMENDED: classes grouped by inbound dependency count - 0 deps first, then 1, 2, etc.)',
         default: 'summary'
       },
       packages: {
@@ -157,6 +158,11 @@ This is more efficient than calling explore_class 16000+ times.`,
         type: 'number',
         description: 'Processing batch size (default: 500 for optimal memory/speed balance)',
         default: 500
+      },
+      maxPerTier: {
+        type: 'number',
+        description: 'Maximum classes to show per dependency tier (default: 100). Use 0 for unlimited.',
+        default: 100
       }
     },
     required: []
@@ -173,6 +179,7 @@ export async function handleExploreCodebase(
   const detectCircular = args.detectCircular === true;
   const maxClasses = (args.maxClasses as number) || 5000;
   const batchSize = (args.batchSize as number) || 500;
+  const maxPerTier = (args.maxPerTier as number) ?? 100;
 
   try {
     // Step 1: Gather all class-like symbols efficiently
@@ -514,7 +521,7 @@ No classes found in the index.${filterPackages ? ` Filter packages: ${filterPack
     };
 
     // Step 7: Format output based on requested format
-    const output = formatOutput(analysis, format, includeClasses);
+    const output = formatOutput(analysis, format, includeClasses, maxPerTier);
 
     return {
       content: [{
@@ -752,13 +759,16 @@ function generateRefactoringCandidates(classes: ClassSummary[]): CodebaseAnalysi
   return candidates.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
 }
 
-function formatOutput(analysis: CodebaseAnalysis, format: string, includeClasses: boolean): string {
+function formatOutput(analysis: CodebaseAnalysis, format: string, includeClasses: boolean, maxPerTier: number = 100): string {
   switch (format) {
     case 'json':
       return JSON.stringify(analysis, null, 2);
     
     case 'refactoring':
       return formatRefactoringReport(analysis);
+    
+    case 'refactoring-priority':
+      return formatRefactoringPriorityReport(analysis, maxPerTier);
     
     case 'detailed':
       return formatDetailedReport(analysis, includeClasses);
@@ -907,6 +917,328 @@ function formatRefactoringReport(analysis: CodebaseAnalysis): string {
   }
   
   return lines.join('\n');
+}
+
+/**
+ * Format output for refactoring-priority: Group classes by inbound dependency count
+ * 
+ * Classes with 0 inbound dependencies are safest to refactor/delete (no ripple effects)
+ * Classes with 1-2 inbound dependencies are low risk
+ * God classes and circular dependencies go last (high risk)
+ */
+function formatRefactoringPriorityReport(analysis: CodebaseAnalysis, maxPerTier: number): string {
+  const lines: string[] = [];
+  
+  lines.push('# 🎯 Refactoring Priority by Dependency Count');
+  lines.push('');
+  lines.push('> **Strategy**: Start with classes that have ZERO inbound dependencies (nobody uses them).');
+  lines.push('> These are safe to refactor, delete, or modify with NO ripple effects.');
+  lines.push('> Work your way up through the tiers. Leave God classes and hub classes for last.');
+  lines.push('');
+  lines.push(`**Analyzed**: ${analysis.metadata.analyzedAt}`);
+  lines.push(`**Total Classes**: ${analysis.metadata.totalClasses + analysis.metadata.totalInterfaces + analysis.metadata.totalEnums}`);
+  lines.push(`**Processing Time**: ${analysis.metadata.processingTimeMs}ms`);
+  lines.push('');
+  
+  // Group classes by inbound dependency count (dependentCount)
+  const tierGroups = new Map<number, ClassSummary[]>();
+  const complexClasses: ClassSummary[] = []; // God classes, circular deps, hub classes
+  
+  for (const cls of analysis.classes) {
+    // Complex classes go to a special tier at the end
+    const isComplex = cls.flags.isGodClass || 
+                      cls.flags.hasCircularDependency || 
+                      cls.dependentCount > 20; // Hub class threshold
+    
+    if (isComplex) {
+      complexClasses.push(cls);
+    } else {
+      const tier = cls.dependentCount; // Use inbound dependency count
+      if (!tierGroups.has(tier)) {
+        tierGroups.set(tier, []);
+      }
+      tierGroups.get(tier)!.push(cls);
+    }
+  }
+  
+  // Sort tiers by dependency count (0, 1, 2, ...)
+  const sortedTiers = Array.from(tierGroups.keys()).sort((a, b) => a - b);
+  
+  // Calculate summary stats
+  const tierStats: { tier: number; count: number }[] = [];
+  let totalQuickWins = 0;
+  
+  for (const tier of sortedTiers) {
+    const count = tierGroups.get(tier)!.length;
+    tierStats.push({ tier, count });
+    if (tier <= 2) totalQuickWins += count;
+  }
+  
+  // Summary box
+  lines.push('## 📊 Quick Summary');
+  lines.push('');
+  lines.push('| Tier | Dependency Count | Classes | Risk Level |');
+  lines.push('|------|------------------|---------|------------|');
+  
+  for (const { tier, count } of tierStats.slice(0, 10)) {
+    const risk = tier === 0 ? '✅ Zero Risk' : 
+                 tier === 1 ? '🟢 Low Risk' : 
+                 tier === 2 ? '🟢 Low Risk' : 
+                 tier <= 5 ? '🟡 Moderate' : 
+                 tier <= 10 ? '🟠 Higher' : '🔴 High';
+    lines.push(`| ${tier} | ${tier === 0 ? 'Nobody uses this' : `${tier} class${tier === 1 ? '' : 'es'} depend on this`} | ${count} | ${risk} |`);
+  }
+  
+  if (sortedTiers.length > 10) {
+    const remaining = sortedTiers.slice(10).reduce((sum, t) => sum + tierGroups.get(t)!.length, 0);
+    lines.push(`| 11+ | Many dependents | ${remaining} | 🔴 High |`);
+  }
+  
+  if (complexClasses.length > 0) {
+    lines.push(`| ⚠️ | God/Hub/Circular | ${complexClasses.length} | 🔴 Tackle Last |`);
+  }
+  
+  lines.push('');
+  lines.push(`**🎯 Quick Wins (Tier 0-2)**: ${totalQuickWins} classes can be refactored with minimal risk`);
+  lines.push('');
+  
+  // Tier 0: Zero dependencies - GOLD
+  lines.push('---');
+  lines.push('');
+  lines.push('## 🏆 TIER 0: Zero Inbound Dependencies');
+  lines.push('');
+  lines.push('> **These classes have NO dependents** - they can be freely modified, refactored, or deleted');
+  lines.push('> without breaking any other code. Perfect starting point for cleanup!');
+  lines.push('');
+  
+  const tier0 = tierGroups.get(0) || [];
+  if (tier0.length === 0) {
+    lines.push('*No classes found with zero inbound dependencies.*');
+  } else {
+    // Categorize tier 0 classes
+    const deadCode = tier0.filter(c => c.dependencyCount === 0); // No in or out deps
+    const leafClasses = tier0.filter(c => c.dependencyCount > 0); // Has outbound but no inbound
+    
+    if (deadCode.length > 0) {
+      lines.push(`### 🗑️ Dead Code Candidates (${deadCode.length})`);
+      lines.push('');
+      lines.push('These have **no inbound AND no outbound** dependencies - likely unused:');
+      lines.push('');
+      const displayCount = maxPerTier === 0 ? deadCode.length : Math.min(maxPerTier, deadCode.length);
+      deadCode.slice(0, displayCount).forEach(cls => {
+        const kindIcon = cls.kind === 'interface' ? '📐' : cls.kind === 'enum' ? '📋' : '📦';
+        lines.push(`- ${kindIcon} \`${cls.fqn}\``);
+        lines.push(`  - 📍 ${cls.file}:${cls.line}`);
+        lines.push(`  - 📊 ${cls.methodCount} methods, ${cls.fieldCount} fields`);
+      });
+      if (deadCode.length > displayCount) {
+        lines.push(`- ... and ${deadCode.length - displayCount} more dead code candidates`);
+      }
+      lines.push('');
+    }
+    
+    if (leafClasses.length > 0) {
+      lines.push(`### 🍃 Leaf Classes (${leafClasses.length})`);
+      lines.push('');
+      lines.push('These USE other classes but nobody uses them - safe to refactor:');
+      lines.push('');
+      const displayCount = maxPerTier === 0 ? leafClasses.length : Math.min(maxPerTier, leafClasses.length);
+      leafClasses.slice(0, displayCount).forEach(cls => {
+        const kindIcon = cls.kind === 'interface' ? '📐' : cls.kind === 'enum' ? '📋' : '📦';
+        lines.push(`- ${kindIcon} \`${cls.fqn}\``);
+        lines.push(`  - Uses: ${cls.dependencyCount} classes`);
+        if (cls.outboundDependencies.length > 0 && cls.outboundDependencies.length <= 5) {
+          lines.push(`  - Dependencies: ${cls.outboundDependencies.map(d => getSimpleName(d)).join(', ')}`);
+        }
+      });
+      if (leafClasses.length > displayCount) {
+        lines.push(`- ... and ${leafClasses.length - displayCount} more leaf classes`);
+      }
+      lines.push('');
+    }
+  }
+  
+  // Tier 1: One dependency
+  lines.push('---');
+  lines.push('');
+  lines.push('## 🟢 TIER 1: One Inbound Dependency');
+  lines.push('');
+  lines.push('> Only **one** other class depends on these. Low risk - just update that one caller.');
+  lines.push('');
+  
+  const tier1 = tierGroups.get(1) || [];
+  if (tier1.length === 0) {
+    lines.push('*No classes found with exactly one dependent.*');
+  } else {
+    const displayCount = maxPerTier === 0 ? tier1.length : Math.min(maxPerTier, tier1.length);
+    lines.push(`| Class | Used By | Methods | Fields |`);
+    lines.push(`|-------|---------|---------|--------|`);
+    tier1.slice(0, displayCount).forEach(cls => {
+      const usedBy = cls.inboundDependents[0] ? getSimpleName(cls.inboundDependents[0]) : '-';
+      lines.push(`| \`${cls.name}\` | ${usedBy} | ${cls.methodCount} | ${cls.fieldCount} |`);
+    });
+    if (tier1.length > displayCount) {
+      lines.push(`| ... | ${tier1.length - displayCount} more | - | - |`);
+    }
+  }
+  lines.push('');
+  
+  // Tier 2: Two dependencies
+  lines.push('---');
+  lines.push('');
+  lines.push('## 🟢 TIER 2: Two Inbound Dependencies');
+  lines.push('');
+  lines.push('> Two classes depend on these. Still manageable - update both callers.');
+  lines.push('');
+  
+  const tier2 = tierGroups.get(2) || [];
+  if (tier2.length === 0) {
+    lines.push('*No classes found with exactly two dependents.*');
+  } else {
+    const displayCount = maxPerTier === 0 ? tier2.length : Math.min(maxPerTier, tier2.length);
+    lines.push(`| Class | Used By | Methods |`);
+    lines.push(`|-------|---------|---------|`);
+    tier2.slice(0, displayCount).forEach(cls => {
+      const usedBy = cls.inboundDependents.slice(0, 2).map(d => getSimpleName(d)).join(', ');
+      lines.push(`| \`${cls.name}\` | ${usedBy} | ${cls.methodCount} |`);
+    });
+    if (tier2.length > displayCount) {
+      lines.push(`| ... | ${tier2.length - displayCount} more | - |`);
+    }
+  }
+  lines.push('');
+  
+  // Tiers 3-5: Moderate
+  const tier3to5 = [3, 4, 5].flatMap(t => tierGroups.get(t) || []);
+  if (tier3to5.length > 0) {
+    lines.push('---');
+    lines.push('');
+    lines.push('## 🟡 TIER 3-5: Moderate Dependencies');
+    lines.push('');
+    lines.push(`> ${tier3to5.length} classes with 3-5 dependents. Requires more coordination.`);
+    lines.push('');
+    const displayCount = maxPerTier === 0 ? tier3to5.length : Math.min(maxPerTier, tier3to5.length);
+    tier3to5.slice(0, displayCount).forEach(cls => {
+      lines.push(`- \`${cls.name}\` (${cls.dependentCount} dependents)`);
+    });
+    if (tier3to5.length > displayCount) {
+      lines.push(`- ... and ${tier3to5.length - displayCount} more`);
+    }
+    lines.push('');
+  }
+  
+  // Tiers 6-10: Higher risk
+  const tier6to10 = [6, 7, 8, 9, 10].flatMap(t => tierGroups.get(t) || []);
+  if (tier6to10.length > 0) {
+    lines.push('---');
+    lines.push('');
+    lines.push('## 🟠 TIER 6-10: Higher Risk');
+    lines.push('');
+    lines.push(`> ${tier6to10.length} classes with 6-10 dependents. Changes affect multiple areas.`);
+    lines.push('');
+    const displayCount = maxPerTier === 0 ? tier6to10.length : Math.min(maxPerTier / 2, tier6to10.length);
+    tier6to10.slice(0, displayCount).forEach(cls => {
+      lines.push(`- \`${cls.name}\` (${cls.dependentCount} dependents)`);
+    });
+    if (tier6to10.length > displayCount) {
+      lines.push(`- ... and ${tier6to10.length - displayCount} more`);
+    }
+    lines.push('');
+  }
+  
+  // Tiers 11+: High risk
+  const tier11plus = sortedTiers.filter(t => t > 10).flatMap(t => tierGroups.get(t) || []);
+  if (tier11plus.length > 0) {
+    lines.push('---');
+    lines.push('');
+    lines.push('## 🔴 TIER 11+: High Risk');
+    lines.push('');
+    lines.push(`> ${tier11plus.length} classes with 11+ dependents. Careful planning required.`);
+    lines.push('');
+    // Sort by dependent count descending
+    tier11plus.sort((a, b) => b.dependentCount - a.dependentCount);
+    const displayCount = maxPerTier === 0 ? tier11plus.length : Math.min(20, tier11plus.length);
+    tier11plus.slice(0, displayCount).forEach(cls => {
+      lines.push(`- \`${cls.name}\` - **${cls.dependentCount} dependents**`);
+    });
+    if (tier11plus.length > displayCount) {
+      lines.push(`- ... and ${tier11plus.length - displayCount} more high-risk classes`);
+    }
+    lines.push('');
+  }
+  
+  // Complex classes: tackle last
+  if (complexClasses.length > 0) {
+    lines.push('---');
+    lines.push('');
+    lines.push('## ⚠️ TACKLE LAST: Complex Classes');
+    lines.push('');
+    lines.push('> These require extra care: God classes, hub classes, and circular dependencies.');
+    lines.push('');
+    
+    const godClasses = complexClasses.filter(c => c.flags.isGodClass);
+    const hubClasses = complexClasses.filter(c => c.dependentCount > 20 && !c.flags.isGodClass);
+    const circularClasses = complexClasses.filter(c => c.flags.hasCircularDependency && !c.flags.isGodClass && c.dependentCount <= 20);
+    
+    if (godClasses.length > 0) {
+      lines.push(`### 🐘 God Classes (${godClasses.length})`);
+      lines.push('');
+      lines.push('Classes with >20 methods - consider breaking into smaller classes:');
+      lines.push('');
+      godClasses.forEach(cls => {
+        lines.push(`- \`${cls.fqn}\``);
+        lines.push(`  - ${cls.methodCount} methods, ${cls.fieldCount} fields`);
+        lines.push(`  - ${cls.dependentCount} dependents, ${cls.dependencyCount} dependencies`);
+      });
+      lines.push('');
+    }
+    
+    if (hubClasses.length > 0) {
+      lines.push(`### 🌐 Hub Classes (${hubClasses.length})`);
+      lines.push('');
+      lines.push('Core classes used by 20+ other classes - changes here affect everything:');
+      lines.push('');
+      hubClasses.sort((a, b) => b.dependentCount - a.dependentCount);
+      hubClasses.forEach(cls => {
+        lines.push(`- \`${cls.name}\` - **${cls.dependentCount} classes depend on this**`);
+      });
+      lines.push('');
+    }
+    
+    if (circularClasses.length > 0) {
+      lines.push(`### 🔄 Circular Dependencies (${circularClasses.length})`);
+      lines.push('');
+      lines.push('Break these cycles before refactoring:');
+      lines.push('');
+      circularClasses.forEach(cls => {
+        lines.push(`- \`${cls.name}\``);
+      });
+      lines.push('');
+    }
+  }
+  
+  // Action plan
+  lines.push('---');
+  lines.push('');
+  lines.push('## 📋 Recommended Action Plan');
+  lines.push('');
+  lines.push('1. **Week 1**: Review and clean up Tier 0 (dead code, leaf classes)');
+  lines.push('2. **Week 2-3**: Refactor Tier 1-2 classes (low risk, quick wins)');
+  lines.push('3. **Week 4+**: Tackle Tier 3-5 with proper testing');
+  lines.push('4. **Long-term**: Plan major refactoring for God classes and hub classes');
+  lines.push('');
+  lines.push('Use `explore_class(className: "...")` for detailed analysis of specific classes.');
+  lines.push('Use `analyze_impact(symbolFqn: "...")` before making changes to high-tier classes.');
+  
+  return lines.join('\n');
+}
+
+/**
+ * Get simple class name from FQN
+ */
+function getSimpleName(fqn: string): string {
+  const lastDot = fqn.lastIndexOf('.');
+  return lastDot > 0 ? fqn.substring(lastDot + 1) : fqn;
 }
 
 function formatDetailedReport(analysis: CodebaseAnalysis, includeClasses: boolean): string {

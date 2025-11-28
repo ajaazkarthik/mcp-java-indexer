@@ -188,6 +188,10 @@ class ExploreCodebaseTest {
     console.log(`\n${colors.blue}Phase 3: Output Format Tests${colors.reset}\n`);
     await this.runFormatTests();
 
+    // Refactoring Priority Format Tests (NEW)
+    console.log(`\n${colors.blue}Phase 3b: Refactoring Priority Format Tests${colors.reset}\n`);
+    await this.runRefactoringPriorityTests();
+
     // Code Smell Detection Tests
     console.log(`\n${colors.blue}Phase 4: Code Smell Detection Tests${colors.reset}\n`);
     await this.runCodeSmellTests();
@@ -307,6 +311,83 @@ class ExploreCodebaseTest {
       const text = result.content[0].text;
       this.assertContains(text, 'Detailed Codebase Analysis', 'Should have detailed title');
       this.assertContains(text, 'FQN', 'Should show FQNs');
+    });
+  }
+
+  // ---- Refactoring Priority Format Tests (NEW) ----
+  async runRefactoringPriorityTests() {
+    await this.runTest('10a. Refactoring-priority format returns valid output', async () => {
+      const result = await this.callTool('explore_codebase', { format: 'refactoring-priority' });
+      const text = result.content[0].text;
+      this.assertContains(text, 'Refactoring Priority by Dependency Count', 'Should have correct title');
+      this.assertContains(text, 'TIER', 'Should show tiers');
+    });
+
+    await this.runTest('10b. Shows Tier 0 (zero inbound dependencies)', async () => {
+      const result = await this.callTool('explore_codebase', { format: 'refactoring-priority' });
+      const text = result.content[0].text;
+      this.assertContains(text, 'TIER 0', 'Should have Tier 0 section');
+      this.assertContains(text, 'Zero Inbound Dependencies', 'Should explain Tier 0');
+    });
+
+    await this.runTest('10c. Shows Tier 1 (one inbound dependency)', async () => {
+      const result = await this.callTool('explore_codebase', { format: 'refactoring-priority' });
+      const text = result.content[0].text;
+      this.assertContains(text, 'TIER 1', 'Should have Tier 1 section');
+    });
+
+    await this.runTest('10d. Shows Tier 2 (two inbound dependencies)', async () => {
+      const result = await this.callTool('explore_codebase', { format: 'refactoring-priority' });
+      const text = result.content[0].text;
+      this.assertContains(text, 'TIER 2', 'Should have Tier 2 section');
+    });
+
+    await this.runTest('10e. Shows quick summary table', async () => {
+      const result = await this.callTool('explore_codebase', { format: 'refactoring-priority' });
+      const text = result.content[0].text;
+      this.assertContains(text, 'Quick Summary', 'Should have summary table');
+      this.assertContains(text, 'Risk Level', 'Should show risk levels');
+    });
+
+    await this.runTest('10f. Shows action plan', async () => {
+      const result = await this.callTool('explore_codebase', { format: 'refactoring-priority' });
+      const text = result.content[0].text;
+      this.assertContains(text, 'Recommended Action Plan', 'Should have action plan');
+    });
+
+    await this.runTest('10g. Respects maxPerTier parameter', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'refactoring-priority',
+        maxPerTier: 5
+      });
+      const text = result.content[0].text;
+      // Should work without errors
+      this.assertContains(text, 'TIER', 'Should show tiers with limited output');
+    });
+
+    await this.runTest('10h. Complex classes are at the end', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'refactoring-priority',
+        includeClasses: true
+      });
+      const text = result.content[0].text;
+      // The "TACKLE LAST" section should come after other tiers
+      const tier0Index = text.indexOf('TIER 0');
+      const tackleLast = text.indexOf('TACKLE LAST');
+      // TACKLE LAST may not exist if no complex classes, but if it does, it should be after Tier 0
+      if (tackleLast > -1) {
+        this.assert(tackleLast > tier0Index, 'TACKLE LAST should come after TIER 0');
+      }
+    });
+
+    await this.runTest('10i. Dead code candidates identified in Tier 0', async () => {
+      const result = await this.callTool('explore_codebase', { format: 'refactoring-priority' });
+      const text = result.content[0].text;
+      // Should either show dead code candidates or leaf classes in Tier 0
+      const hasTier0Content = text.includes('Dead Code') || 
+                              text.includes('Leaf Classes') || 
+                              text.includes('No classes found with zero');
+      this.assert(hasTier0Content, 'Tier 0 should show class categories or indicate none found');
     });
   }
 

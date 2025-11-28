@@ -5,6 +5,68 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.2] - 2025-11-29
+
+### ✨ Enhanced: Refactoring Priority by Dependency Count
+
+**New Format**: `refactoring-priority` - Classes grouped by inbound dependency count for practical refactoring
+
+This enhancement addresses the real-world need to refactor a large codebase (16,000+ classes) efficiently by prioritizing classes based on their "blast radius" - how many other classes depend on them.
+
+#### Strategy
+
+| Tier | Inbound Dependencies | Risk Level | Action |
+|------|----------------------|------------|--------|
+| **0** | Zero (nobody uses this) | ✅ Zero Risk | Refactor/delete freely |
+| **1** | One class depends on this | 🟢 Low Risk | Update one caller |
+| **2** | Two classes depend on this | 🟢 Low Risk | Easy coordination |
+| **3-5** | Few dependents | 🟡 Moderate | Plan testing |
+| **6-10** | Several dependents | 🟠 Higher | Careful planning |
+| **11+** | Many dependents | 🔴 High Risk | Major effort |
+| **⚠️** | God/Hub/Circular | 🔴 Tackle Last | Requires strategy |
+
+#### Tier 0 Categories
+
+- **Dead Code Candidates**: Zero inbound AND zero outbound dependencies - likely unused
+- **Leaf Classes**: Use other classes but nobody uses them - safe to refactor
+
+#### Complex Classes (Tackle Last)
+
+- **God Classes**: 20+ methods - need splitting
+- **Hub Classes**: 20+ dependents - core classes, changes affect everything
+- **Circular Dependencies**: Break cycles before refactoring
+
+#### Usage
+
+```javascript
+// Get refactoring priority report
+explore_codebase(format: "refactoring-priority")
+
+// Limit output per tier
+explore_codebase(format: "refactoring-priority", maxPerTier: 50)
+```
+
+#### Output Includes
+
+- Quick summary table with tier counts and risk levels
+- Detailed per-tier listing with class details
+- Dead code candidates and leaf classes identified
+- Recommended action plan (Week 1, 2-3, 4+, Long-term)
+
+### Added
+- New `refactoring-priority` format for `explore_codebase` tool
+- New `maxPerTier` parameter to limit output per dependency tier
+- Dead code detection (0 inbound + 0 outbound dependencies)
+- Leaf class identification (outbound deps but no inbound)
+- Hub class detection (20+ inbound dependencies)
+- Recommended action plan in output
+
+### Test Coverage
+- 45 tests (up from 36), 100% pass rate
+- 9 new tests for refactoring-priority format
+
+---
+
 ## [2.5.1] - 2025-11-28
 
 ### ✨ New Feature: Bulk Codebase Exploration
