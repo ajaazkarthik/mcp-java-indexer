@@ -5,6 +5,75 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2025-11-28
+
+### ✨ New Feature: Bulk Codebase Exploration
+
+**New Tool**: `explore_codebase` - Comprehensive bulk class analysis for large codebases (16,000+ classes)
+
+This tool is designed for AI agents that need to understand an entire codebase before refactoring. Instead of calling `explore_class` individually for each class (which would take hours), this tool processes all classes in a single efficient pass.
+
+#### Key Features:
+
+| Feature | Description |
+|---------|-------------|
+| **Bulk Processing** | Analyzes all indexed classes in one call |
+| **Performance Optimized** | Uses batch processing (configurable batch size) |
+| **Multiple Output Formats** | `summary`, `detailed`, `json`, `refactoring` |
+| **Code Smell Detection** | God classes, unused classes, high coupling, data classes |
+| **Refactoring Candidates** | Prioritized list (HIGH/MEDIUM/LOW) with suggestions |
+| **Package Filtering** | Analyze specific packages only |
+| **Circular Dependencies** | Optional detection (configurable) |
+| **Inheritance Analysis** | Depth calculation and subclass counting |
+| **Coupling Metrics** | Inbound/outbound dependencies per class |
+
+#### Output Includes:
+
+- **Metadata**: Processing time, class/interface/enum counts
+- **Statistics**: Avg methods/fields, max dependencies, deepest inheritance
+- **Code Smells**: God classes, data classes, unused classes, high coupling
+- **Refactoring Candidates**: Prioritized issues with specific suggestions
+- **Package Summaries**: Aggregated stats per package
+- **Class Details**: Full structure, flags, dependencies (optional)
+
+#### Usage Examples:
+
+```javascript
+// Quick overview
+explore_codebase(format: "summary")
+
+// Full structured data for programmatic use
+explore_codebase(format: "json")
+
+// Refactoring priority list
+explore_codebase(format: "refactoring")
+
+// Analyze specific packages only
+explore_codebase(format: "detailed", packages: ["com.example.core"])
+
+// With circular dependency detection
+explore_codebase(format: "json", detectCircular: true)
+```
+
+#### Performance:
+
+- Target: <30 minutes for 16,000+ classes
+- Batch processing with configurable batch size (default: 500)
+- Memory-efficient single-pass symbol categorization
+- Pre-computed dependency maps
+
+#### Files Added:
+
+- `server/src/tools/explore_codebase.ts`: New tool implementation (~950 lines)
+- `test-explore-codebase.js`: Comprehensive test suite (36 tests)
+
+#### Files Modified:
+
+- `server/src/index.ts`: Registered new tool
+- `package.json`: Updated version to 2.5.1, tool count to 18
+
+---
+
 ## [2.5.0] - 2025-11-28
 
 ### 🐛 Critical Fix: Same-Package Dependency Detection

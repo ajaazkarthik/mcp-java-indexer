@@ -33,11 +33,12 @@ import { compactIndexTool, handleCompactIndex } from './tools/compact_index.js';
 import { exploreClassTool, handleExploreClass } from './tools/explore_class.js';
 import { batchQueryTool, handleBatchQuery } from './tools/batch_query.js';
 import { scanMigrationCandidatesTool, handleScanMigrationCandidates } from './tools/scan_migration_candidates.js';
+import { exploreCodebaseTool, handleExploreCodebase } from './tools/explore_codebase.js';
 
 const server = new Server(
   {
     name: 'mcp-java-indexer',
-    version: '2.4.1',
+    version: '2.5.1',
   },
   {
     capabilities: {
@@ -133,7 +134,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     compactIndexTool,
     exploreClassTool,
     batchQueryTool,
-    scanMigrationCandidatesTool
+    scanMigrationCandidatesTool,
+    exploreCodebaseTool
   ];
 
   // Add tool annotations for agent safety hints
@@ -503,6 +505,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'scan_migration_candidates': {
         const refreshMsg = await ensureFreshIndex();
         const result = await handleScanMigrationCandidates(args, memoryIndex);
+        if (refreshMsg && result.content?.[0]?.type === 'text') {
+          result.content[0].text = refreshMsg + result.content[0].text;
+        }
+        return result;
+      }
+
+      case 'explore_codebase': {
+        const refreshMsg = await ensureFreshIndex();
+        const result = await handleExploreCodebase(args, memoryIndex);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
