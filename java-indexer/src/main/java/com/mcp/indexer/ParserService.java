@@ -83,6 +83,12 @@ public class ParserService {
                 refExtractor.extractReferences(ed, getEnumFqn(ed, packageName));
             });
             
+            // Process record declarations (Java 14+)
+            cu.findAll(RecordDeclaration.class).forEach(rd -> {
+                extractRecordSymbol(rd, packageName, filePath, result);
+                refExtractor.extractReferences(rd, getRecordFqn(rd, packageName));
+            });
+            
         } catch (IOException e) {
             result.error = "IO Error: " + e.getMessage();
         } catch (Exception e) {
@@ -282,5 +288,64 @@ public class ParserService {
     
     private String getEnumFqn(EnumDeclaration ed, String packageName) {
         return packageName.isEmpty() ? ed.getNameAsString() : packageName + "." + ed.getNameAsString();
+    }
+    
+    private String getRecordFqn(RecordDeclaration rd, String packageName) {
+        return packageName.isEmpty() ? rd.getNameAsString() : packageName + "." + rd.getNameAsString();
+    }
+    
+    private void extractRecordSymbol(RecordDeclaration rd, String packageName, 
+                                    String filePath, IndexResult result) {
+        String recordFqn = packageName.isEmpty() ? rd.getNameAsString() : packageName + "." + rd.getNameAsString();
+        
+        SymbolStub recordStub = new SymbolStub();
+        recordStub.name = rd.getNameAsString();
+        recordStub.packageName = packageName;
+        recordStub.fqn = recordFqn;
+        recordStub.kind = "record";
+        recordStub.file = filePath;
+        recordStub.line = rd.getBegin().map(pos -> pos.line).orElse(0);
+        recordStub.column = rd.getBegin().map(pos -> pos.column).orElse(0);
+        recordStub.modifiers = rd.getModifiers().stream()
+            .map(m -> m.getKeyword().asString())
+            .collect(Collectors.toList());
+        
+        // Records implicitly extend java.lang.Record
+        recordStub.extendsClass = "java.lang.Record";
+        
+        // Extract implemented interfaces
+        if (!rd.getImplementedTypes().isEmpty()) {
+            recordStub.implementsInterfaces = new ArrayList<>();
+            for (ClassOrInterfaceType implType : rd.getImplementedTypes()) {
+                String simpleName = implType.getNameAsString();
+                String fqn = simpleName.contains(".") ? simpleName : packageName + "." + simpleName;
+                recordStub.implementsInterfaces.add(fqn);
+            }
+        }
+        
+        result.symbols.add(recordStub);
+        
+        // Extract record components as fields
+        rd.getParameters().forEach(param -> {
+            SymbolStub fieldStub = new SymbolStub();
+            fieldStub.name = param.getNameAsString();
+            fieldStub.declaringClass = recordFqn;
+            fieldStub.packageName = packageName;
+            fieldStub.fqn = recordFqn + "." + param.getNameAsString();
+            fieldStub.kind = "field";
+            fieldStub.file = filePath;
+            fieldStub.line = param.getBegin().map(pos -> pos.line).orElse(0);
+            fieldStub.column = param.getBegin().map(pos -> pos.column).orElse(0);
+            List<String> modifiers = new ArrayList<>();
+            modifiers.add("private");
+            modifiers.add("final");
+            fieldStub.modifiers = modifiers;
+            fieldStub.signature = param.getType().asString() + " " + param.getNameAsString();
+            
+            result.symbols.add(fieldStub);
+        });
+        
+        // Extract methods
+        rd.getMethods().forEach(md -> extractMethodSymbol(md, recordFqn, filePath, result));
     }
 }

@@ -20,7 +20,7 @@ import { StorageFactory } from './storage/storage-factory.js';
 export interface SymbolStub {
   fqn: string;
   name: string;
-  kind: 'class' | 'interface' | 'enum' | 'method' | 'field' | 'constructor';
+  kind: 'class' | 'interface' | 'enum' | 'record' | 'method' | 'field' | 'constructor';
   file: string;
   line: number;
   column: number;

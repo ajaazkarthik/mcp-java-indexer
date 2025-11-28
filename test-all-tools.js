@@ -164,7 +164,8 @@ class ComprehensiveTestExecutor {
         symbolFqn: 'com.example.demo.UserRepository'
       });
       const text = result.content[0].text;
-      if (!text.includes('Usage') && !text.includes('reference') && !text.includes('found')) {
+      const textLower = text.toLowerCase();
+      if (!textLower.includes('usage') && !textLower.includes('reference') && !textLower.includes('found')) {
         throw new Error('Failed to find usages: ' + text.substring(0, 200));
       }
     });

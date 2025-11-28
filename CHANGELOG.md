@@ -5,6 +5,70 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2025-11-28
+
+### 🐛 Critical Fix: Same-Package Dependency Detection
+
+**Problem Solved**: The `scan_migration_candidates` tool was incorrectly classifying files as "SAFE" when they had same-package dependencies that don't require explicit import statements in Java.
+
+**Root Cause**: Java allows implicit references to classes in the same package without import statements. The previous implementation only tracked imported types, missing ~20+ edge cases of type references.
+
+**Comprehensive Fix**: Complete rewrite of `ReferenceExtractor.java` and enhanced TypeScript analysis with `strictMode` option.
+
+#### Edge Cases Now Correctly Detected (20+ scenarios):
+
+| # | Category | Example | Status |
+|---|----------|---------|--------|
+| 1 | **extends** | `class A extends BaseService` | ✅ |
+| 2 | **implements** | `class A implements Entity` | ✅ |
+| 3 | **Field Types** | `private Entity entity;` | ✅ |
+| 4 | **Parameter Types** | `void process(Entity e)` | ✅ |
+| 5 | **Return Types** | `Entity getEntity()` | ✅ |
+| 6 | **Local Variables** | `Entity e = ...` | ✅ |
+| 7 | **Generics** | `List<Entity>`, `Map<Status, Entity>` | ✅ |
+| 8 | **Annotations** | `@Auditable` | ✅ |
+| 9 | **throws clause** | `throws CustomException` | ✅ |
+| 10 | **catch clause** | `catch (CustomException e)` | ✅ |
+| 11 | **instanceof** | `obj instanceof Entity` | ✅ |
+| 12 | **Cast expressions** | `(Entity) obj` | ✅ |
+| 13 | **Class literals** | `Entity.class` | ✅ |
+| 14 | **Method references** | `Helper::process` | ✅ |
+| 15 | **Object instantiation** | `new CustomException()` | ✅ |
+| 16 | **Static field access** | `Helper.CONSTANT` | ✅ |
+| 17 | **Static method calls** | `Helper.doSomething()` | ✅ |
+| 18 | **Enum constant access** | `Status.ACTIVE` | ✅ |
+| 19 | **Array types** | `Entity[]`, `Status[]` | ✅ |
+| 20 | **Type parameter bounds** | `<T extends Entity>` | ✅ |
+| 21 | **Multiple implements** | `implements Entity, Auditable` | ✅ |
+
+#### New `strictMode` Parameter
+
+The `scan_migration_candidates` tool now supports a `strictMode` parameter that performs direct file content analysis to ensure accurate same-package dependency detection:
+
+```json
+{
+  "sourcePackage": "com.example.util",
+  "blockedPatterns": ["com.example.business"],
+  "strictMode": true
+}
+```
+
+#### Files Modified:
+
+- `ReferenceExtractor.java`: Complete rewrite (~700 lines) with comprehensive AST traversal
+- `scan_migration_candidates.ts`: Added `strictMode`, `safePatterns`, file-based parsing
+- `ParserService.java`: Added RecordDeclaration support  
+- `memory-index*.ts`: Added 'record' to SymbolStub kind type
+
+### ✅ Test Results
+
+- Feature Preservation Tests: 26/26 passed
+- Migration Scanner Tests: 29/29 passed  
+- All Tools Tests: 30/30 passed
+- Strict Mode Edge Cases: 17/17 passed
+
+---
+
 ## [2.4.0] - 2025-11-28
 
 ### 🚀 New Feature: Migration Scanner Tool

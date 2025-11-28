@@ -1,5 +1,7 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { MemoryIndex, SymbolStub, Reference } from '../memory-index.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * scan_migration_candidates - Bulk migration analysis tool
@@ -8,7 +10,381 @@ import { MemoryIndex, SymbolStub, Reference } from '../memory-index.js';
  * categorize by risk, and generate an optimal migration plan with batch ordering.
  * 
  * This is 40-60x faster than calling explore_class individually for each file.
+ * 
+ * IMPORTANT: This tool now includes DEEP FILE ANALYSIS to detect same-package
+ * dependencies that don't require explicit imports in Java.
  */
+
+// ============== File-Based Type Reference Extraction ==============
+
+/**
+ * Comprehensive Java file parser that extracts ALL type references.
+ * This catches same-package dependencies that the index might miss.
+ */
+interface ExtractedTypeReference {
+  typeName: string;
+  kind: 'extends' | 'implements' | 'field_type' | 'parameter_type' | 'return_type' | 
+        'local_variable' | 'throws' | 'catch' | 'annotation' | 'instanceof' | 
+        'cast' | 'instantiation' | 'generic_type' | 'array_type' | 'method_reference' |
+        'class_literal' | 'static_access' | 'import';
+  line: number;
+}
+
+interface FileAnalysisResult {
+  packageName: string;
+  className: string;
+  imports: Map<string, string>;  // simpleName -> FQN
+  wildcardImports: string[];     // package prefixes
+  typeReferences: ExtractedTypeReference[];
+}
+
+/**
+ * Common java.lang types that are auto-imported (should not be flagged as same-package)
+ */
+const JAVA_LANG_TYPES = new Set([
+  'Object', 'String', 'Class', 'System', 'Runtime', 'Thread', 'Throwable',
+  'Exception', 'RuntimeException', 'Error', 'StackTraceElement',
+  'Boolean', 'Byte', 'Character', 'Short', 'Integer', 'Long', 'Float', 'Double', 'Void',
+  'Number', 'Math', 'StrictMath', 'StringBuilder', 'StringBuffer',
+  'Comparable', 'CharSequence', 'Iterable', 'AutoCloseable', 'Cloneable',
+  'Enum', 'Record', 'Deprecated', 'Override', 'SuppressWarnings', 'FunctionalInterface',
+  'SafeVarargs', 'Package', 'Module', 'ClassLoader', 'Process', 'ProcessBuilder',
+  'Appendable', 'Readable', 'Runnable', 'Serializable'
+]);
+
+/**
+ * Java primitive types
+ */
+const PRIMITIVE_TYPES = new Set([
+  'int', 'long', 'double', 'float', 'boolean', 'char', 'byte', 'short', 'void'
+]);
+
+/**
+ * Common Java collection types (from java.util)
+ */
+const JAVA_UTIL_TYPES = new Set([
+  'List', 'ArrayList', 'LinkedList', 'Map', 'HashMap', 'TreeMap', 'LinkedHashMap',
+  'Set', 'HashSet', 'TreeSet', 'LinkedHashSet', 'Collection', 'Collections',
+  'Arrays', 'Optional', 'Iterator', 'Comparator', 'Date', 'Calendar', 'UUID',
+  'Queue', 'Deque', 'Stack', 'Vector', 'Properties', 'Enumeration', 'BitSet'
+]);
+
+/**
+ * Parse a Java file and extract all type references
+ */
+function parseJavaFile(filePath: string): FileAnalysisResult | null {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return parseJavaContent(content, filePath);
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Parse Java content and extract all type references
+ */
+function parseJavaContent(content: string, filePath: string): FileAnalysisResult {
+  const result: FileAnalysisResult = {
+    packageName: '',
+    className: path.basename(filePath, '.java'),
+    imports: new Map(),
+    wildcardImports: [],
+    typeReferences: []
+  };
+  
+  // Remove comments to avoid false positives
+  const contentWithoutComments = removeComments(content);
+  const lines = contentWithoutComments.split('\n');
+  
+  // Extract package declaration
+  const packageMatch = contentWithoutComments.match(/^\s*package\s+([\w.]+)\s*;/m);
+  if (packageMatch) {
+    result.packageName = packageMatch[1];
+  }
+  
+  // Extract class/interface name
+  const classMatch = contentWithoutComments.match(/(?:public\s+)?(?:abstract\s+)?(?:final\s+)?(?:class|interface|enum|record|@interface)\s+(\w+)/);
+  if (classMatch) {
+    result.className = classMatch[1];
+  }
+  
+  // Extract imports
+  const importRegex = /^\s*import\s+(?:static\s+)?([\w.]+)(\.\*)?\s*;/gm;
+  let importMatch;
+  while ((importMatch = importRegex.exec(contentWithoutComments)) !== null) {
+    const importFqn = importMatch[1];
+    if (importMatch[2] === '.*') {
+      result.wildcardImports.push(importFqn);
+    } else {
+      const simpleName = importFqn.substring(importFqn.lastIndexOf('.') + 1);
+      result.imports.set(simpleName, importFqn);
+      // Track as import reference
+      result.typeReferences.push({
+        typeName: importFqn,
+        kind: 'import',
+        line: 0
+      });
+    }
+  }
+  
+  // Process each line for type references
+  for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+    const line = lines[lineNum];
+    extractTypeReferencesFromLine(line, lineNum + 1, result);
+  }
+  
+  return result;
+}
+
+/**
+ * Remove Java comments (single-line and multi-line)
+ */
+function removeComments(content: string): string {
+  // Remove multi-line comments
+  content = content.replace(/\/\*[\s\S]*?\*\//g, match => {
+    // Preserve line count for accurate line numbers
+    return match.split('\n').map(() => '').join('\n');
+  });
+  
+  // Remove single-line comments
+  content = content.replace(/\/\/.*$/gm, '');
+  
+  // Remove string literals to avoid false type matches
+  content = content.replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  content = content.replace(/'(?:[^'\\]|\\.)*'/g, "''");
+  
+  return content;
+}
+
+/**
+ * Extract all type references from a single line
+ */
+function extractTypeReferencesFromLine(line: string, lineNum: number, result: FileAnalysisResult): void {
+  // Skip empty lines and package/import declarations
+  if (!line.trim() || line.match(/^\s*(package|import)\s/)) {
+    return;
+  }
+  
+  // 1. extends clause
+  const extendsMatch = line.match(/\bextends\s+(\w+(?:\.\w+)*)/);
+  if (extendsMatch) {
+    addTypeReference(extendsMatch[1], 'extends', lineNum, result);
+  }
+  
+  // 2. implements clause (can have multiple interfaces)
+  const implementsMatch = line.match(/\bimplements\s+([\w.,\s<>]+)/);
+  if (implementsMatch) {
+    const interfaces = implementsMatch[1].split(',').map(s => s.trim());
+    for (const iface of interfaces) {
+      const cleanType = extractBaseType(iface);
+      if (cleanType) {
+        addTypeReference(cleanType, 'implements', lineNum, result);
+      }
+      // Also extract generic type parameters
+      extractGenericTypes(iface, 'generic_type', lineNum, result);
+    }
+  }
+  
+  // 3. throws clause
+  const throwsMatch = line.match(/\bthrows\s+([\w.,\s]+)/);
+  if (throwsMatch) {
+    const exceptions = throwsMatch[1].split(',').map(s => s.trim());
+    for (const exc of exceptions) {
+      addTypeReference(extractBaseType(exc), 'throws', lineNum, result);
+    }
+  }
+  
+  // 4. Annotations
+  const annotationRegex = /@(\w+(?:\.\w+)*)/g;
+  let annotationMatch;
+  while ((annotationMatch = annotationRegex.exec(line)) !== null) {
+    addTypeReference(annotationMatch[1], 'annotation', lineNum, result);
+  }
+  
+  // 5. Field declarations (Type fieldName;)
+  const fieldMatch = line.match(/^\s*(?:private|protected|public|static|final|volatile|transient|\s)+\s*(\w+(?:\.\w+)*(?:<[^>]+>)?(?:\[\])?)\s+\w+\s*[;=]/);
+  if (fieldMatch && !line.match(/\bclass\b|\binterface\b|\benum\b/)) {
+    extractTypesFromDeclaration(fieldMatch[1], 'field_type', lineNum, result);
+  }
+  
+  // 6. Method return types and parameters
+  // Match: accessModifiers returnType methodName(params)
+  const methodMatch = line.match(/(?:public|private|protected|static|final|abstract|synchronized|native|\s)+\s*(?:<[^>]+>\s+)?(\w+(?:\.\w+)*(?:<[^>]+>)?(?:\[\])?)\s+\w+\s*\(/);
+  if (methodMatch && !line.includes(' new ') && !line.match(/\bclass\b|\binterface\b/)) {
+    extractTypesFromDeclaration(methodMatch[1], 'return_type', lineNum, result);
+  }
+  
+  // 7. Method parameters
+  const paramMatch = line.match(/\(\s*([^)]+)\s*\)/);
+  if (paramMatch && !line.match(/^\s*(?:if|while|for|switch|catch)\s*\(/)) {
+    const params = paramMatch[1].split(',');
+    for (const param of params) {
+      const typeMatch = param.trim().match(/^(?:final\s+)?(\w+(?:\.\w+)*(?:<[^>]+>)?(?:\[\])?)\s+\w+/);
+      if (typeMatch) {
+        extractTypesFromDeclaration(typeMatch[1], 'parameter_type', lineNum, result);
+      }
+    }
+  }
+  
+  // 8. Local variable declarations
+  const localVarMatch = line.match(/^\s*(?:final\s+)?(\w+(?:\.\w+)*(?:<[^>]+>)?(?:\[\])?)\s+\w+\s*[;=]/);
+  if (localVarMatch && !line.match(/\breturn\b/) && !line.match(/^\s*(?:private|protected|public)/)) {
+    extractTypesFromDeclaration(localVarMatch[1], 'local_variable', lineNum, result);
+  }
+  
+  // 9. Object instantiation (new Type())
+  const newMatch = line.match(/\bnew\s+(\w+(?:\.\w+)*)\s*[<(]/);
+  if (newMatch) {
+    addTypeReference(newMatch[1], 'instantiation', lineNum, result);
+  }
+  
+  // 10. Cast expressions ((Type) expr)
+  const castMatch = line.match(/\(\s*(\w+(?:\.\w+)*)\s*\)\s*(?:\w|\()/);
+  if (castMatch && !PRIMITIVE_TYPES.has(castMatch[1])) {
+    addTypeReference(castMatch[1], 'cast', lineNum, result);
+  }
+  
+  // 11. instanceof expressions
+  const instanceofMatch = line.match(/\binstanceof\s+(\w+(?:\.\w+)*)/);
+  if (instanceofMatch) {
+    addTypeReference(instanceofMatch[1], 'instanceof', lineNum, result);
+  }
+  
+  // 12. catch blocks
+  const catchMatch = line.match(/\bcatch\s*\(\s*(?:final\s+)?(\w+(?:\.\w+)*(?:\s*\|\s*\w+(?:\.\w+)*)*)\s+\w+\s*\)/);
+  if (catchMatch) {
+    const exceptions = catchMatch[1].split('|').map(s => s.trim());
+    for (const exc of exceptions) {
+      addTypeReference(exc, 'catch', lineNum, result);
+    }
+  }
+  
+  // 13. Class literals (Type.class)
+  const classLiteralMatch = line.match(/(\w+(?:\.\w+)*)\.class\b/g);
+  if (classLiteralMatch) {
+    for (const match of classLiteralMatch) {
+      const typeName = match.replace('.class', '');
+      addTypeReference(typeName, 'class_literal', lineNum, result);
+    }
+  }
+  
+  // 14. Method references (Type::method)
+  const methodRefMatch = line.match(/(\w+(?:\.\w+)*)::\w+/g);
+  if (methodRefMatch) {
+    for (const match of methodRefMatch) {
+      const typeName = match.split('::')[0];
+      addTypeReference(typeName, 'method_reference', lineNum, result);
+    }
+  }
+  
+  // 15. Static field/method access (Type.CONSTANT or Type.staticMethod())
+  const staticAccessMatch = line.match(/\b([A-Z]\w*(?:\.[A-Z]\w*)*)\.\w+(?:\(|[^(])/g);
+  if (staticAccessMatch) {
+    for (const match of staticAccessMatch) {
+      const typeName = match.match(/^([A-Z]\w*(?:\.[A-Z]\w*)*)/)?.[1];
+      if (typeName && !JAVA_LANG_TYPES.has(typeName) && !result.imports.has(typeName)) {
+        addTypeReference(typeName, 'static_access', lineNum, result);
+      }
+    }
+  }
+  
+  // 16. Generic type bounds in method declarations (<T extends Entity>)
+  const typeBoundMatch = line.match(/<\s*\w+\s+extends\s+(\w+(?:\.\w+)*)/);
+  if (typeBoundMatch) {
+    addTypeReference(typeBoundMatch[1], 'generic_type', lineNum, result);
+  }
+}
+
+/**
+ * Extract base type from a potentially generic type
+ */
+function extractBaseType(typeStr: string): string {
+  const match = typeStr.match(/^(\w+(?:\.\w+)*)/);
+  return match ? match[1] : '';
+}
+
+/**
+ * Extract generic type parameters from a type declaration
+ */
+function extractGenericTypes(typeStr: string, kind: ExtractedTypeReference['kind'], lineNum: number, result: FileAnalysisResult): void {
+  const genericMatch = typeStr.match(/<([^>]+)>/);
+  if (genericMatch) {
+    const typeParams = genericMatch[1].split(',').map(s => s.trim());
+    for (const param of typeParams) {
+      const cleanType = extractBaseType(param.replace(/^\?.*extends\s+/, '').replace(/^\?.*super\s+/, ''));
+      if (cleanType && cleanType !== '?') {
+        addTypeReference(cleanType, kind, lineNum, result);
+      }
+    }
+  }
+}
+
+/**
+ * Extract all types from a type declaration (handles generics, arrays)
+ */
+function extractTypesFromDeclaration(typeStr: string, kind: ExtractedTypeReference['kind'], lineNum: number, result: FileAnalysisResult): void {
+  // Extract base type
+  const baseType = extractBaseType(typeStr);
+  if (baseType) {
+    addTypeReference(baseType, kind, lineNum, result);
+  }
+  
+  // Extract generic type parameters
+  extractGenericTypes(typeStr, 'generic_type', lineNum, result);
+}
+
+/**
+ * Add a type reference if it's not a primitive or java.lang type
+ */
+function addTypeReference(typeName: string, kind: ExtractedTypeReference['kind'], lineNum: number, result: FileAnalysisResult): void {
+  if (!typeName) return;
+  
+  // Skip primitives
+  if (PRIMITIVE_TYPES.has(typeName)) return;
+  
+  // Skip java.lang types
+  if (JAVA_LANG_TYPES.has(typeName)) return;
+  
+  // Skip common java.util types (they require imports)
+  if (JAVA_UTIL_TYPES.has(typeName) && !result.imports.has(typeName)) {
+    // Only skip if it looks like it's actually java.util (would need import)
+    return;
+  }
+  
+  // Skip single-letter type parameters (T, E, K, V, etc.)
+  if (typeName.length === 1 && typeName.match(/[A-Z]/)) return;
+  
+  result.typeReferences.push({ typeName, kind, line: lineNum });
+}
+
+/**
+ * Resolve a type name to FQN using imports and package context
+ */
+function resolveTypeFqn(typeName: string, packageName: string, imports: Map<string, string>, wildcardImports: string[]): string {
+  // Already FQN
+  if (typeName.includes('.')) {
+    return typeName;
+  }
+  
+  // Check explicit imports
+  if (imports.has(typeName)) {
+    return imports.get(typeName)!;
+  }
+  
+  // Check java.lang (auto-imported)
+  if (JAVA_LANG_TYPES.has(typeName)) {
+    return 'java.lang.' + typeName;
+  }
+  
+  // If no explicit import and not java.lang, assume same package
+  // This is the key for detecting same-package dependencies!
+  if (packageName) {
+    return packageName + '.' + typeName;
+  }
+  
+  return typeName;
+}
 
 // ============== Input/Output Interfaces ==============
 
@@ -25,11 +401,22 @@ export interface ScanMigrationInput {
   maxSafeExternalDeps?: number;    // Default: 0 (strict isolation)
   groupBySubpackage?: boolean;     // Group results by sub-package
   outputFormat?: "summary" | "detailed" | "json" | "migration-plan";
+  
+  // STRICT MODE - Deep file analysis for accurate same-package dependency detection
+  // When enabled, parses file content directly instead of relying solely on the index
+  strictMode?: boolean;            // Default: true (CRITICAL for accurate migration analysis)
+  
+  // Additional patterns to treat as "safe" (won't be flagged as blocking)
+  safePatterns?: string[];         // e.g., ["java.", "javax.", "org.springframework."]
 }
 
 export interface DependencyInfo {
   target: string;                  // FQN of blocking dependency
-  type: "import" | "method_call" | "field_access" | "extends" | "implements" | "instantiation" | "type_reference";
+  type: "import" | "method_call" | "field_access" | "extends" | "implements" | 
+        "instantiation" | "type_reference" | "field_type" | "parameter_type" | 
+        "return_type" | "local_variable" | "throws" | "catch" | "annotation" |
+        "instanceof" | "cast" | "generic_type" | "array_type" | "method_reference" |
+        "class_literal" | "static_access" | "same_package_type";
   location: string;                // File:line
   removable: boolean;              // Could this be extracted?
 }
@@ -111,25 +498,34 @@ export interface ScanMigrationResult {
 
 export const scanMigrationCandidatesTool: Tool = {
   name: 'scan_migration_candidates',
-  description: `Bulk analyze a package to identify migration-ready classes with risk categorization.
+  description: `Bulk analyze a package to identify migration-ready classes with COMPREHENSIVE dependency detection.
+
+**IMPORTANT**: This tool now includes STRICT MODE (enabled by default) that performs DEEP FILE ANALYSIS
+to detect ALL dependencies, including same-package types that don't require imports in Java.
 
 **When to use**: Planning module extraction, large-scale refactoring, dependency cleanup.
-**40-60x faster** than calling explore_class on each file individually.
+
+**Key Features**:
+- Detects extends/implements with same-package types (no import needed in Java)
+- Finds type references in: fields, method params, return types, local variables
+- Catches: throws/catch types, annotations, instanceof, casts, generics, method references
+- Identifies class literals (Entity.class) and static access patterns
 
 **Output includes**:
-- Summary: total/safe/review/blocked counts
-- Categorized classes with blocking dependencies
+- Summary: total/safe/review/blocked counts (ACCURATE numbers)
+- Categorized classes with ALL blocking dependencies listed
 - Migration plan with ordered batches
 
 Example:
 scan_migration_candidates({
   sourcePackage: "com.example.util",
   blockedPatterns: ["com.example.business", "com.example.legacy"],
+  strictMode: true,  // RECOMMENDED - deep file analysis
   outputFormat: "migration-plan"
 })
 
 **Risk Categories**:
-- SAFE: 0 blocked deps - migrate immediately
+- SAFE: 0 blocked deps - migrate immediately (VERIFIED safe)
 - LOW/MEDIUM: 1-5 blocked deps - may need minor refactoring
 - BLOCKED: 6+ blocked deps - leave in place or major refactor`,
   inputSchema: {
@@ -168,6 +564,16 @@ scan_migration_candidates({
         enum: ['summary', 'detailed', 'json', 'migration-plan'],
         description: 'Output format: summary (quick), detailed (full), json (structured), migration-plan (with batches)',
         default: 'migration-plan'
+      },
+      strictMode: {
+        type: 'boolean',
+        description: 'Enable deep file analysis to detect ALL dependencies including same-package types that don\'t require imports. HIGHLY RECOMMENDED for accurate migration analysis.',
+        default: true
+      },
+      safePatterns: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Additional package patterns to treat as safe (e.g., ["java.", "javax.", "org.springframework."])'
       }
     },
     required: ['sourcePackage', 'blockedPatterns']
@@ -390,7 +796,9 @@ export async function handleScanMigrationCandidates(
       includeSubpackages: args.includeSubpackages !== false,
       maxSafeExternalDeps: (args.maxSafeExternalDeps as number) ?? 5,
       groupBySubpackage: args.groupBySubpackage === true,
-      outputFormat: (args.outputFormat as ScanMigrationInput['outputFormat']) || 'migration-plan'
+      outputFormat: (args.outputFormat as ScanMigrationInput['outputFormat']) || 'migration-plan',
+      strictMode: args.strictMode !== false, // Default to true for comprehensive analysis
+      safePatterns: (args.safePatterns as string[]) || ['java.', 'javax.', 'sun.', 'com.sun.']
     };
     
     if (!input.sourcePackage) {
@@ -413,8 +821,8 @@ export async function handleScanMigrationCandidates(
     const sourcePackagePrefix = input.sourcePackage + '.';
     
     for (const [fqn, stub] of allSymbols) {
-      // Only include top-level classes/interfaces/enums (not methods/fields)
-      if (stub.kind !== 'class' && stub.kind !== 'interface' && stub.kind !== 'enum') {
+      // Only include top-level classes/interfaces/enums/records (not methods/fields)
+      if (stub.kind !== 'class' && stub.kind !== 'interface' && stub.kind !== 'enum' && stub.kind !== 'record') {
         continue;
       }
       
@@ -447,18 +855,97 @@ export async function handleScanMigrationCandidates(
       };
     }
     
+    // Build a set of all classes in the package (for internal dependency detection)
+    const packageFqns = new Set(packageClasses.map(c => c.fqn));
+    const packageSimpleNames = new Map<string, string>(); // simpleName -> FQN
+    for (const cls of packageClasses) {
+      packageSimpleNames.set(cls.name, cls.fqn);
+    }
+    
     // Analyze each class
     const classInfos: ClassInfo[] = [];
-    const packageFqns = new Set(packageClasses.map(c => c.fqn));
     
     for (const stub of packageClasses) {
       const blockedDeps: DependencyInfo[] = [];
       const internalDeps: string[] = [];
       const externalDeps: string[] = [];
-      
-      // Get all outbound references from this class
-      const refs = memoryIndex.findReferencesFromClass(stub.fqn);
       const processedTargets = new Set<string>();
+      
+      // Helper to check if a pattern is safe (not blocking)
+      const isSafePattern = (fqn: string): boolean => {
+        for (const pattern of input.safePatterns || []) {
+          if (fqn.startsWith(pattern)) return true;
+        }
+        return false;
+      };
+      
+      // STRICT MODE: Parse file content directly to catch ALL dependencies
+      if (input.strictMode && stub.file && fs.existsSync(stub.file)) {
+        const fileAnalysis = parseJavaFile(stub.file);
+        if (fileAnalysis) {
+          for (const typeRef of fileAnalysis.typeReferences) {
+            // Resolve the type to FQN
+            const resolvedFqn = resolveTypeFqn(
+              typeRef.typeName, 
+              fileAnalysis.packageName, 
+              fileAnalysis.imports,
+              fileAnalysis.wildcardImports
+            );
+            
+            // Skip self-references
+            if (resolvedFqn === stub.fqn) continue;
+            
+            // Skip already processed
+            const key = `${resolvedFqn}:${typeRef.kind}`;
+            if (processedTargets.has(key)) continue;
+            processedTargets.add(key);
+            
+            // Skip safe patterns (java.*, javax.*, etc.)
+            if (isSafePattern(resolvedFqn)) continue;
+            
+            // Check if it's a blocked dependency
+            if (matchesBlockedPattern(resolvedFqn, input.blockedPatterns)) {
+              blockedDeps.push({
+                target: resolvedFqn,
+                type: typeRef.kind as DependencyInfo['type'],
+                location: `${stub.file}:${typeRef.line}`,
+                removable: isRemovableDependency(typeRef.kind)
+              });
+            }
+            // Check if it's an internal dependency (same package class)
+            else if (packageFqns.has(resolvedFqn)) {
+              if (!internalDeps.includes(resolvedFqn)) {
+                internalDeps.push(resolvedFqn);
+              }
+            }
+            // Check if simple name matches a package class (same-package reference)
+            else if (packageSimpleNames.has(typeRef.typeName)) {
+              const actualFqn = packageSimpleNames.get(typeRef.typeName)!;
+              if (actualFqn !== stub.fqn && !internalDeps.includes(actualFqn)) {
+                internalDeps.push(actualFqn);
+                // Check if this is actually blocked
+                if (matchesBlockedPattern(actualFqn, input.blockedPatterns)) {
+                  blockedDeps.push({
+                    target: actualFqn,
+                    type: 'same_package_type',
+                    location: `${stub.file}:${typeRef.line}`,
+                    removable: isRemovableDependency(typeRef.kind)
+                  });
+                }
+              }
+            }
+            // External but not blocked
+            else {
+              if (!externalDeps.includes(resolvedFqn)) {
+                externalDeps.push(resolvedFqn);
+              }
+            }
+          }
+        }
+      }
+      
+      // Also use index-based references (catches method calls, field access, etc.)
+      const refs = memoryIndex.findReferencesFromClass(stub.fqn);
       
       for (const ref of refs) {
         let targetFqn = ref.toFqn;
@@ -471,8 +958,8 @@ export async function handleScanMigrationCandidates(
           targetFqn = fqnWithoutParams.substring(0, lastDot);
         }
         
-        // Skip self-references and java.lang
-        if (targetFqn === stub.fqn || targetFqn.startsWith('java.lang.')) {
+        // Skip self-references and safe patterns
+        if (targetFqn === stub.fqn || isSafePattern(targetFqn)) {
           continue;
         }
         

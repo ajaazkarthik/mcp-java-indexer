@@ -10,7 +10,7 @@ function normalizePath(filePath: string): string {
 export interface SymbolStub {
   fqn: string; // Fully Qualified Name
   name: string;
-  kind: 'class' | 'interface' | 'enum' | 'method' | 'field' | 'constructor';
+  kind: 'class' | 'interface' | 'enum' | 'record' | 'method' | 'field' | 'constructor';
   file: string;
   line: number;
   column: number;
