@@ -362,6 +362,31 @@ export class FileShardStorage implements IIndexStorage {
     return results;
   }
 
+  async findReferencesFromClass(classFqn: string): Promise<Reference[]> {
+    const results: Reference[] = [];
+
+    // Scan all reference shards
+    const files = await fs.readdir(this.shardsDir);
+    const refFiles = files.filter(f => f.startsWith('refs_'));
+
+    for (const file of refFiles) {
+      const shardName = file.replace('refs_', '').replace('.json', '');
+      const shard = await this.loadShard(shardName, 'refs');
+      
+      for (const ref of shard) {
+        // Match if fromFqn is exactly the class, or starts with class. (methods/fields)
+        // or starts with class( (constructors)
+        if (ref.fromFqn === classFqn ||
+            ref.fromFqn.startsWith(classFqn + '.') ||
+            ref.fromFqn.startsWith(classFqn + '(')) {
+          results.push(ref);
+        }
+      }
+    }
+
+    return results;
+  }
+
   async deleteReferencesByFile(file: string): Promise<void> {
     const fileName = path.basename(file);
     const shardPath = this.getShardPath(fileName, 'refs');

@@ -113,6 +113,7 @@ export class MemoryIndexWithStorage {
   private referenceCount: number = 0;
   private callGraphEdgeCount: number = 0;
   private inheritanceCount: number = 0;
+  private projectRootDir: string = '';
 
   constructor() {}
 
@@ -120,12 +121,26 @@ export class MemoryIndexWithStorage {
    * Set index directory and initialize storage
    */
   setIndexDir(dir: string): void {
+    // Normalize and store the project root
+    const normalizedDir = dir.replace(/\\/g, '/');
+    this.projectRootDir = normalizedDir;
     this.indexDir = path.join(dir, '.mcp-index');
     
     // Initialize storage in background
     if (this.useStorage && !this.storageInitPromise) {
       this.storageInitPromise = this.initializeStorage();
     }
+  }
+
+  getProjectRootDir(): string {
+    return this.projectRootDir;
+  }
+
+  // Check if the current index matches the expected project root
+  isForProject(rootDir: string): boolean {
+    if (!this.projectRootDir) return false;
+    const normalizedInput = rootDir.replace(/\\/g, '/');
+    return normalizedInput === this.projectRootDir;
   }
 
   private async initializeStorage(): Promise<void> {
@@ -442,6 +457,77 @@ export class MemoryIndexWithStorage {
       }
     } catch (error) {
       console.error(`findUsagesSync error for ${fqn}:`, error);
+    }
+
+    return [];
+  }
+
+  /**
+   * Find all references FROM a class (what this class uses)
+   * This catches same-package dependencies that don't need explicit imports
+   */
+  findReferencesFromClass(classFqn: string): Reference[] {
+    if (!this.storageInitialized || !this.storage) {
+      return [];
+    }
+
+    try {
+      const sqliteStorage = this.storage as any;
+      // Check for better-sqlite3 (has synchronous 'all' method)
+      if (sqliteStorage.db && typeof sqliteStorage.db.prepare === 'function') {
+        const stmt = sqliteStorage.db.prepare(`
+          SELECT from_fqn, to_fqn, file, line, col, kind
+          FROM refs
+          WHERE from_fqn = ? OR from_fqn LIKE ? OR from_fqn LIKE ?
+        `);
+
+        // better-sqlite3 uses stmt.all(), sql.js uses different API
+        if (typeof stmt.all === 'function') {
+          const rows = stmt.all(classFqn, `${classFqn}.%`, `${classFqn}(%`) as Array<{
+            from_fqn: string;
+            to_fqn: string;
+            file: string;
+            line: number;
+            col: number;
+            kind: string;
+          }>;
+
+          return rows.map(row => ({
+            fromFqn: row.from_fqn,
+            toFqn: row.to_fqn,
+            file: row.file,
+            line: row.line,
+            column: row.col,
+            kind: row.kind as any
+          }));
+        } else if (typeof stmt.bind === 'function') {
+          // sql.js style - iterate with step()
+          stmt.bind([classFqn, `${classFqn}.%`, `${classFqn}(%`]);
+          const results: Reference[] = [];
+          while (stmt.step()) {
+            const row = stmt.getAsObject() as {
+              from_fqn: string;
+              to_fqn: string;
+              file: string;
+              line: number;
+              col: number;
+              kind: string;
+            };
+            results.push({
+              fromFqn: row.from_fqn,
+              toFqn: row.to_fqn,
+              file: row.file,
+              line: row.line,
+              column: row.col,
+              kind: row.kind as any
+            });
+          }
+          stmt.free();
+          return results;
+        }
+      }
+    } catch (error) {
+      console.error(`findReferencesFromClass error for ${classFqn}:`, error);
     }
 
     return [];

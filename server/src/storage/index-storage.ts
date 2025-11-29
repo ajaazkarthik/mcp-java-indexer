@@ -81,6 +81,12 @@ export interface IIndexStorage {
   findUsages(fqn: string): Promise<Reference[]>;
 
   /**
+   * Find all references FROM a class (what this class uses)
+   * This catches same-package dependencies that don't need explicit imports
+   */
+  findReferencesFromClass(classFqn: string): Promise<Reference[]>;
+
+  /**
    * Delete all references in a file
    */
   deleteReferencesByFile(file: string): Promise<void>;

@@ -94,10 +94,22 @@ export async function handleIndexProject(
       try {
         const loaded = await persistence.load(memoryIndex);
         if (loaded) {
-          loadedExisting = true;
-          const stats = memoryIndex.getStats();
-          console.error(`✅ Loaded existing index from disk`);
-          console.error(`   Loaded ${stats.symbols} symbols, ${stats.files} files`);
+          // CRITICAL: Validate the loaded index is for THIS project
+          // Prevents cross-project contamination when switching between projects
+          const loadedRootDir = memoryIndex.getProjectRootDir();
+          if (loadedRootDir && loadedRootDir !== rootDir.replace(/\\/g, '/')) {
+            console.error(`⚠️  Loaded index is for different project: ${loadedRootDir}`);
+            console.error(`   Current project: ${rootDir}`);
+            console.error(`   Clearing stale index and doing full reindex...`);
+            memoryIndex.clear();
+            memoryIndex.setIndexDir(rootDir);
+            loadedExisting = false;
+          } else {
+            loadedExisting = true;
+            const stats = memoryIndex.getStats();
+            console.error(`✅ Loaded existing index from disk`);
+            console.error(`   Loaded ${stats.symbols} symbols, ${stats.files} files`);
+          }
         } else {
           console.error(`⚠️  persistence.load() returned false - no valid index found`);
         }

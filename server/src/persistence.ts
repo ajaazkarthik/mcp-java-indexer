@@ -31,10 +31,11 @@ export class Persistence {
     const data = memoryIndex.toJSON();
     
     try {
-      // Save metadata separately
+      // Save metadata separately (includes projectRootDir for validation on load)
       const metadata = {
-        version: '1.0',
+        version: '1.1', // Bumped version for projectRootDir support
         timestamp: Date.now(),
+        projectRootDir: data.projectRootDir || '', // Store the project root
         stats: {
           symbols: data.symbols.length,
           files: data.files.length,
@@ -145,7 +146,13 @@ export class Persistence {
   // Load chunked format index
   private async loadChunked(memoryIndex: MemoryIndex): Promise<boolean> {
     try {
+      // Load metadata first to get projectRootDir
+      const metadataPath = path.join(this.indexDir, 'metadata.json');
+      const metadataContent = await fs.readFile(metadataPath, 'utf-8');
+      const metadata = JSON.parse(metadataContent);
+      
       const data: any = {
+        projectRootDir: metadata.projectRootDir || '', // Restore from metadata
         symbols: [],
         files: [],
         indexedFiles: [],

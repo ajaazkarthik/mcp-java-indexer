@@ -293,6 +293,36 @@ export class SqliteStorage implements IIndexStorage {
     }));
   }
 
+  async findReferencesFromClass(classFqn: string): Promise<Reference[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Find references where fromFqn is exactly the class, or starts with class. (methods/fields)
+    // or starts with class( (constructors)
+    const stmt = this.db.prepare(`
+      SELECT from_fqn, to_fqn, file, line, col, kind
+      FROM refs
+      WHERE from_fqn = ? OR from_fqn LIKE ? OR from_fqn LIKE ?
+    `);
+
+    const rows = stmt.all(classFqn, `${classFqn}.%`, `${classFqn}(%`) as Array<{
+      from_fqn: string;
+      to_fqn: string;
+      file: string;
+      line: number;
+      col: number;
+      kind: string;
+    }>;
+
+    return rows.map(row => ({
+      fromFqn: row.from_fqn,
+      toFqn: row.to_fqn,
+      file: row.file,
+      line: row.line,
+      column: row.col,
+      kind: row.kind as any
+    }));
+  }
+
   async deleteReferencesByFile(file: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 

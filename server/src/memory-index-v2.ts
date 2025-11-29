@@ -324,6 +324,15 @@ export class MemoryIndexV2 {
   }
 
   /**
+   * Find all references FROM a class (what this class uses)
+   * This catches same-package dependencies that don't need explicit imports
+   */
+  async findReferencesFromClass(classFqn: string): Promise<Reference[]> {
+    const storage = this.ensureStorage();
+    return await storage.findReferencesFromClass(classFqn);
+  }
+
+  /**
    * Get outbound calls (what this method calls)
    */
   async getOutboundCalls(fqn: string): Promise<CallGraphEdge[]> {

@@ -103,13 +103,16 @@ export async function handleExploreClass(
     }
     result.push('');
 
-    // Inheritance
+    // Inheritance - check both old and new property names for compatibility
     result.push('## 🔗 Inheritance');
-    if (classSymbol.extends) {
-      result.push(`- **Extends**: \`${classSymbol.extends}\``);
+    const extendsClass = classSymbol.extends || classSymbol.extendsClass;
+    const implementsInterfaces = classSymbol.implements || classSymbol.implementsInterfaces;
+    
+    if (extendsClass) {
+      result.push(`- **Extends**: \`${extendsClass}\``);
     }
-    if (classSymbol.implements?.length) {
-      result.push(`- **Implements**: ${classSymbol.implements.map(i => `\`${i}\``).join(', ')}`);
+    if (implementsInterfaces?.length) {
+      result.push(`- **Implements**: ${implementsInterfaces.map(i => `\`${i}\``).join(', ')}`);
     }
     
     const children = memoryIndex.getChildren(fqn);
@@ -167,6 +170,7 @@ export async function handleExploreClass(
     // Same-package classes may not have explicit imports but are still dependencies
     result.push('## 📤 Dependencies (Outbound)');
     const outboundDeps = new Map<string, Set<string>>(); // class -> reference kinds
+    const unresolvedDeps = new Set<string>(); // Dependencies not found in index (external libraries)
     const currentPackage = classSymbol.packageName;
     
     // Helper to check if a name looks like a class name (starts with uppercase)
@@ -179,17 +183,17 @@ export async function handleExploreClass(
       return className.length > 0 && className[0] === className[0].toUpperCase() && className[0] !== className[0].toLowerCase();
     };
     
-    // Helper to resolve simple class name to FQN
+    // Helper to resolve simple class name to FQN and track unresolved
     // If it's already a FQN (has dots), return as-is
     // If it's a simple name, look it up in the index
-    const resolveToFqn = (name: string): string | null => {
+    const resolveToFqn = (name: string): { fqn: string | null; isIndexed: boolean } => {
       if (!name || name === 'String' || name === 'Object' || name === 'void') {
-        return null; // Skip primitives and basic types
+        return { fqn: null, isIndexed: false }; // Skip primitives and basic types
       }
       
       // Skip keywords and variable-like names
       if (name === 'this' || name === 'super' || !isClassName(name)) {
-        return null;
+        return { fqn: null, isIndexed: false };
       }
       
       // Already qualified (has dots) - validate it exists in index
@@ -197,9 +201,10 @@ export async function handleExploreClass(
         // Check if this FQN exists as a class in the index
         const symbol = memoryIndex.getSymbol(name);
         if (symbol && (symbol.kind === 'class' || symbol.kind === 'interface' || symbol.kind === 'enum')) {
-          return name;
+          return { fqn: name, isIndexed: true };
         }
-        return name; // Keep it even if not in index (may be external)
+        // Not in index - treat as external/unresolved
+        return { fqn: name, isIndexed: false };
       }
       
       // Simple name - try to resolve from indexed symbols
@@ -212,16 +217,16 @@ export async function handleExploreClass(
       // Prefer same package
       const samePackageMatch = matches.find(s => s.packageName === currentPackage);
       if (samePackageMatch) {
-        return samePackageMatch.fqn;
+        return { fqn: samePackageMatch.fqn, isIndexed: true };
       }
       
       // Fall back to first match
       if (matches.length > 0) {
-        return matches[0].fqn;
+        return { fqn: matches[0].fqn, isIndexed: true };
       }
       
-      // Not found in index - don't assume it exists
-      return null;
+      // Not found in index - could be external library
+      return { fqn: null, isIndexed: false };
     };
     
     // Helper to add dependency
@@ -229,8 +234,20 @@ export async function handleExploreClass(
       if (!targetClass) return;
       
       // Resolve to FQN
-      const resolvedFqn = resolveToFqn(targetClass);
-      if (!resolvedFqn) return;
+      const resolved = resolveToFqn(targetClass);
+      
+      // Track unresolved dependencies (external libraries or missing from index)
+      if (!resolved.isIndexed && targetClass.includes('.')) {
+        // Only track qualified names that look like real class references
+        if (!targetClass.startsWith('java.') && !targetClass.startsWith('javax.') && 
+            !targetClass.startsWith('org.w3c.') && !targetClass.startsWith('org.xml.')) {
+          unresolvedDeps.add(targetClass);
+        }
+      }
+      
+      if (!resolved.fqn) return;
+      
+      const resolvedFqn = resolved.fqn;
       
       // Skip self-references and inner class references
       if (resolvedFqn === fqn || resolvedFqn.startsWith(fqn + '.') || resolvedFqn.startsWith(fqn + '$')) {
@@ -240,10 +257,14 @@ export async function handleExploreClass(
       if (resolvedFqn.startsWith('java.lang.')) {
         return;
       }
-      if (!outboundDeps.has(resolvedFqn)) {
-        outboundDeps.set(resolvedFqn, new Set());
+      
+      // Only add if it's actually indexed
+      if (resolved.isIndexed) {
+        if (!outboundDeps.has(resolvedFqn)) {
+          outboundDeps.set(resolvedFqn, new Set());
+        }
+        outboundDeps.get(resolvedFqn)!.add(kind);
       }
-      outboundDeps.get(resolvedFqn)!.add(kind);
     };
     
     // 1. Check method calls from call graph
@@ -284,6 +305,8 @@ export async function handleExploreClass(
       addDep(targetClass, ref.kind);
     });
     
+    // Show indexed dependencies
+    result.push('### Indexed (in project)');
     if (outboundDeps.size > 0) {
       const sortedDeps = Array.from(outboundDeps.entries())
         .sort((a, b) => b[1].size - a[1].size); // Sort by number of reference types
@@ -294,7 +317,23 @@ export async function handleExploreClass(
       });
       if (sortedDeps.length > 15) result.push(`- ... and ${sortedDeps.length - 15} more`);
     } else {
-      result.push('- No external dependencies found');
+      result.push('- No indexed dependencies found');
+    }
+    
+    // Show unresolved dependencies (external libraries or missing from index)
+    if (unresolvedDeps.size > 0) {
+      result.push('');
+      result.push('### ⚠️ External/Unresolved (not in index)');
+      result.push('> These dependencies are referenced but NOT in the index. They may be:');
+      result.push('> - External libraries (verify in Maven/Gradle dependencies)');
+      result.push('> - Classes from a different Maven module (index that module too)');
+      result.push('> - Or the index may be stale - run `index_project` to refresh');
+      result.push('');
+      const sortedUnresolved = Array.from(unresolvedDeps).sort();
+      sortedUnresolved.slice(0, 10).forEach(dep => {
+        result.push(`- \`${dep}\``);
+      });
+      if (sortedUnresolved.length > 10) result.push(`- ... and ${sortedUnresolved.length - 10} more`);
     }
     result.push('');
 
@@ -328,6 +367,9 @@ export async function handleExploreClass(
     result.push(`- **Total usages**: ${usages.length}`);
     result.push(`- **Unique dependents**: ${dependentClasses.size}`);
     result.push(`- **Unique dependencies**: ${outboundDeps.size}`);
+    if (unresolvedDeps.size > 0) {
+      result.push(`- **⚠️ Unresolved dependencies**: ${unresolvedDeps.size} (external or not indexed)`);
+    }
     result.push('');
 
     // Suggested next actions

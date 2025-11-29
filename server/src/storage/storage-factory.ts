@@ -1,27 +1,36 @@
 /**
  * Storage factory - auto-detects best available storage backend
- * Tries SQLite first (fast), falls back to file shards if needed
+ * Priority: better-sqlite3 (fastest) -> sql.js (zero-config) -> file shards (fallback)
  */
 
 import { IIndexStorage } from './index-storage.js';
 import { FileShardStorage } from './file-shard-storage.js';
 
-export type StorageType = 'sqlite' | 'file-shard';
+export type StorageType = 'better-sqlite3' | 'sqljs' | 'file-shard';
 
 export class StorageFactory {
   private static detectedType: StorageType | null = null;
 
   /**
    * Create storage instance - auto-detects best available backend
+   * Priority:
+   * 1. better-sqlite3 (native, fastest) - requires C++ compilation
+   * 2. sql.js (WebAssembly, zero-config) - works everywhere, slightly slower
+   * 3. file-shard (pure JS, fallback) - last resort
    */
   static async create(indexDir: string): Promise<IIndexStorage> {
     const type = await this.detectStorageType();
     
-    if (type === 'sqlite') {
-      console.error('🚀 Using SQLite storage (high performance)');
-      // Dynamic import to avoid loading better-sqlite3 when not available
+    if (type === 'better-sqlite3') {
+      console.error('🚀 Using better-sqlite3 storage (native, fastest)');
       const { SqliteStorage } = await import('./sqlite-storage.js');
       const storage = new SqliteStorage(indexDir);
+      await storage.initialize();
+      return storage;
+    } else if (type === 'sqljs') {
+      console.error('🔷 Using sql.js storage (WebAssembly, zero-config)');
+      const { SqlJsStorage } = await import('./sqljs-storage.js');
+      const storage = new SqlJsStorage(indexDir);
       await storage.initialize();
       return storage;
     } else {
@@ -41,17 +50,29 @@ export class StorageFactory {
       return this.detectedType;
     }
 
-    // Try to load better-sqlite3
+    // Try better-sqlite3 first (native, fastest)
     try {
       await import('better-sqlite3');
-      this.detectedType = 'sqlite';
-      return 'sqlite';
+      this.detectedType = 'better-sqlite3';
+      console.error('✅ better-sqlite3 available (native performance)');
+      return 'better-sqlite3';
     } catch (error) {
-      console.error('⚠️  better-sqlite3 not available, using file shard fallback');
-      console.error('   (To enable SQLite: npm install better-sqlite3)');
-      this.detectedType = 'file-shard';
-      return 'file-shard';
+      // better-sqlite3 not available - this is expected and fine
     }
+
+    // Try sql.js (WebAssembly, zero-config)
+    try {
+      await import('sql.js');
+      this.detectedType = 'sqljs';
+      console.error('✅ sql.js available (zero-config WebAssembly)');
+      return 'sqljs';
+    } catch (error) {
+      console.error('⚠️  sql.js not available, using file shard fallback');
+    }
+
+    // Fall back to file shards
+    this.detectedType = 'file-shard';
+    return 'file-shard';
   }
 
   /**
@@ -59,5 +80,12 @@ export class StorageFactory {
    */
   static getDetectedType(): StorageType | null {
     return this.detectedType;
+  }
+
+  /**
+   * Reset detection (for testing)
+   */
+  static resetDetection(): void {
+    this.detectedType = null;
   }
 }

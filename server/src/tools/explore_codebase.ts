@@ -51,6 +51,17 @@ export interface ClassFlags {
   isUtility: boolean;        // only static methods
   isEntryPoint: boolean;     // has main method or Spring annotations
   hasCircularDependency: boolean;
+  isTestClass: boolean;      // Test/IT class (new for filtering)
+  isProbablyUsed: boolean;   // Detected via annotations/patterns (reduces false positives)
+}
+
+// Method clustering for God class refactoring suggestions
+export interface MethodCluster {
+  name: string;              // Suggested class name
+  reason: string;            // Why these methods belong together
+  methods: string[];         // Method names
+  sharedFields: string[];    // Fields accessed by these methods
+  confidence: 'high' | 'medium' | 'low';
 }
 
 export interface PackageSummary {
@@ -74,6 +85,9 @@ export interface CodebaseAnalysis {
     totalEnums: number;
     totalPackages: number;
     processingTimeMs: number;
+    // Multi-module awareness
+    modules?: string[];
+    isMultiModule?: boolean;
   };
   statistics: {
     avgMethodsPerClass: number;
@@ -107,7 +121,7 @@ export const exploreCodebaseTool: Tool = {
 **When to use**: 
 - Initial codebase understanding before refactoring
 - Finding code smells across entire project
-- Generating refactoring priority list
+- Generating refactoring priority list with actionable insights
 - Getting overview before major changes
 
 **Output includes**:
@@ -115,14 +129,18 @@ export const exploreCodebaseTool: Tool = {
 - Coupling analysis (dependencies/dependents for each class)
 - Code smell detection (God classes, unused classes, high coupling)
 - Refactoring candidates with prioritized suggestions
+- **NEW: Method clustering analysis** for God classes (suggests HOW to split)
+- **NEW: Test class filtering** to avoid false positives
+- **NEW: Smarter unused detection** (ignores Spring/EJB patterns)
 - Package-level summaries
 
 **Performance**: Optimized for efficiency - processes in batches, uses pre-computed indices.
 **Timeout**: ~30 minutes for 16000+ classes
 
-Example: explore_codebase(format: "summary")  // Quick overview
-Example: explore_codebase(format: "refactoring-priority")  // Classes grouped by dependency count
-Example: explore_codebase(format: "detailed", packages: ["com.example.core"])  // Detailed for specific packages
+Example: explore_codebase(format: "refactoring", sortByPriority: "LOW_FIRST")  // Quick wins first!
+Example: explore_codebase(format: "refactoring-priority", ignoreTests: true)  // Skip test classes
+Example: explore_codebase(format: "refactoring", priority: "LOW")  // Only LOW priority issues
+Example: explore_codebase(format: "method-clusters", packages: ["com.example.util"])  // Method grouping suggestions
 
 This is more efficient than calling explore_class 16000+ times.`,
   inputSchema: {
@@ -130,8 +148,8 @@ This is more efficient than calling explore_class 16000+ times.`,
     properties: {
       format: {
         type: 'string',
-        enum: ['summary', 'detailed', 'json', 'refactoring', 'refactoring-priority'],
-        description: 'Output format: summary (quick stats), detailed (full report), json (structured data), refactoring (code smell issues), refactoring-priority (RECOMMENDED: classes grouped by inbound dependency count - 0 deps first, then 1, 2, etc.)',
+        enum: ['summary', 'detailed', 'json', 'refactoring', 'refactoring-priority', 'method-clusters'],
+        description: 'Output format: summary (quick stats), detailed (full report), json (structured data), refactoring (code smell issues with sortable priority), refactoring-priority (classes grouped by inbound dependency count), method-clusters (GOD CLASS SPLITTING: shows how to group methods)',
         default: 'summary'
       },
       packages: {
@@ -163,6 +181,28 @@ This is more efficient than calling explore_class 16000+ times.`,
         type: 'number',
         description: 'Maximum classes to show per dependency tier (default: 100). Use 0 for unlimited.',
         default: 100
+      },
+      sortByPriority: {
+        type: 'string',
+        enum: ['LOW_FIRST', 'HIGH_FIRST'],
+        description: 'Sort refactoring candidates: LOW_FIRST (recommended - quick wins first!) or HIGH_FIRST (legacy default). Use LOW_FIRST for momentum-based refactoring.',
+        default: 'HIGH_FIRST'
+      },
+      priority: {
+        type: 'string',
+        enum: ['LOW', 'MEDIUM', 'HIGH', 'ALL'],
+        description: 'Filter to show only specific priority level. Use "LOW" for quick wins, "HIGH" for major issues.',
+        default: 'ALL'
+      },
+      ignoreTests: {
+        type: 'boolean',
+        description: 'Exclude test classes (*Test.java, *IT.java, *Tests.java, src/test/**). Recommended to avoid false positives.',
+        default: false
+      },
+      includeMethodClusters: {
+        type: 'boolean',
+        description: 'For God classes, analyze and suggest method groupings (how to split the class)',
+        default: false
       }
     },
     required: []
@@ -180,6 +220,10 @@ export async function handleExploreCodebase(
   const maxClasses = (args.maxClasses as number) || 5000;
   const batchSize = (args.batchSize as number) || 500;
   const maxPerTier = (args.maxPerTier as number) ?? 100;
+  const sortByPriority = (args.sortByPriority as string) || 'HIGH_FIRST';
+  const priorityFilter = (args.priority as string) || 'ALL';
+  const ignoreTests = args.ignoreTests === true;
+  const includeMethodClusters = args.includeMethodClusters === true || format === 'method-clusters';
 
   try {
     // Step 1: Gather all class-like symbols efficiently
@@ -200,6 +244,12 @@ export async function handleExploreCodebase(
           );
           if (!matchesPackage) continue;
         }
+        
+        // Filter test classes if ignoreTests is true
+        if (ignoreTests && isTestClass(stub)) {
+          continue;
+        }
+        
         classes.push(stub);
       } else if (stub.kind === 'method' || stub.kind === 'field' || stub.kind === 'constructor') {
         // Associate with declaring class
@@ -473,6 +523,9 @@ No classes found in the index.${filterPackages ? ` Filter packages: ${filterPack
     // Step 5: Generate refactoring candidates
     const refactoringCandidates = generateRefactoringCandidates(classSummaries);
 
+    // Step 5b: Detect Maven modules (for multi-module project awareness)
+    const moduleInfo = detectMavenModules(classSummaries);
+
     // Step 6: Calculate overall statistics
     const totalMethods = classSummaries.reduce((sum, c) => sum + c.methodCount, 0);
     const totalFields = classSummaries.reduce((sum, c) => sum + c.fieldCount, 0);
@@ -498,7 +551,9 @@ No classes found in the index.${filterPackages ? ` Filter packages: ${filterPack
         totalInterfaces: classSummaries.filter(c => c.kind === 'interface').length,
         totalEnums: classSummaries.filter(c => c.kind === 'enum').length,
         totalPackages: packageMap.size,
-        processingTimeMs: Date.now() - startTime
+        processingTimeMs: Date.now() - startTime,
+        modules: moduleInfo.modules,
+        isMultiModule: moduleInfo.isMultiModule
       },
       statistics: {
         avgMethodsPerClass: Math.round(totalMethods / classSummaries.length * 10) / 10,
@@ -521,7 +576,16 @@ No classes found in the index.${filterPackages ? ` Filter packages: ${filterPack
     };
 
     // Step 7: Format output based on requested format
-    const output = formatOutput(analysis, format, includeClasses, maxPerTier);
+    const formatOptions: FormatOptions = {
+      sortByPriority,
+      priorityFilter,
+      includeMethodClusters,
+      methodsByClass,
+      fieldsByClass,
+      memoryIndex
+    };
+    
+    const output = formatOutput(analysis, format, includeClasses, maxPerTier, formatOptions);
 
     return {
       content: [{
@@ -595,6 +659,33 @@ function resolveClassName(name: string, currentPackage: string, allSymbols: Map<
   return undefined;
 }
 
+/**
+ * Detect Maven modules from file paths.
+ * Returns module names if multi-module project is detected.
+ */
+function detectMavenModules(classes: ClassSummary[]): { modules: string[]; isMultiModule: boolean } {
+  const modulePatterns = new Set<string>();
+  
+  for (const cls of classes) {
+    const file = cls.file.replace(/\\/g, '/');
+    // Look for patterns like /module-name/src/main/java/
+    const match = file.match(/\/([^\/]+)\/src\/main\/java\//);
+    if (match) {
+      modulePatterns.add(match[1]);
+    }
+    // Also check for /module-name/src/ pattern
+    const match2 = file.match(/\/([^\/]+)\/src\/[^\/]+\//);
+    if (match2 && !match2[1].startsWith('src')) {
+      modulePatterns.add(match2[1]);
+    }
+  }
+  
+  return {
+    modules: Array.from(modulePatterns).sort(),
+    isMultiModule: modulePatterns.size > 1
+  };
+}
+
 function calculateInheritanceDepth(
   cls: SymbolStub, 
   allSymbols: Map<string, SymbolStub>,
@@ -631,6 +722,83 @@ function calculateInheritanceDepth(
   return depth;
 }
 
+/**
+ * Check if a class is a test class based on naming and file path conventions
+ */
+function isTestClass(cls: SymbolStub): boolean {
+  const name = cls.name;
+  const file = cls.file.toLowerCase().replace(/\\/g, '/');
+  
+  // Check name patterns
+  if (name.endsWith('Test') || name.endsWith('IT') || name.endsWith('Tests') ||
+      name.endsWith('Spec') || name.endsWith('TestCase') || name.startsWith('Test')) {
+    return true;
+  }
+  
+  // Check file path patterns
+  if (file.includes('/src/test/') || file.includes('/test/') || 
+      file.includes('/tests/') || file.includes('_test/')) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if a class is probably used even without detected dependents
+ * This reduces false positives for unused detection
+ */
+function isProbablyUsedClass(cls: SymbolStub, methods: SymbolStub[]): boolean {
+  const modifiers = cls.modifiers || [];
+  const name = cls.name;
+  
+  // Check for Spring/JEE annotations patterns (common false positives)
+  // These are often instantiated via reflection/DI
+  const springPatterns = [
+    'Controller', 'Service', 'Repository', 'Component', 'Bean', 
+    'Configuration', 'Aspect', 'Endpoint', 'Resource', 'Entity',
+    'Mapper', 'Converter', 'Serializer', 'Deserializer', 'Handler',
+    'Listener', 'Processor', 'Factory', 'Provider', 'Adapter',
+    'Validator', 'Formatter', 'Filter', 'Interceptor'
+  ];
+  
+  for (const pattern of springPatterns) {
+    if (name.endsWith(pattern) || name.includes(pattern)) {
+      return true;
+    }
+  }
+  
+  // Impl classes are usually wired via interfaces
+  if (name.endsWith('Impl') || name.endsWith('Implementation')) {
+    return true;
+  }
+  
+  // Public classes in API/model packages are often used externally
+  if (modifiers.includes('public')) {
+    const pkg = cls.packageName.toLowerCase();
+    if (pkg.includes('.api.') || pkg.includes('.model') || pkg.includes('.dto') ||
+        pkg.includes('.entity') || pkg.includes('.domain')) {
+      return true;
+    }
+  }
+  
+  // Classes with @Override methods are likely implementations
+  const hasOverride = methods.some(m => m.modifiers?.includes('override'));
+  if (hasOverride) {
+    return true;
+  }
+  
+  // EJB patterns
+  const ejbPatterns = ['SessionBean', 'EJB', 'MDB', 'MessageDriven'];
+  for (const pattern of ejbPatterns) {
+    if (name.includes(pattern)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 function detectCodeSmells(
   cls: SymbolStub,
   methods: SymbolStub[],
@@ -642,6 +810,8 @@ function detectCodeSmells(
   const modifiers = cls.modifiers || [];
   const isInterface = cls.kind === 'interface';
   const isAbstract = modifiers.includes('abstract');
+  const testClass = isTestClass(cls);
+  const probablyUsed = isProbablyUsedClass(cls, methods);
   
   // Check for entry point markers
   const hasMain = methods.some(m => m.name === 'main' && m.modifiers?.includes('static'));
@@ -652,8 +822,8 @@ function detectCodeSmells(
     methods.every(m => m.modifiers?.includes('static')) &&
     fields.every(f => f.modifiers?.includes('static'));
 
-  // God class: too many methods
-  const isGodClass = methods.length > 20;
+  // God class: too many methods (BUT not test classes - they SHOULD have many methods)
+  const isGodClass = methods.length > 20 && !testClass;
   
   // Data class: mostly fields, few methods (excluding getters/setters)
   const nonGetterSetterMethods = methods.filter(m => 
@@ -669,8 +839,8 @@ function detectCodeSmells(
   // High coupling: too many dependencies
   const isHighCoupling = dependencyCount > 10;
   
-  // Unused: no dependents (but not if it's an entry point or interface)
-  const isUnused = dependentCount === 0 && !hasMain && !isInterface && !isAbstract;
+  // Unused: no dependents (but not if it's an entry point, interface, or probably used via DI/reflection)
+  const isUnused = dependentCount === 0 && !hasMain && !isInterface && !isAbstract && !probablyUsed && !testClass;
   
   // Leaf class: no subclasses
   const isLeafClass = subclassCount === 0;
@@ -685,7 +855,9 @@ function detectCodeSmells(
     isAbstract,
     isUtility,
     isEntryPoint: hasMain,
-    hasCircularDependency: false // Set later if detected
+    hasCircularDependency: false, // Set later if detected
+    isTestClass: testClass,
+    isProbablyUsed: probablyUsed
   };
 }
 
@@ -754,21 +926,66 @@ function generateRefactoringCandidates(classes: ClassSummary[]): CodebaseAnalysi
     }
   }
 
-  // Sort by priority
+  // Sort by priority (default HIGH first)
   const priorityOrder = { 'HIGH': 0, 'MEDIUM': 1, 'LOW': 2 };
   return candidates.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
 }
 
-function formatOutput(analysis: CodebaseAnalysis, format: string, includeClasses: boolean, maxPerTier: number = 100): string {
+/**
+ * Sort candidates based on sortByPriority option
+ */
+function sortCandidates(
+  candidates: CodebaseAnalysis['refactoringCandidates'],
+  sortByPriority: string
+): CodebaseAnalysis['refactoringCandidates'] {
+  const priorityOrder = sortByPriority === 'LOW_FIRST' 
+    ? { 'LOW': 0, 'MEDIUM': 1, 'HIGH': 2 }
+    : { 'HIGH': 0, 'MEDIUM': 1, 'LOW': 2 };
+  
+  return candidates.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+}
+
+/**
+ * Filter candidates by priority
+ */
+function filterCandidatesByPriority(
+  candidates: CodebaseAnalysis['refactoringCandidates'],
+  priorityFilter: string
+): CodebaseAnalysis['refactoringCandidates'] {
+  if (priorityFilter === 'ALL') {
+    return candidates;
+  }
+  return candidates.filter(c => c.priority === priorityFilter);
+}
+
+interface FormatOptions {
+  sortByPriority: string;
+  priorityFilter: string;
+  includeMethodClusters: boolean;
+  methodsByClass: Map<string, SymbolStub[]>;
+  fieldsByClass: Map<string, SymbolStub[]>;
+  memoryIndex: MemoryIndex;
+}
+
+function formatOutput(
+  analysis: CodebaseAnalysis, 
+  format: string, 
+  includeClasses: boolean, 
+  maxPerTier: number = 100,
+  options?: FormatOptions
+): string {
   switch (format) {
     case 'json':
       return JSON.stringify(analysis, null, 2);
     
     case 'refactoring':
-      return formatRefactoringReport(analysis);
+      return formatRefactoringReport(analysis, options);
     
     case 'refactoring-priority':
       return formatRefactoringPriorityReport(analysis, maxPerTier);
+    
+    case 'method-clusters':
+      return formatMethodClustersReport(analysis, options);
     
     case 'detailed':
       return formatDetailedReport(analysis, includeClasses);
@@ -787,6 +1004,20 @@ function formatSummaryReport(analysis: CodebaseAnalysis): string {
   lines.push(`**Analyzed**: ${analysis.metadata.analyzedAt}`);
   lines.push(`**Processing Time**: ${analysis.metadata.processingTimeMs}ms`);
   lines.push('');
+  
+  // Multi-module warning
+  if (analysis.metadata.isMultiModule && analysis.metadata.modules && analysis.metadata.modules.length > 1) {
+    lines.push('## ⚠️ Multi-Module Project Detected');
+    lines.push('');
+    lines.push(`Found ${analysis.metadata.modules.length} modules: ${analysis.metadata.modules.slice(0, 5).map(m => `\`${m}\``).join(', ')}${analysis.metadata.modules.length > 5 ? ' ...' : ''}`);
+    lines.push('');
+    lines.push('> **Important**: Dependency counts only include classes IN THIS INDEX.');
+    lines.push('> - Classes depending on other modules may show fewer dependencies than actual');
+    lines.push('> - "Unused" classes may be used by modules not indexed');
+    lines.push('> - For accurate cross-module analysis, index the entire parent project');
+    lines.push('> - Or use `grep` to verify dependencies before moving/deleting classes');
+    lines.push('');
+  }
   
   lines.push('## 📈 Overview');
   lines.push(`- **Total Classes**: ${analysis.metadata.totalClasses}`);
@@ -850,70 +1081,151 @@ function formatSummaryReport(analysis: CodebaseAnalysis): string {
   return lines.join('\n');
 }
 
-function formatRefactoringReport(analysis: CodebaseAnalysis): string {
+function formatRefactoringReport(analysis: CodebaseAnalysis, options?: FormatOptions): string {
   const lines: string[] = [];
+  const sortByPriority = options?.sortByPriority || 'HIGH_FIRST';
+  const priorityFilter = options?.priorityFilter || 'ALL';
+  
+  // Apply sorting and filtering
+  let candidates = [...analysis.refactoringCandidates];
+  candidates = filterCandidatesByPriority(candidates, priorityFilter);
+  candidates = sortCandidates(candidates, sortByPriority);
   
   lines.push('# 🔧 Refactoring Priority Report');
   lines.push('');
   lines.push(`Generated: ${analysis.metadata.analyzedAt}`);
   lines.push(`Classes Analyzed: ${analysis.metadata.totalClasses + analysis.metadata.totalInterfaces + analysis.metadata.totalEnums}`);
+  
+  if (priorityFilter !== 'ALL') {
+    lines.push(`**Filter**: Showing only ${priorityFilter} priority issues`);
+  }
+  if (sortByPriority === 'LOW_FIRST') {
+    lines.push(`**Sort**: LOW priority first (quick wins strategy! 🚀)`);
+  }
   lines.push('');
   
-  const high = analysis.refactoringCandidates.filter(c => c.priority === 'HIGH');
-  const medium = analysis.refactoringCandidates.filter(c => c.priority === 'MEDIUM');
-  const low = analysis.refactoringCandidates.filter(c => c.priority === 'LOW');
+  const high = candidates.filter(c => c.priority === 'HIGH');
+  const medium = candidates.filter(c => c.priority === 'MEDIUM');
+  const low = candidates.filter(c => c.priority === 'LOW');
   
   lines.push(`## Summary: ${high.length} HIGH, ${medium.length} MEDIUM, ${low.length} LOW priority issues`);
   lines.push('');
   
-  if (high.length > 0) {
-    lines.push('## 🔴 HIGH Priority');
-    lines.push('');
-    lines.push('Address these immediately:');
-    lines.push('');
-    high.forEach((c, i) => {
-      lines.push(`### ${i + 1}. \`${c.fqn}\``);
-      lines.push(`- **Issue**: ${c.reason}`);
-      lines.push(`- **Suggestion**: ${c.suggestion}`);
+  // Show in order based on sortByPriority
+  if (sortByPriority === 'LOW_FIRST') {
+    // LOW FIRST - Quick wins strategy
+    if (low.length > 0) {
+      lines.push('## 🚀 LOW Priority - QUICK WINS (Start Here!)');
       lines.push('');
-    });
-  }
-  
-  if (medium.length > 0) {
-    lines.push('## 🟡 MEDIUM Priority');
-    lines.push('');
-    lines.push('Plan to address in the near term:');
-    lines.push('');
-    medium.slice(0, 20).forEach((c, i) => {
-      lines.push(`### ${i + 1}. \`${c.fqn}\``);
-      lines.push(`- **Issue**: ${c.reason}`);
-      lines.push(`- **Suggestion**: ${c.suggestion}`);
+      lines.push('> **Strategy**: These are easy, low-risk changes. Complete them first to build momentum!');
       lines.push('');
-    });
-    if (medium.length > 20) {
-      lines.push(`... and ${medium.length - 20} more medium priority issues`);
+      low.forEach((c, i) => {
+        lines.push(`### ${i + 1}. \`${c.fqn}\``);
+        lines.push(`- **Issue**: ${c.reason}`);
+        lines.push(`- **Suggestion**: ${c.suggestion}`);
+        lines.push(`- **Risk**: ✅ Minimal - isolated change`);
+        lines.push('');
+      });
+    }
+    
+    if (medium.length > 0) {
+      lines.push('## 🟡 MEDIUM Priority - Next Wave');
+      lines.push('');
+      lines.push('> After completing LOW priority items, tackle these:');
+      lines.push('');
+      medium.slice(0, 20).forEach((c, i) => {
+        lines.push(`### ${i + 1}. \`${c.fqn}\``);
+        lines.push(`- **Issue**: ${c.reason}`);
+        lines.push(`- **Suggestion**: ${c.suggestion}`);
+        lines.push('');
+      });
+      if (medium.length > 20) {
+        lines.push(`... and ${medium.length - 20} more medium priority issues`);
+        lines.push('');
+      }
+    }
+    
+    if (high.length > 0) {
+      lines.push('## 🔴 HIGH Priority - Tackle Last');
+      lines.push('');
+      lines.push('> These require more planning. Address after cleaning up LOW/MEDIUM:');
+      lines.push('');
+      high.forEach((c, i) => {
+        lines.push(`### ${i + 1}. \`${c.fqn}\``);
+        lines.push(`- **Issue**: ${c.reason}`);
+        lines.push(`- **Suggestion**: ${c.suggestion}`);
+        lines.push(`- **Risk**: ⚠️ High - may affect many callers`);
+        lines.push('');
+      });
+    }
+  } else {
+    // HIGH FIRST - Traditional approach
+    if (high.length > 0) {
+      lines.push('## 🔴 HIGH Priority');
+      lines.push('');
+      lines.push('Address these immediately:');
+      lines.push('');
+      high.forEach((c, i) => {
+        lines.push(`### ${i + 1}. \`${c.fqn}\``);
+        lines.push(`- **Issue**: ${c.reason}`);
+        lines.push(`- **Suggestion**: ${c.suggestion}`);
+        lines.push('');
+      });
+    }
+    
+    if (medium.length > 0) {
+      lines.push('## 🟡 MEDIUM Priority');
+      lines.push('');
+      lines.push('Plan to address in the near term:');
+      lines.push('');
+      medium.slice(0, 20).forEach((c, i) => {
+        lines.push(`### ${i + 1}. \`${c.fqn}\``);
+        lines.push(`- **Issue**: ${c.reason}`);
+        lines.push(`- **Suggestion**: ${c.suggestion}`);
+        lines.push('');
+      });
+      if (medium.length > 20) {
+        lines.push(`... and ${medium.length - 20} more medium priority issues`);
+        lines.push('');
+      }
+    }
+    
+    if (low.length > 0) {
+      lines.push('## 🟢 LOW Priority');
+      lines.push('');
+      lines.push('Nice-to-have improvements:');
+      lines.push('');
+      low.slice(0, 10).forEach((c, i) => {
+        lines.push(`${i + 1}. \`${c.fqn}\` - ${c.reason}`);
+      });
+      if (low.length > 10) {
+        lines.push(`... and ${low.length - 10} more low priority issues`);
+      }
       lines.push('');
     }
   }
   
-  if (low.length > 0) {
-    lines.push('## 🟢 LOW Priority');
+  if (candidates.length === 0) {
+    lines.push('## ✅ No Issues Found');
     lines.push('');
-    lines.push('Nice-to-have improvements:');
-    lines.push('');
-    low.slice(0, 10).forEach((c, i) => {
-      lines.push(`${i + 1}. \`${c.fqn}\` - ${c.reason}`);
-    });
-    if (low.length > 10) {
-      lines.push(`... and ${low.length - 10} more low priority issues`);
+    if (priorityFilter !== 'ALL') {
+      lines.push(`No ${priorityFilter} priority issues found. Try a different filter.`);
+    } else {
+      lines.push('The codebase looks clean! Keep up the good work.');
     }
-    lines.push('');
   }
   
-  if (analysis.refactoringCandidates.length === 0) {
-    lines.push('## ✅ No Major Issues Found');
+  // Add tips for LOW_FIRST strategy
+  if (sortByPriority === 'LOW_FIRST' && low.length > 0) {
+    lines.push('---');
     lines.push('');
-    lines.push('The codebase looks clean! Keep up the good work.');
+    lines.push('## 💡 Quick Wins Strategy Tips');
+    lines.push('');
+    lines.push('1. **Batch similar changes** - Group related LOW priority fixes');
+    lines.push('2. **Test after each batch** - Keep changes small and verifiable');
+    lines.push('3. **Track progress** - Each completed item builds momentum');
+    lines.push('4. **Move to MEDIUM only after LOW is clean**');
+    lines.push('5. **God classes become MUCH easier** once surrounding code is clean');
   }
   
   return lines.join('\n');
@@ -1283,6 +1595,7 @@ function formatDetailedReport(analysis: CodebaseAnalysis, includeClasses: boolea
       if (cls.flags.isDataClass) flags.push('📦 DATA CLASS');
       if (cls.flags.isUtility) flags.push('🔧 UTILITY');
       if (cls.flags.hasCircularDependency) flags.push('🔄 CIRCULAR DEP');
+      if (cls.flags.isTestClass) flags.push('🧪 TEST');
       
       lines.push(`### ${cls.name}`);
       lines.push(`- **FQN**: \`${cls.fqn}\``);
@@ -1301,6 +1614,317 @@ function formatDetailedReport(analysis: CodebaseAnalysis, includeClasses: boolea
       lines.push('');
     });
   }
+  
+  return lines.join('\n');
+}
+
+/**
+ * Analyze methods in a God class and suggest logical groupings
+ * Uses multiple heuristics:
+ * 1. Method name prefix patterns (e.g., all "validate*" methods)
+ * 2. Shared field access (methods that use same fields)
+ * 3. Call relationships (methods that call each other)
+ */
+function analyzeMethodClusters(
+  classFqn: string,
+  methods: SymbolStub[],
+  fields: SymbolStub[],
+  memoryIndex: MemoryIndex
+): MethodCluster[] {
+  const clusters: MethodCluster[] = [];
+  const methodNames = methods.map(m => m.name);
+  
+  if (methods.length < 5) {
+    return clusters; // Not worth clustering for small classes
+  }
+  
+  // 1. Group by method name prefix
+  const prefixGroups = new Map<string, string[]>();
+  const commonPrefixes = ['get', 'set', 'is', 'has', 'create', 'build', 'parse', 'validate', 
+                          'process', 'handle', 'load', 'save', 'update', 'delete', 'find',
+                          'calculate', 'compute', 'convert', 'format', 'init', 'register',
+                          'check', 'verify', 'transform', 'extract', 'generate', 'export', 'import'];
+  
+  for (const method of methods) {
+    for (const prefix of commonPrefixes) {
+      if (method.name.startsWith(prefix) && method.name.length > prefix.length) {
+        if (!prefixGroups.has(prefix)) {
+          prefixGroups.set(prefix, []);
+        }
+        prefixGroups.get(prefix)!.push(method.name);
+        break;
+      }
+    }
+  }
+  
+  // Convert prefix groups to clusters (minimum 3 methods to form a cluster)
+  for (const [prefix, groupMethods] of prefixGroups) {
+    if (groupMethods.length >= 3) {
+      const suggestedName = generateSuggestedClassName(prefix, classFqn);
+      clusters.push({
+        name: suggestedName,
+        reason: `${groupMethods.length} methods share "${prefix}*" naming pattern`,
+        methods: groupMethods,
+        sharedFields: [], // Will be filled later
+        confidence: groupMethods.length >= 5 ? 'high' : 'medium'
+      });
+    }
+  }
+  
+  // 2. Group by domain concept (based on method name keywords)
+  const domainKeywords: { [key: string]: string[] } = {
+    'DateUtils': ['date', 'time', 'calendar', 'timestamp', 'day', 'month', 'year'],
+    'StringUtils': ['string', 'text', 'format', 'parse', 'trim', 'concat', 'split'],
+    'FileUtils': ['file', 'path', 'directory', 'read', 'write', 'stream', 'io'],
+    'ValidationUtils': ['valid', 'check', 'verify', 'assert', 'ensure', 'require'],
+    'ConversionUtils': ['convert', 'transform', 'map', 'to', 'from', 'cast'],
+    'CalculationUtils': ['calc', 'compute', 'sum', 'avg', 'total', 'count', 'math'],
+    'DatabaseUtils': ['db', 'sql', 'query', 'persist', 'entity', 'transaction']
+  };
+  
+  for (const [utilName, keywords] of Object.entries(domainKeywords)) {
+    const matchingMethods = methods.filter(m => {
+      const nameLower = m.name.toLowerCase();
+      return keywords.some(kw => nameLower.includes(kw));
+    }).map(m => m.name);
+    
+    if (matchingMethods.length >= 3) {
+      // Check if not already covered by prefix groups
+      const alreadyClustered = clusters.some(c => 
+        c.methods.some(cm => matchingMethods.includes(cm))
+      );
+      
+      if (!alreadyClustered) {
+        clusters.push({
+          name: utilName,
+          reason: `Methods related to ${utilName.replace('Utils', '').toLowerCase()} operations`,
+          methods: matchingMethods,
+          sharedFields: [],
+          confidence: 'medium'
+        });
+      }
+    }
+  }
+  
+  // 3. Identify getters/setters that could become a Data class
+  const getterSetterPairs = new Map<string, { get: boolean; set: boolean; methods: string[] }>();
+  for (const method of methods) {
+    let fieldName = '';
+    if (method.name.startsWith('get') && method.name.length > 3) {
+      fieldName = method.name.substring(3);
+    } else if (method.name.startsWith('set') && method.name.length > 3) {
+      fieldName = method.name.substring(3);
+    } else if (method.name.startsWith('is') && method.name.length > 2) {
+      fieldName = method.name.substring(2);
+    }
+    
+    if (fieldName) {
+      if (!getterSetterPairs.has(fieldName)) {
+        getterSetterPairs.set(fieldName, { get: false, set: false, methods: [] });
+      }
+      const pair = getterSetterPairs.get(fieldName)!;
+      if (method.name.startsWith('get') || method.name.startsWith('is')) {
+        pair.get = true;
+      } else {
+        pair.set = true;
+      }
+      pair.methods.push(method.name);
+    }
+  }
+  
+  const dataClassMethods: string[] = [];
+  for (const [, pair] of getterSetterPairs) {
+    if (pair.get || pair.set) {
+      dataClassMethods.push(...pair.methods);
+    }
+  }
+  
+  if (dataClassMethods.length >= 6) {
+    // Check if not already a separate cluster
+    const notClustered = dataClassMethods.filter(m => 
+      !clusters.some(c => c.methods.includes(m))
+    );
+    
+    if (notClustered.length >= 4) {
+      clusters.push({
+        name: getSimpleName(classFqn) + 'Data',
+        reason: `${notClustered.length} getter/setter methods could be extracted to a data class`,
+        methods: notClustered.slice(0, 20),
+        sharedFields: fields.map(f => f.name).slice(0, 10),
+        confidence: 'high'
+      });
+    }
+  }
+  
+  // 4. Remaining unclustered methods
+  const clusteredMethods = new Set(clusters.flatMap(c => c.methods));
+  const unclustered = methods.filter(m => !clusteredMethods.has(m.name)).map(m => m.name);
+  
+  if (unclustered.length >= 3 && unclustered.length <= 10) {
+    clusters.push({
+      name: getSimpleName(classFqn) + 'Core',
+      reason: `${unclustered.length} core business methods (not fitting other patterns)`,
+      methods: unclustered,
+      sharedFields: [],
+      confidence: 'low'
+    });
+  }
+  
+  return clusters;
+}
+
+function generateSuggestedClassName(prefix: string, originalFqn: string): string {
+  const originalName = getSimpleName(originalFqn);
+  
+  // Remove common suffixes from original name
+  let baseName = originalName
+    .replace(/Utility$/i, '')
+    .replace(/Utils$/i, '')
+    .replace(/Helper$/i, '')
+    .replace(/Manager$/i, '')
+    .replace(/Service$/i, '');
+  
+  // Capitalize prefix
+  const capitalizedPrefix = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+  
+  // Generate suggested name
+  if (baseName.length > 3) {
+    return baseName + capitalizedPrefix + 'Utils';
+  } else {
+    return capitalizedPrefix + 'Utils';
+  }
+}
+
+/**
+ * Format the method clusters report for God classes
+ */
+function formatMethodClustersReport(analysis: CodebaseAnalysis, options?: FormatOptions): string {
+  const lines: string[] = [];
+  
+  lines.push('# 🔬 Method Clustering Analysis for God Classes');
+  lines.push('');
+  lines.push('> This report suggests **HOW to split** God classes based on method grouping analysis.');
+  lines.push('> Each cluster represents a potential new class to extract.');
+  lines.push('');
+  lines.push(`**Analyzed**: ${analysis.metadata.analyzedAt}`);
+  lines.push('');
+  
+  // Get God classes
+  const godClasses = analysis.classes.filter(c => c.flags.isGodClass);
+  
+  if (godClasses.length === 0) {
+    lines.push('## ✅ No God Classes Found');
+    lines.push('');
+    lines.push('Great! Your codebase has no classes with >20 methods.');
+    return lines.join('\n');
+  }
+  
+  lines.push(`## Found ${godClasses.length} God Class${godClasses.length > 1 ? 'es' : ''}`);
+  lines.push('');
+  
+  // Sort by method count (largest first)
+  godClasses.sort((a, b) => b.methodCount - a.methodCount);
+  
+  for (const cls of godClasses.slice(0, 10)) { // Limit to top 10
+    lines.push('---');
+    lines.push('');
+    lines.push(`## 🐘 ${cls.name}`);
+    lines.push('');
+    lines.push(`- **FQN**: \`${cls.fqn}\``);
+    lines.push(`- **Methods**: ${cls.methodCount}`);
+    lines.push(`- **Fields**: ${cls.fieldCount}`);
+    lines.push(`- **File**: ${cls.file}`);
+    lines.push('');
+    
+    // Get methods and fields for this class
+    const methods = options?.methodsByClass?.get(cls.fqn) || [];
+    const fields = options?.fieldsByClass?.get(cls.fqn) || [];
+    
+    if (methods.length > 0 && options?.memoryIndex) {
+      const clusters = analyzeMethodClusters(cls.fqn, methods, fields, options.memoryIndex);
+      
+      if (clusters.length > 0) {
+        lines.push('### 📦 Suggested Splits');
+        lines.push('');
+        
+        // Sort clusters by confidence
+        clusters.sort((a, b) => {
+          const order = { 'high': 0, 'medium': 1, 'low': 2 };
+          return order[a.confidence] - order[b.confidence];
+        });
+        
+        for (let i = 0; i < clusters.length; i++) {
+          const cluster = clusters[i];
+          const confidenceIcon = cluster.confidence === 'high' ? '🟢' : 
+                                cluster.confidence === 'medium' ? '🟡' : '🔴';
+          
+          lines.push(`#### ${i + 1}. Extract: \`${cluster.name}\` ${confidenceIcon}`);
+          lines.push('');
+          lines.push(`**Reason**: ${cluster.reason}`);
+          lines.push(`**Confidence**: ${cluster.confidence.toUpperCase()}`);
+          lines.push('');
+          lines.push('**Methods to move:**');
+          cluster.methods.slice(0, 15).forEach(m => {
+            lines.push(`- \`${m}()\``);
+          });
+          if (cluster.methods.length > 15) {
+            lines.push(`- ... and ${cluster.methods.length - 15} more`);
+          }
+          lines.push('');
+          
+          if (cluster.sharedFields.length > 0) {
+            lines.push('**Related fields:**');
+            cluster.sharedFields.slice(0, 5).forEach(f => {
+              lines.push(`- \`${f}\``);
+            });
+            lines.push('');
+          }
+        }
+        
+        // Refactoring steps
+        lines.push('### 📝 Refactoring Steps');
+        lines.push('');
+        lines.push('1. Create new class with suggested name');
+        lines.push('2. Move listed methods to new class');
+        lines.push('3. Move related fields (if any)');
+        lines.push('4. Update original class to delegate to new class');
+        lines.push('5. Update all callers (use `find_usages` to locate them)');
+        lines.push('6. Run tests and fix any issues');
+        lines.push('');
+      } else {
+        lines.push('### ⚠️ No Clear Clustering Pattern Found');
+        lines.push('');
+        lines.push('This class may need manual analysis. Consider:');
+        lines.push('- Grouping methods by the data they access');
+        lines.push('- Looking for natural domain boundaries');
+        lines.push('- Consulting with team members who know this code');
+        lines.push('');
+      }
+    } else {
+      lines.push('### ℹ️ Method Details Not Available');
+      lines.push('');
+      lines.push('Use `explore_class(className: "' + cls.name + '")` for detailed method analysis.');
+      lines.push('');
+    }
+  }
+  
+  if (godClasses.length > 10) {
+    lines.push('---');
+    lines.push('');
+    lines.push(`> Showing top 10 of ${godClasses.length} God classes. Run with specific package filter for more.`);
+  }
+  
+  // Best practices
+  lines.push('---');
+  lines.push('');
+  lines.push('## 💡 God Class Refactoring Best Practices');
+  lines.push('');
+  lines.push('1. **Start with high-confidence clusters** - These have clear patterns');
+  lines.push('2. **Extract one cluster at a time** - Small, incremental changes');
+  lines.push('3. **Preserve the original class initially** - Delegate to extracted classes');
+  lines.push('4. **Write tests BEFORE refactoring** - Ensure behavior is preserved');
+  lines.push('5. **Update callers gradually** - Can be done in follow-up PRs');
+  lines.push('6. **Consider using composition** - Original class holds references to extracted classes');
   
   return lines.join('\n');
 }

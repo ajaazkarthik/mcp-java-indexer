@@ -60,16 +60,29 @@ export class MemoryIndex {
   private reverseInheritance: Map<string, string[]> = new Map(); // parent -> children
 
   private indexDir: string = '';
+  private projectRootDir: string = ''; // The project root that was indexed
 
   constructor() {}
 
   // Initialize index directory
   setIndexDir(dir: string): void {
+    const normalizedDir = normalizePath(dir);
     this.indexDir = normalizePath(path.join(dir, '.mcp-index'));
+    this.projectRootDir = normalizedDir;
   }
 
   getIndexDir(): string {
     return this.indexDir;
+  }
+
+  getProjectRootDir(): string {
+    return this.projectRootDir;
+  }
+
+  // Check if the current index matches the expected project root
+  isForProject(rootDir: string): boolean {
+    if (!this.projectRootDir) return false;
+    return normalizePath(rootDir) === this.projectRootDir;
   }
 
   // Add symbol
@@ -737,6 +750,7 @@ export class MemoryIndex {
     this.symbols.clear();
     this.files.clear();
     this.indexedFiles.clear();
+    this.projectRootDir = '';
     this.references = [];
     this.referencesByFile.clear();
     this.callGraph.clear();
@@ -791,6 +805,7 @@ export class MemoryIndex {
   // Serialization for persistence
   toJSON() {
     return {
+      projectRootDir: this.projectRootDir,
       symbols: Array.from(this.symbols.entries()),
       files: Array.from(this.files.entries()),
       indexedFiles: Array.from(this.indexedFiles),
@@ -805,6 +820,11 @@ export class MemoryIndex {
 
   fromJSON(data: any): void {
     this.clear();
+    
+    // Restore project root if available
+    if (data.projectRootDir) {
+      this.projectRootDir = normalizePath(data.projectRootDir);
+    }
     
     this.symbols = new Map(data.symbols);
     this.files = new Map(data.files);

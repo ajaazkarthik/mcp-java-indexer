@@ -124,6 +124,21 @@ export class MemoryIndexAdapter {
   }
 
   /**
+   * Find all references FROM a class (what this class uses)
+   */
+  findReferencesFromClass(classFqn: string): Reference[] {
+    throw new Error('findReferencesFromClass() is now async. Use await findReferencesFromClassAsync(classFqn) instead.');
+  }
+
+  /**
+   * Async version of findReferencesFromClass
+   */
+  async findReferencesFromClassAsync(classFqn: string): Promise<Reference[]> {
+    await this.ensureInitialized();
+    return await this.indexV2.findReferencesFromClass(classFqn);
+  }
+
+  /**
    * Get outbound calls
    */
   getOutboundCalls(fqn: string): CallGraphEdge[] {
