@@ -229,6 +229,17 @@ export class Persistence {
     }
   }
 
+  // Get index metadata (timestamp, stats, etc.) for freshness indicator
+  async getMetadata(): Promise<{ timestamp: number; version: string; stats: any } | null> {
+    const metadataPath = path.join(this.indexDir, 'metadata.json');
+    try {
+      const content = await fs.readFile(metadataPath, 'utf-8');
+      return JSON.parse(content);
+    } catch {
+      return null;
+    }
+  }
+
   // Clear index
   async clear(): Promise<void> {
     try {

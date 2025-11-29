@@ -5,6 +5,267 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2025-11-30
+
+### 🎯 Migration Workflow Improvements
+
+This release addresses feedback from extensive migration workflow testing, making the tool more trustworthy for large-scale Java refactoring.
+
+#### ✨ 1. `explore_class` directOnly Flag (Feature Request)
+
+**Problem**: When checking an interface, `explore_class` showed dependencies from implementing classes, causing confusion. Users couldn't distinguish between the class's own dependencies vs transitive dependencies.
+
+**Solution**: Added `directOnly` parameter to `explore_class`:
+```javascript
+explore_class(className: "AccountBalanceList", directOnly: true)
+```
+
+When `directOnly=true`:
+- Shows only dependencies from THIS class file (extends, implements, direct type references)
+- **Excludes** transitive dependencies from call graph analysis
+- Output clearly indicates `[DIRECT ONLY MODE]`
+- Perfect for accurate migration planning
+
+#### 📊 2. Migration Safety Score (0-100)
+
+**Problem**: No quantified way to assess migration risk for classes.
+
+**Solution**: Added `migrationScore` field to `scan_migration_candidates` output:
+
+| Factor | Weight | Description |
+|--------|--------|-------------|
+| Blocked Dependencies | -40 | Has imports matching blocked patterns |
+| External Dependencies | -5 each | Dependencies outside target package |
+| Inbound References | -3 each | Other classes depending on this one |
+| Pure Interface Bonus | +15 | Is an interface (easier to move) |
+| No Dependencies Bonus | +20 | Zero external dependencies |
+
+**Score Interpretation:**
+- 90-100: ✅ Very safe to migrate
+- 70-89: ⚠️ Likely safe, verify manually  
+- 50-69: ⚠️ Some risk, check carefully
+- Below 50: ❌ High risk, significant refactoring needed
+
+#### 🚀 3. `explore_class` in `batch_query`
+
+**Problem**: `batch_query` didn't support `explore_class`, requiring multiple round-trips.
+
+**Solution**: Added `explore_class` as a supported operation in `batch_query`:
+```javascript
+batch_query(queries: [
+  { tool: "explore_class", args: { className: "UserService", directOnly: true } },
+  { tool: "explore_class", args: { className: "OrderService" } }
+])
+```
+
+#### 🕐 4. Index Freshness Indicator
+
+**Problem**: No way to know when the index was last updated, leading to stale data issues.
+
+**Solution**: Added freshness information to `index_project` output:
+```
+📊 Index Status:
+  Last indexed: 2025-11-30T14:32:15.000Z (2 hours ago)
+  Symbols: 45,230 | References: 128,450
+```
+
+Shows warning when index is >24 hours old:
+```
+⚠️ INDEX MAY BE STALE - Consider re-indexing with forceReindex: true
+```
+
+---
+
+## [2.6.2] - 2025-11-29
+
+### 🔧 Publication Release: v2.6.1 Fixes
+
+Published version with all critical fixes for stale index and dependency visibility issues.
+
+---
+
+## [2.6.1] - 2025-11-29
+
+### 🔧 Critical Bugfix: Stale Index & Dependency Visibility
+
+This release fixes critical issues reported by users where `explore_class` showed wrong dependencies due to stale index data and missing cross-module awareness.
+
+#### 🐛 1. Fixed Cross-Project Index Contamination
+
+**Problem**: When switching between projects, the indexer could retain stale data from the previous project, causing "mixing files across modules" errors.
+
+**Solution**: 
+- Added `projectRootDir` tracking to the index
+- On `index_project`, validates the loaded index matches the current project
+- Automatically clears stale index when project root changes
+- Stored in `metadata.json` (version 1.1)
+
+```javascript
+// Now logged when switching projects:
+// ⚠️ Loaded index is for different project: /old/project
+// Current project: /new/project
+// Clearing stale index and doing full reindex...
+```
+
+#### 🔍 2. Improved OUTBOUND Dependency Visibility
+
+**Problem**: `explore_class` only showed dependencies that were in the index. External libraries and cross-module dependencies were silently dropped, making classes appear to have fewer dependencies than they actually do.
+
+**Solution**:
+- Now tracks "unresolved" dependencies separately
+- Output shows two sections: "Indexed (in project)" and "⚠️ External/Unresolved (not in index)"
+- Quick stats shows both counts
+
+```markdown
+## 📤 Dependencies (Outbound)
+### Indexed (in project)
+- `com.example.UserRepository` (method_call)
+
+### ⚠️ External/Unresolved (not in index)
+> These dependencies are referenced but NOT in the index. They may be:
+> - External libraries (verify in Maven/Gradle dependencies)
+> - Classes from a different Maven module (index that module too)
+> - Or the index may be stale - run `index_project` to refresh
+
+- `jakarta.mail.Session`
+- `org.springframework.stereotype.Service`
+```
+
+#### 📦 3. Multi-Module Project Awareness
+
+**Problem**: Maven multi-module projects were indexed as a flat namespace with no warning that dependencies might cross module boundaries.
+
+**Solution**:
+- `explore_codebase` now detects Maven modules from file paths
+- Shows warning for multi-module projects
+- Explains that dependency counts only reflect what's IN the index
+
+```markdown
+## ⚠️ Multi-Module Project Detected
+
+Found 5 modules: `core`, `api`, `service`, `web`, `common`
+
+> **Important**: Dependency counts only include classes IN THIS INDEX.
+> - Classes depending on other modules may show fewer dependencies than actual
+> - "Unused" classes may be used by modules not indexed
+> - For accurate cross-module analysis, index the entire parent project
+> - Or use `grep` to verify dependencies before moving/deleting classes
+```
+
+### Files Changed
+- `memory-index.ts`: Added `projectRootDir` tracking and validation
+- `persistence.ts`: Saves/loads `projectRootDir` in metadata (version 1.1)
+- `index_project.ts`: Validates project root on load, clears if different
+- `explore_class.ts`: Tracks and displays unresolved dependencies
+- `explore_codebase.ts`: Detects Maven modules, shows multi-module warnings
+
+---
+
+## [2.6.0] - 2025-11-29
+
+### ✨ Major Enhancement: Refactoring Intelligence - Priority Sorting, Test Filtering, Method Clustering
+
+This release transforms `explore_codebase` from a diagnostic tool into a comprehensive refactoring strategy engine based on real user feedback.
+
+#### 🚀 1. Priority Sorting (LOW_FIRST Strategy)
+
+**Parameter**: `sortByPriority: "LOW_FIRST" | "HIGH_FIRST"`
+
+Start with quick wins to build momentum:
+```javascript
+explore_codebase(format: "refactoring", sortByPriority: "LOW_FIRST")
+```
+
+- **LOW_FIRST**: Shows "🚀 QUICK WINS (Start Here!)" first - perfect for momentum-based refactoring
+- **HIGH_FIRST**: Legacy default - tackle big issues immediately
+
+#### 🎯 2. Priority Filtering
+
+**Parameter**: `priority: "LOW" | "MEDIUM" | "HIGH" | "ALL"`
+
+Focus on one priority level at a time:
+```javascript
+explore_codebase(format: "refactoring", priority: "LOW")
+```
+
+#### 🧪 3. Test Class Filtering
+
+**Parameter**: `ignoreTests: true`
+
+Eliminate false positives - test classes NO LONGER flagged as God Classes:
+```javascript
+explore_codebase(format: "refactoring", ignoreTests: true)
+```
+
+- Detects: `*Test.java`, `*IT.java`, `*Tests.java`, `*Spec.java`, `/src/test/**`
+- Test classes correctly identified and excluded from God class analysis
+- Tests should have many methods - now they're not penalized
+
+#### 🔍 4. Improved "Unused" Detection
+
+New `isProbablyUsed` flag reduces false positives by detecting:
+- Spring/JEE patterns: `*Controller`, `*Service`, `*Repository`, `*Component`, `*Entity`
+- `*Impl` classes (wired via interfaces)
+- Public classes in `api`, `model`, `dto`, `entity`, `domain` packages
+- Classes with `@Override` methods
+- EJB patterns: `*SessionBean`, `*EJB`, `*MDB`
+
+Classes with these patterns are marked as "probably used" and NOT flagged as unused.
+
+#### 📦 5. Method Clustering (NEW Format)
+
+**NEW Format**: `format: "method-clusters"`
+
+Get actionable refactoring guidance - HOW to split God classes, not just WHAT to split:
+
+```javascript
+explore_codebase(format: "method-clusters")
+```
+
+**Output includes:**
+- Suggested extracted class names with confidence levels (high/medium/low)
+- Method groupings based on:
+  1. Naming patterns (`validate*`, `process*`, `handle*`, etc.)
+  2. Domain concepts (`DateUtils`, `StringUtils`, `FileUtils`, etc.)
+  3. Getter/setter extraction suggestions
+- Refactoring steps and best practices
+- Which fields to move with each cluster
+
+#### 🎯 Recommended Workflow
+
+```javascript
+// Week 1: Quick wins - build momentum
+explore_codebase(format: "refactoring", sortByPriority: "LOW_FIRST", ignoreTests: true)
+
+// After LOW is clean: Next tier
+explore_codebase(format: "refactoring", sortByPriority: "LOW_FIRST", priority: "MEDIUM")
+
+// For God classes: Get split suggestions
+explore_codebase(format: "method-clusters", packages: ["com.example.util"])
+```
+
+#### 📊 Test Coverage
+
+- 56 tests passing (100% pass rate)
+- 11 new tests for new features:
+  - Priority sorting and filtering
+  - Test class filtering
+  - Method clustering analysis
+
+#### 🔧 Technical Details
+
+**New ClassFlags:**
+- `isTestClass`: boolean - identifies test classes
+- `isProbablyUsed`: boolean - reduces false positives
+
+**New helper functions:**
+- `isTestClass(cls)` - Test class detection
+- `isProbablyUsedClass(cls, methods)` - Reduces false positives
+- `analyzeMethodClusters(fqn, methods, fields, index)` - Suggests class splits
+- `sortCandidates(candidates, sortByPriority)` - Flexible priority sorting
+- `filterCandidatesByPriority(candidates, filter)` - Priority filtering
+- `formatMethodClustersReport(analysis, options)` - New output format
+
 ## [2.5.2] - 2025-11-29
 
 ### ✨ Enhanced: Refactoring Priority by Dependency Count

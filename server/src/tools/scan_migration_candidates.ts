@@ -436,6 +436,7 @@ export interface ClassInfo {
   totalDependencies: number;
   blockedCount: number;
   migrationRisk: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "BLOCKED";
+  migrationScore: number;          // 0-100 score: 100 = safe, 0 = heavily blocked
   
   // Suggestions
   suggestion?: string;             // "Extract interface", "Move with X", etc.
@@ -619,6 +620,50 @@ function calculateRisk(blockedCount: number, maxSafeExternal: number): ClassInfo
   if (blockedCount <= 2) return 'LOW';
   if (blockedCount <= maxSafeExternal) return 'MEDIUM';
   return 'BLOCKED';
+}
+
+/**
+ * Calculate migration safety score (0-100)
+ * 100 = completely safe to migrate (no blocked deps)
+ * 0 = heavily blocked, major refactoring required
+ * 
+ * Scoring:
+ * - Start at 100
+ * - extends blocked: -20 (hardest to fix)
+ * - implements blocked: -15 (hard to fix)
+ * - method_call blocked: -5 each
+ * - field_access blocked: -5 each
+ * - instantiation blocked: -8 each (need DI)
+ * - other types: -3 each
+ */
+function calculateMigrationScore(blockedDeps: DependencyInfo[]): number {
+  if (blockedDeps.length === 0) return 100;
+  
+  let score = 100;
+  
+  for (const dep of blockedDeps) {
+    switch (dep.type) {
+      case 'extends':
+        score -= 20;
+        break;
+      case 'implements':
+        score -= 15;
+        break;
+      case 'instantiation':
+        score -= 8;
+        break;
+      case 'method_call':
+      case 'field_access':
+        score -= 5;
+        break;
+      default:
+        score -= 3;
+        break;
+    }
+  }
+  
+  // Clamp to 0-100
+  return Math.max(0, Math.min(100, score));
 }
 
 /**
@@ -1035,7 +1080,8 @@ export async function handleScanMigrationCandidates(
         externalDeps,
         totalDependencies: blockedDeps.length + internalDeps.length + externalDeps.length,
         blockedCount: blockedDeps.length,
-        migrationRisk: calculateRisk(blockedDeps.length, input.maxSafeExternalDeps ?? 5)
+        migrationRisk: calculateRisk(blockedDeps.length, input.maxSafeExternalDeps ?? 5),
+        migrationScore: calculateMigrationScore(blockedDeps)
       };
       
       classInfo.suggestion = generateSuggestion(classInfo);
@@ -1119,6 +1165,7 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
         className: c.className,
         type: c.type,
         risk: c.migrationRisk,
+        score: c.migrationScore,  // 0-100 safety score
         blockedCount: c.blockedCount,
         blockedDeps: c.blockedDeps,
         suggestion: c.suggestion
@@ -1165,10 +1212,10 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   
   // Safe classes
   if (result.categories.safe.length > 0) {
-    lines.push('### ✅ Safe to Migrate');
+    lines.push('### ✅ Safe to Migrate (Score: 100)');
     lines.push('');
     for (const cls of result.categories.safe.slice(0, 50)) {
-      lines.push(`- \`${cls.fqn}\` (${cls.type})`);
+      lines.push(`- \`${cls.fqn}\` (${cls.type}) - Score: ${cls.migrationScore}`);
     }
     if (result.categories.safe.length > 50) {
       lines.push(`- ... and ${result.categories.safe.length - 50} more`);
@@ -1178,11 +1225,11 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   
   // Review classes
   if (result.categories.review.length > 0) {
-    lines.push('### ⚠️ Needs Review');
+    lines.push('### ⚠️ Needs Review (Score: 50-99)');
     lines.push('');
     for (const cls of result.categories.review.slice(0, 30)) {
       const depList = cls.blockedDeps.slice(0, 3).map(d => d.target.split('.').pop()).join(', ');
-      lines.push(`- \`${cls.fqn}\` - ${cls.blockedCount} blocked dep(s): ${depList}`);
+      lines.push(`- \`${cls.fqn}\` - Score: ${cls.migrationScore}, ${cls.blockedCount} blocked: ${depList}`);
       if (cls.suggestion) {
         lines.push(`  - 💡 ${cls.suggestion}`);
       }
@@ -1195,10 +1242,10 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   
   // Blocked classes (show fewer, they're less actionable)
   if (result.categories.blocked.length > 0) {
-    lines.push('### ❌ Blocked (6+ dependencies)');
+    lines.push('### ❌ Blocked (Score: 0-49)');
     lines.push('');
     for (const cls of result.categories.blocked.slice(0, 20)) {
-      lines.push(`- \`${cls.fqn}\` - ${cls.blockedCount} blocked dependencies`);
+      lines.push(`- \`${cls.fqn}\` - Score: ${cls.migrationScore}, ${cls.blockedCount} blocked deps`);
     }
     if (result.categories.blocked.length > 20) {
       lines.push(`- ... and ${result.categories.blocked.length - 20} more`);

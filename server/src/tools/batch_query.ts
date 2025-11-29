@@ -1,5 +1,6 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { MemoryIndex } from '../memory-index.js';
+import { handleExploreClass } from './explore_class.js';
 
 /**
  * batch_query - Execute multiple index queries in one call
@@ -35,7 +36,7 @@ batch_query(queries: [
           properties: {
             tool: {
               type: 'string',
-              enum: ['find_symbol', 'find_usages', 'call_graph', 'explain_code', 'goto_definition'],
+              enum: ['find_symbol', 'find_usages', 'call_graph', 'explain_code', 'goto_definition', 'explore_class'],
               description: 'Tool to invoke'
             },
             args: {
@@ -198,8 +199,26 @@ export async function handleBatchQuery(
           break;
         }
 
+        case 'explore_class': {
+          const className = query.args.className as string;
+          if (!className) {
+            result = '❌ Error: "className" parameter required';
+          } else {
+            const exploreResult = await handleExploreClass(
+              { 
+                className, 
+                includeMethodDetails: query.args.includeMethodDetails || false,
+                directOnly: query.args.directOnly || false
+              },
+              memoryIndex
+            );
+            result = exploreResult.content[0].text;
+          }
+          break;
+        }
+
         default:
-          result = `❌ Unsupported tool: ${query.tool}. Supported: find_symbol, find_usages, call_graph, explain_code, goto_definition`;
+          result = `❌ Unsupported tool: ${query.tool}. Supported: find_symbol, find_usages, call_graph, explain_code, goto_definition, explore_class`;
       }
 
       results.push(result);

@@ -15,6 +15,7 @@ export const exploreClassTool: Tool = {
 **Output includes**: Symbol info, fields, methods, inheritance hierarchy, inbound/outbound calls, usages.
 
 Example: explore_class(className: "UserService")
+explore_class(className: "UserService", directOnly: true)  // Only direct dependencies from this file
 
 This is more efficient than calling find_symbol + explain_code + call_graph + find_usages separately.`,
   inputSchema: {
@@ -28,6 +29,11 @@ This is more efficient than calling find_symbol + explain_code + call_graph + fi
         type: 'boolean',
         description: 'Include detailed analysis of each method (default: false for performance)',
         default: false
+      },
+      directOnly: {
+        type: 'boolean',
+        description: 'Show only DIRECT dependencies from this class file (imports, extends, implements). Excludes transitive dependencies from implementing classes or call graph analysis. Use this for accurate migration planning.',
+        default: false
       }
     },
     required: ['className']
@@ -40,6 +46,7 @@ export async function handleExploreClass(
 ) {
   const className = args.className as string;
   const includeMethodDetails = args.includeMethodDetails === true;
+  const directOnly = args.directOnly === true;
 
   try {
     // Find the class - first try exact match, then partial match
@@ -168,7 +175,14 @@ export async function handleExploreClass(
     // Dependencies (who does this class depend on?)
     // IMPORTANT: We must check ALL reference types, not just method calls!
     // Same-package classes may not have explicit imports but are still dependencies
-    result.push('## 📤 Dependencies (Outbound)');
+    if (directOnly) {
+      result.push('## 📤 Dependencies [DIRECT ONLY MODE]');
+      result.push('> ℹ️ **directOnly=true**: Showing only direct dependencies from this class file.');
+      result.push('> This excludes transitive dependencies from call graph analysis (implementing class deps).')
+      result.push('');
+    } else {
+      result.push('## 📤 Dependencies (Outbound)');
+    }
     const outboundDeps = new Map<string, Set<string>>(); // class -> reference kinds
     const unresolvedDeps = new Set<string>(); // Dependencies not found in index (external libraries)
     const currentPackage = classSymbol.packageName;
@@ -267,20 +281,22 @@ export async function handleExploreClass(
       }
     };
     
-    // 1. Check method calls from call graph
-    methods.forEach(m => {
-      const calls = memoryIndex.getOutboundCalls(m.fqn);
-      calls.forEach(c => {
-        const calleeFqn = c.callee;
-        const parenIndex = calleeFqn.indexOf('(');
-        const fqnWithoutParams = parenIndex > 0 ? calleeFqn.substring(0, parenIndex) : calleeFqn;
-        const lastDotIndex = fqnWithoutParams.lastIndexOf('.');
-        if (lastDotIndex > 0) {
-          const calleeClass = fqnWithoutParams.substring(0, lastDotIndex);
-          addDep(calleeClass, 'method_call');
-        }
+    // 1. Check method calls from call graph (SKIP in directOnly mode - these can include transitive deps)
+    if (!directOnly) {
+      methods.forEach(m => {
+        const calls = memoryIndex.getOutboundCalls(m.fqn);
+        calls.forEach(c => {
+          const calleeFqn = c.callee;
+          const parenIndex = calleeFqn.indexOf('(');
+          const fqnWithoutParams = parenIndex > 0 ? calleeFqn.substring(0, parenIndex) : calleeFqn;
+          const lastDotIndex = fqnWithoutParams.lastIndexOf('.');
+          if (lastDotIndex > 0) {
+            const calleeClass = fqnWithoutParams.substring(0, lastDotIndex);
+            addDep(calleeClass, 'method_call');
+          }
+        });
       });
-    });
+    }
     
     // 2. Check ALL references from this class's file for type_reference, instantiation, field_access
     // This captures same-package dependencies that don't require imports
@@ -304,6 +320,15 @@ export async function handleExploreClass(
       // Add the dependency - addDep will resolve simple names to FQN
       addDep(targetClass, ref.kind);
     });
+    
+    // 3. ALWAYS add extends/implements as direct dependencies (even in directOnly mode)
+    // These are fundamental type dependencies declared in the class signature
+    if (extendsClass) {
+      addDep(extendsClass, 'extends');
+    }
+    if (implementsInterfaces?.length) {
+      implementsInterfaces.forEach(iface => addDep(iface, 'implements'));
+    }
     
     // Show indexed dependencies
     result.push('### Indexed (in project)');

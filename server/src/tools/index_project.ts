@@ -179,6 +179,19 @@ export async function handleIndexProject(
         const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
         const stats = memoryIndex.getStats();
         
+        // Get metadata for freshness info
+        const metadata = await persistence.getMetadata();
+        let freshnessInfo = '';
+        if (metadata && metadata.timestamp) {
+          const lastIndexed = new Date(metadata.timestamp);
+          const ageMs = Date.now() - metadata.timestamp;
+          const ageHours = Math.floor(ageMs / (1000 * 60 * 60));
+          const ageMinutes = Math.floor((ageMs % (1000 * 60 * 60)) / (1000 * 60));
+          freshnessInfo = `\n🕐 Index Freshness:
+  • Last indexed: ${lastIndexed.toLocaleString()}
+  • Age: ${ageHours > 0 ? ageHours + 'h ' : ''}${ageMinutes}m ago`;
+        }
+        
         // Still start file watcher
         const watcher = new FileSystemWatcher(rootDir, absoluteSourceRoots, memoryIndex, indexerClient, persistence);
         watcher.start();
@@ -196,7 +209,7 @@ export async function handleIndexProject(
   • References: ${stats.references}
   • Call Graph Edges: ${stats.callGraphEdges}
   • Inheritance Relations: ${stats.inheritanceRelations}
-
+${freshnessInfo}
 💾 Index location: ${memoryIndex.getIndexDir()}
 👁️ File watcher enabled for incremental updates`
           }]
@@ -340,6 +353,12 @@ export async function handleIndexProject(
     const indexMode = loadedExisting ? 
       (filesToIndex.length > 0 ? `Incremental update: ${filesToIndex.length} changed` : 'Up-to-date') :
       `Full index: ${javaFiles.length} files`;
+    
+    // Get freshness info
+    const now = new Date();
+    const freshnessInfo = `\n🕐 Index Freshness:
+  • Just indexed: ${now.toLocaleString()}
+  • Status: ✅ Fresh`;
 
     return {
       content: [{
@@ -353,7 +372,7 @@ export async function handleIndexProject(
   • References: ${stats.references}
   • Call Graph Edges: ${stats.callGraphEdges}
   • Inheritance Relations: ${stats.inheritanceRelations}
-
+${freshnessInfo}
 💾 Index location: ${memoryIndex.getIndexDir()}
 👁️ File watcher enabled for incremental updates
 
