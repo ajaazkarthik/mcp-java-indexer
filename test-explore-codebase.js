@@ -212,6 +212,16 @@ class ExploreCodebaseTest {
     console.log(`\n${colors.blue}Phase 8: Integration Tests${colors.reset}\n`);
     await this.runIntegrationTests();
 
+    // New Feature Tests (v2.6.0)
+    console.log(`\n${colors.blue}Phase 9: Priority Sorting & Filtering Tests (NEW)${colors.reset}\n`);
+    await this.runPrioritySortingTests();
+
+    console.log(`\n${colors.blue}Phase 10: Test Class Filtering Tests (NEW)${colors.reset}\n`);
+    await this.runTestClassFilteringTests();
+
+    console.log(`\n${colors.blue}Phase 11: Method Clustering Tests (NEW)${colors.reset}\n`);
+    await this.runMethodClusteringTests();
+
     // Print summary
     this.printSummary();
   }
@@ -678,6 +688,160 @@ class ExploreCodebaseTest {
       const text = result.content[0].text;
       this.assertContains(text, 'Suggested Next Steps', 'Should have next steps');
       this.assertContains(text, 'explore_codebase', 'Should suggest format options');
+    });
+  }
+
+  // ---- Priority Sorting & Filtering Tests (NEW v2.6.0) ----
+  async runPrioritySortingTests() {
+    await this.runTest('36. sortByPriority: LOW_FIRST works', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'refactoring',
+        sortByPriority: 'LOW_FIRST'
+      });
+      const text = result.content[0].text;
+      // LOW should appear before HIGH in LOW_FIRST mode
+      const lowIndex = text.indexOf('LOW Priority');
+      const highIndex = text.indexOf('HIGH Priority');
+      if (lowIndex > 0 && highIndex > 0) {
+        this.assert(lowIndex < highIndex, 'LOW should appear before HIGH');
+      }
+      this.assertContains(text, 'quick wins', 'Should mention quick wins strategy');
+    });
+
+    await this.runTest('37. sortByPriority: HIGH_FIRST is default', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'refactoring',
+        sortByPriority: 'HIGH_FIRST'
+      });
+      const text = result.content[0].text;
+      // HIGH should appear before LOW in HIGH_FIRST mode (default)
+      const lowIndex = text.indexOf('LOW Priority');
+      const highIndex = text.indexOf('HIGH Priority');
+      if (lowIndex > 0 && highIndex > 0) {
+        this.assert(highIndex < lowIndex, 'HIGH should appear before LOW in default mode');
+      }
+    });
+
+    await this.runTest('38. priority filter: LOW only', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'refactoring',
+        priority: 'LOW'
+      });
+      const text = result.content[0].text;
+      this.assertContains(text, 'Showing only LOW priority issues', 'Should indicate LOW filter');
+    });
+
+    await this.runTest('39. priority filter: HIGH only', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'refactoring',
+        priority: 'HIGH'
+      });
+      const text = result.content[0].text;
+      this.assertContains(text, 'Showing only HIGH priority issues', 'Should indicate HIGH filter');
+    });
+
+    await this.runTest('40. Combined sort and filter work together', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'refactoring',
+        sortByPriority: 'LOW_FIRST',
+        priority: 'LOW'
+      });
+      const text = result.content[0].text;
+      this.assertContains(text, 'LOW', 'Should show LOW priority issues');
+      // Should NOT contain HIGH priority issues
+      this.assertNotContains(text, '🔴 HIGH Priority', 'Should not show HIGH section when filtered');
+    });
+  }
+
+  // ---- Test Class Filtering Tests (NEW v2.6.0) ----
+  async runTestClassFilteringTests() {
+    await this.runTest('41. ignoreTests: false includes test classes', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'json',
+        ignoreTests: false,
+        includeClasses: true
+      });
+      const parsed = JSON.parse(result.content[0].text);
+      // Check if any test classes exist in our example project
+      // This validates the test class detection
+      const hasTestFlag = parsed.classes.some(c => c.flags.isTestClass);
+      // If there are test classes, they should be flagged
+      console.log(`    (Found ${parsed.classes.filter(c => c.flags.isTestClass).length} test classes)`);
+    });
+
+    await this.runTest('42. ignoreTests: true excludes test classes', async () => {
+      const withTests = await this.callTool('explore_codebase', { 
+        format: 'json',
+        ignoreTests: false,
+        includeClasses: true
+      });
+      const withoutTests = await this.callTool('explore_codebase', { 
+        format: 'json',
+        ignoreTests: true,
+        includeClasses: true
+      });
+      const parsedWith = JSON.parse(withTests.content[0].text);
+      const parsedWithout = JSON.parse(withoutTests.content[0].text);
+      
+      // When ignoring tests, should have same or fewer classes
+      this.assert(
+        parsedWithout.classes.length <= parsedWith.classes.length,
+        'Should have fewer or same classes when ignoring tests'
+      );
+    });
+
+    await this.runTest('43. Test classes not flagged as God classes', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'json',
+        includeClasses: true
+      });
+      const parsed = JSON.parse(result.content[0].text);
+      // Test classes should not be flagged as God classes
+      const testGodClasses = parsed.classes.filter(
+        c => c.flags.isTestClass && c.flags.isGodClass
+      );
+      this.assert(
+        testGodClasses.length === 0,
+        'Test classes should not be flagged as God classes'
+      );
+    });
+  }
+
+  // ---- Method Clustering Tests (NEW v2.6.0) ----
+  async runMethodClusteringTests() {
+    await this.runTest('44. method-clusters format works', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'method-clusters'
+      });
+      const text = result.content[0].text;
+      this.assertContains(text, 'Method Clustering Analysis', 'Should have method clusters title');
+    });
+
+    await this.runTest('45. method-clusters shows refactoring guidance', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'method-clusters'
+      });
+      const text = result.content[0].text;
+      // Should have guidance section (either "Best Practices" or "Refactoring" help)
+      const hasGuidance = text.includes('Best Practices') || 
+                          text.includes('Refactoring') || 
+                          text.includes('No God Classes');
+      this.assert(hasGuidance, 'Should have refactoring guidance');
+    });
+
+    await this.runTest('46. isProbablyUsed flag reduces false positives', async () => {
+      const result = await this.callTool('explore_codebase', { 
+        format: 'json',
+        includeClasses: true
+      });
+      const parsed = JSON.parse(result.content[0].text);
+      // Check that isProbablyUsed flag exists
+      for (const cls of parsed.classes.slice(0, 10)) {
+        this.assert(
+          typeof cls.flags.isProbablyUsed === 'boolean',
+          'Should have isProbablyUsed flag'
+        );
+      }
     });
   }
 

@@ -294,6 +294,35 @@ function extractTypeReferencesFromLine(line: string, lineNum: number, result: Fi
   if (typeBoundMatch) {
     addTypeReference(typeBoundMatch[1], 'generic_type', lineNum, result);
   }
+  
+  // 17. Fully-qualified type names in code body (e.g., com.example.business.Helper)
+  // CRITICAL: Detects blocked dependencies that use FQN instead of imports
+  // Pattern: lowercase.package.segments.ClassName (at least 2 package segments)
+  const fqnPattern = /\b((?:[a-z_][a-z0-9_]*\.)+)([A-Z][A-Za-z0-9_]*)\b(?!\s*::)/g;
+  let fqnMatch;
+  while ((fqnMatch = fqnPattern.exec(line)) !== null) {
+    const packagePrefix = fqnMatch[1].slice(0, -1); // Remove trailing dot
+    const className = fqnMatch[2];
+    const fullFqn = packagePrefix + '.' + className;
+    
+    // Skip java.lang types and already imported types
+    if (!JAVA_LANG_TYPES.has(className) && !result.imports.has(className)) {
+      addTypeReference(fullFqn, 'static_access', lineNum, result);
+    }
+  }
+  
+  // 18. FQN followed by method/field access (com.example.Helper.method() or .CONSTANT)
+  const fqnAccessPattern = /\b((?:[a-z_][a-z0-9_]*\.)+[A-Z][A-Za-z0-9_]*)\.[a-zA-Z_]\w*(?:\(|\s*[;,)\]=])/g;
+  let fqnAccessMatch;
+  while ((fqnAccessMatch = fqnAccessPattern.exec(line)) !== null) {
+    const fullFqn = fqnAccessMatch[1];
+    const lastDot = fullFqn.lastIndexOf('.');
+    const className = fullFqn.substring(lastDot + 1);
+    
+    if (!JAVA_LANG_TYPES.has(className) && !result.imports.has(className)) {
+      addTypeReference(fullFqn, 'static_access', lineNum, result);
+    }
+  }
 }
 
 /**
@@ -359,7 +388,110 @@ function addTypeReference(typeName: string, kind: ExtractedTypeReference['kind']
 }
 
 /**
- * Resolve a type name to FQN using imports and package context
+ * Type resolution result with confidence indicator
+ */
+interface TypeResolutionResult {
+  fqn: string;
+  confidence: 'definite' | 'wildcard' | 'indexed' | 'assumed_same_package';
+  source: string;  // What resolved it (import, wildcard, index, assumption)
+}
+
+/**
+ * Context for enhanced type resolution
+ */
+interface TypeResolutionContext {
+  packageName: string;
+  imports: Map<string, string>;
+  wildcardImports: string[];
+  indexedTypes: Map<string, string[]>;  // simpleName -> [FQN1, FQN2, ...]
+  blockedPatterns: string[];
+}
+
+/**
+ * Enhanced type resolution that uses wildcard imports and index lookup
+ * Returns resolution with confidence level to identify risky assumptions
+ */
+function resolveTypeFqnEnhanced(
+  typeName: string, 
+  context: TypeResolutionContext
+): TypeResolutionResult {
+  const { packageName, imports, wildcardImports, indexedTypes, blockedPatterns } = context;
+  
+  // Already FQN - highest confidence
+  if (typeName.includes('.')) {
+    return { fqn: typeName, confidence: 'definite', source: 'fqn_in_code' };
+  }
+  
+  // Check explicit imports - definite resolution
+  if (imports.has(typeName)) {
+    return { fqn: imports.get(typeName)!, confidence: 'definite', source: 'explicit_import' };
+  }
+  
+  // Check java.lang (auto-imported) - definite
+  if (JAVA_LANG_TYPES.has(typeName)) {
+    return { fqn: 'java.lang.' + typeName, confidence: 'definite', source: 'java.lang' };
+  }
+  
+  // Check java.util types - these need explicit import in real code
+  if (JAVA_UTIL_TYPES.has(typeName)) {
+    return { fqn: 'java.util.' + typeName, confidence: 'assumed_same_package', source: 'java.util_without_import' };
+  }
+  
+  // Check wildcard imports - try to match against blocked patterns or index
+  for (const wildcardPackage of wildcardImports) {
+    const potentialFqn = wildcardPackage + '.' + typeName;
+    
+    // Check if this matches any blocked pattern - this is a risk!
+    for (const pattern of blockedPatterns) {
+      if (potentialFqn.startsWith(pattern + '.') || potentialFqn === pattern) {
+        return { fqn: potentialFqn, confidence: 'wildcard', source: `wildcard_import:${wildcardPackage}.*` };
+      }
+    }
+    
+    // Check if this type exists in the index under this package
+    const candidates = indexedTypes.get(typeName) || [];
+    const matchingCandidate = candidates.find(c => c.startsWith(wildcardPackage + '.'));
+    if (matchingCandidate) {
+      return { fqn: matchingCandidate, confidence: 'indexed', source: `wildcard_import:${wildcardPackage}.*` };
+    }
+  }
+  
+  // Check if type exists anywhere in the index (could help disambiguate)
+  const indexCandidates = indexedTypes.get(typeName) || [];
+  
+  // If exactly one match in index and it's in same package, use it
+  const samePackageMatch = indexCandidates.find(c => {
+    const pkg = c.substring(0, c.lastIndexOf('.'));
+    return pkg === packageName;
+  });
+  if (samePackageMatch) {
+    return { fqn: samePackageMatch, confidence: 'indexed', source: 'same_package_indexed' };
+  }
+  
+  // If type exists in index under a blocked package, that's a risk!
+  for (const candidate of indexCandidates) {
+    for (const pattern of blockedPatterns) {
+      if (candidate.startsWith(pattern + '.') || candidate === pattern) {
+        return { fqn: candidate, confidence: 'indexed', source: 'blocked_package_in_index' };
+      }
+    }
+  }
+  
+  // If no explicit import and not java.lang, assume same package
+  // This is a RISK - mark with low confidence
+  if (packageName) {
+    return { 
+      fqn: packageName + '.' + typeName, 
+      confidence: 'assumed_same_package', 
+      source: 'assumed_same_package' 
+    };
+  }
+  
+  return { fqn: typeName, confidence: 'assumed_same_package', source: 'unresolved' };
+}
+
+/**
+ * Legacy resolve function for backward compatibility
  */
 function resolveTypeFqn(typeName: string, packageName: string, imports: Map<string, string>, wildcardImports: string[]): string {
   // Already FQN
@@ -419,6 +551,18 @@ export interface DependencyInfo {
         "class_literal" | "static_access" | "same_package_type";
   location: string;                // File:line
   removable: boolean;              // Could this be extracted?
+  confidence?: 'definite' | 'wildcard' | 'indexed' | 'assumed_same_package';  // How confident is this resolution?
+}
+
+/**
+ * Unresolved type reference - types that couldn't be definitively resolved
+ */
+export interface UnresolvedRef {
+  typeName: string;               // Original type name in code
+  resolvedFqn: string;            // Best-guess FQN
+  confidence: 'wildcard' | 'assumed_same_package';  // Why it's uncertain
+  source: string;                 // What resolution method was used
+  location: string;               // File:line
 }
 
 export interface ClassInfo {
@@ -431,15 +575,18 @@ export interface ClassInfo {
   blockedDeps: DependencyInfo[];   // Why it can't migrate
   internalDeps: string[];          // Depends on OTHER files in source package
   externalDeps: string[];          // Deps outside source package (OK)
+  unresolvedRefs: UnresolvedRef[]; // Types that couldn't be definitively resolved - RISK!
   
   // Metrics
   totalDependencies: number;
   blockedCount: number;
+  unresolvedCount: number;         // Number of uncertain type resolutions
   migrationRisk: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "BLOCKED";
   migrationScore: number;          // 0-100 score: 100 = safe, 0 = heavily blocked
   
   // Suggestions
   suggestion?: string;             // "Extract interface", "Move with X", etc.
+  hasUncertainDeps: boolean;       // True if any deps have low confidence resolution
 }
 
 export interface MigrationBatch {
@@ -907,6 +1054,16 @@ export async function handleScanMigrationCandidates(
       packageSimpleNames.set(cls.name, cls.fqn);
     }
     
+    // Build index of all types by simple name for enhanced resolution
+    const indexedTypes = new Map<string, string[]>();  // simpleName -> [FQN1, FQN2, ...]
+    for (const [fqn, stub] of allSymbols) {
+      if (stub.kind === 'class' || stub.kind === 'interface' || stub.kind === 'enum' || stub.kind === 'record') {
+        const existing = indexedTypes.get(stub.name) || [];
+        existing.push(fqn);
+        indexedTypes.set(stub.name, existing);
+      }
+    }
+    
     // Analyze each class
     const classInfos: ClassInfo[] = [];
     
@@ -914,6 +1071,7 @@ export async function handleScanMigrationCandidates(
       const blockedDeps: DependencyInfo[] = [];
       const internalDeps: string[] = [];
       const externalDeps: string[] = [];
+      const unresolvedRefs: UnresolvedRef[] = [];
       const processedTargets = new Set<string>();
       
       // Helper to check if a pattern is safe (not blocking)
@@ -928,14 +1086,19 @@ export async function handleScanMigrationCandidates(
       if (input.strictMode && stub.file && fs.existsSync(stub.file)) {
         const fileAnalysis = parseJavaFile(stub.file);
         if (fileAnalysis) {
+          // Build enhanced resolution context
+          const resolutionContext: TypeResolutionContext = {
+            packageName: fileAnalysis.packageName,
+            imports: fileAnalysis.imports,
+            wildcardImports: fileAnalysis.wildcardImports,
+            indexedTypes,
+            blockedPatterns: input.blockedPatterns
+          };
+          
           for (const typeRef of fileAnalysis.typeReferences) {
-            // Resolve the type to FQN
-            const resolvedFqn = resolveTypeFqn(
-              typeRef.typeName, 
-              fileAnalysis.packageName, 
-              fileAnalysis.imports,
-              fileAnalysis.wildcardImports
-            );
+            // Use enhanced type resolution with confidence tracking
+            const resolution = resolveTypeFqnEnhanced(typeRef.typeName, resolutionContext);
+            const resolvedFqn = resolution.fqn;
             
             // Skip self-references
             if (resolvedFqn === stub.fqn) continue;
@@ -948,13 +1111,43 @@ export async function handleScanMigrationCandidates(
             // Skip safe patterns (java.*, javax.*, etc.)
             if (isSafePattern(resolvedFqn)) continue;
             
+            // Track unresolved/uncertain references
+            if (resolution.confidence === 'assumed_same_package' || resolution.confidence === 'wildcard') {
+              // Check if this MIGHT be a blocked package type
+              let mightBeBlocked = false;
+              for (const pattern of input.blockedPatterns) {
+                const potentialFqn = pattern + '.' + typeRef.typeName;
+                const candidates = indexedTypes.get(typeRef.typeName) || [];
+                if (candidates.some(c => c.startsWith(pattern + '.'))) {
+                  mightBeBlocked = true;
+                  break;
+                }
+              }
+              
+              // Also check wildcard imports for potential blocked resolution
+              if (!mightBeBlocked && resolution.confidence === 'wildcard') {
+                mightBeBlocked = true;  // Wildcard imports are inherently risky
+              }
+              
+              if (mightBeBlocked || resolution.source === 'assumed_same_package') {
+                unresolvedRefs.push({
+                  typeName: typeRef.typeName,
+                  resolvedFqn: resolvedFqn,
+                  confidence: resolution.confidence as 'wildcard' | 'assumed_same_package',
+                  source: resolution.source,
+                  location: `${stub.file}:${typeRef.line}`
+                });
+              }
+            }
+            
             // Check if it's a blocked dependency
             if (matchesBlockedPattern(resolvedFqn, input.blockedPatterns)) {
               blockedDeps.push({
                 target: resolvedFqn,
                 type: typeRef.kind as DependencyInfo['type'],
                 location: `${stub.file}:${typeRef.line}`,
-                removable: isRemovableDependency(typeRef.kind)
+                removable: isRemovableDependency(typeRef.kind),
+                confidence: resolution.confidence
               });
             }
             // Check if it's an internal dependency (same package class)
@@ -974,7 +1167,8 @@ export async function handleScanMigrationCandidates(
                     target: actualFqn,
                     type: 'same_package_type',
                     location: `${stub.file}:${typeRef.line}`,
-                    removable: isRemovableDependency(typeRef.kind)
+                    removable: isRemovableDependency(typeRef.kind),
+                    confidence: 'indexed'
                   });
                 }
               }
@@ -1019,7 +1213,8 @@ export async function handleScanMigrationCandidates(
             target: targetFqn,
             type: ref.kind as DependencyInfo['type'],
             location: `${ref.file}:${ref.line}`,
-            removable: isRemovableDependency(ref.kind)
+            removable: isRemovableDependency(ref.kind),
+            confidence: 'indexed'
           });
         }
         // Check if it's an internal dependency (within source package)
@@ -1036,6 +1231,77 @@ export async function handleScanMigrationCandidates(
         }
       }
       
+      // ========================================================================
+      // EXPLORE_CLASS-STYLE ANALYSIS: Use call graph for deeper method-level deps
+      // This catches dependencies that file parsing might miss
+      // ========================================================================
+      
+      // Find all methods belonging to this class
+      const classMethods: SymbolStub[] = [];
+      for (const [symbolFqn, s] of allSymbols) {
+        if ((symbolFqn.startsWith(stub.fqn + '.') || s.declaringClass === stub.fqn) && 
+            (s.kind === 'method' || s.kind === 'constructor')) {
+          classMethods.push(s);
+        }
+      }
+      
+      // Analyze outbound calls from each method (like explore_class does)
+      for (const method of classMethods) {
+        const outboundCalls = memoryIndex.getOutboundCalls(method.fqn);
+        for (const call of outboundCalls) {
+          const calleeFqn = call.callee;
+          
+          // Extract class FQN from method call
+          const parenIdx = calleeFqn.indexOf('(');
+          const fqnWithoutParams = parenIdx > 0 ? calleeFqn.substring(0, parenIdx) : calleeFqn;
+          const lastDot = fqnWithoutParams.lastIndexOf('.');
+          
+          if (lastDot <= 0) continue; // No class part
+          
+          const calleeClass = fqnWithoutParams.substring(0, lastDot);
+          
+          // Skip self-references and safe patterns
+          if (calleeClass === stub.fqn || isSafePattern(calleeClass)) continue;
+          
+          // Skip if already processed
+          const key = `${calleeClass}:call_graph`;
+          if (processedTargets.has(key)) continue;
+          processedTargets.add(key);
+          
+          // Resolve simple names to FQN if needed
+          let resolvedClass = calleeClass;
+          if (!calleeClass.includes('.')) {
+            // Try to find in index
+            const matches = indexedTypes.get(calleeClass) || [];
+            const samePackageMatch = matches.find(m => m.startsWith(stub.packageName + '.'));
+            resolvedClass = samePackageMatch || matches[0] || calleeClass;
+          }
+          
+          // Check if it's a blocked dependency
+          if (matchesBlockedPattern(resolvedClass, input.blockedPatterns)) {
+            blockedDeps.push({
+              target: resolvedClass,
+              type: 'method_call',
+              location: `${method.file}:${method.line}`,
+              removable: true,
+              confidence: 'indexed'
+            });
+          }
+          // Check if it's an internal dependency
+          else if (packageFqns.has(resolvedClass)) {
+            if (!internalDeps.includes(resolvedClass)) {
+              internalDeps.push(resolvedClass);
+            }
+          }
+          // External but not blocked
+          else if (resolvedClass.includes('.')) {
+            if (!externalDeps.includes(resolvedClass)) {
+              externalDeps.push(resolvedClass);
+            }
+          }
+        }
+      }
+      
       // Also check extends/implements from symbol itself
       const extendsClass = stub.extends || stub.extendsClass;
       if (extendsClass && !processedTargets.has(`${extendsClass}:extends`)) {
@@ -1044,7 +1310,8 @@ export async function handleScanMigrationCandidates(
             target: extendsClass,
             type: 'extends',
             location: `${stub.file}:${stub.line}`,
-            removable: false
+            removable: false,
+            confidence: 'definite'
           });
         } else if (packageFqns.has(extendsClass)) {
           if (!internalDeps.includes(extendsClass)) {
@@ -1061,13 +1328,29 @@ export async function handleScanMigrationCandidates(
             target: iface,
             type: 'implements',
             location: `${stub.file}:${stub.line}`,
-            removable: false
+            removable: false,
+            confidence: 'definite'
           });
         } else if (packageFqns.has(iface)) {
           if (!internalDeps.includes(iface)) {
             internalDeps.push(iface);
           }
         }
+      }
+      
+      // Calculate score with penalty for unresolved refs
+      const baseScore = calculateMigrationScore(blockedDeps);
+      const unresolvedPenalty = Math.min(unresolvedRefs.length * 5, 30); // Max 30 point penalty
+      const adjustedScore = unresolvedRefs.length > 0 ? Math.max(0, baseScore - unresolvedPenalty) : baseScore;
+      
+      // Determine if class has uncertain dependencies
+      const hasUncertainDeps = unresolvedRefs.length > 0 || 
+        blockedDeps.some(d => d.confidence === 'wildcard' || d.confidence === 'assumed_same_package');
+      
+      // Adjust risk based on uncertainty - never SAFE if uncertain
+      let risk = calculateRisk(blockedDeps.length, input.maxSafeExternalDeps ?? 5);
+      if (hasUncertainDeps && risk === 'SAFE') {
+        risk = 'LOW';  // Downgrade SAFE to LOW if there's uncertainty
       }
       
       const classInfo: ClassInfo = {
@@ -1078,10 +1361,13 @@ export async function handleScanMigrationCandidates(
         blockedDeps,
         internalDeps,
         externalDeps,
+        unresolvedRefs,
         totalDependencies: blockedDeps.length + internalDeps.length + externalDeps.length,
         blockedCount: blockedDeps.length,
-        migrationRisk: calculateRisk(blockedDeps.length, input.maxSafeExternalDeps ?? 5),
-        migrationScore: calculateMigrationScore(blockedDeps)
+        unresolvedCount: unresolvedRefs.length,
+        migrationRisk: risk,
+        migrationScore: adjustedScore,
+        hasUncertainDeps
       };
       
       classInfo.suggestion = generateSuggestion(classInfo);
@@ -1156,25 +1442,41 @@ function buildRiskAssessment(categories: ScanMigrationResult['categories']): str
  * Format the output based on requested format
  */
 function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): string {
+  // Count classes with uncertain dependencies
+  const allClasses = [...result.categories.safe, ...result.categories.review, ...result.categories.blocked];
+  const uncertainClasses = allClasses.filter(c => c.hasUncertainDeps);
+  const totalUnresolved = allClasses.reduce((sum, c) => sum + c.unresolvedCount, 0);
+  
   // JSON format - return raw structured data
   if (input.outputFormat === 'json') {
     return JSON.stringify({
       summary: result.summary,
-      classes: [...result.categories.safe, ...result.categories.review, ...result.categories.blocked].map(c => ({
+      warnings: {
+        uncertainClassCount: uncertainClasses.length,
+        totalUnresolvedRefs: totalUnresolved,
+        message: totalUnresolved > 0 
+          ? `${uncertainClasses.length} classes have ${totalUnresolved} type references that could not be definitively resolved. Verify with grep before migrating.`
+          : null
+      },
+      classes: allClasses.map(c => ({
         fqn: c.fqn,
         className: c.className,
         type: c.type,
         risk: c.migrationRisk,
         score: c.migrationScore,  // 0-100 safety score
         blockedCount: c.blockedCount,
+        unresolvedCount: c.unresolvedCount,
+        hasUncertainDeps: c.hasUncertainDeps,
         blockedDeps: c.blockedDeps,
+        unresolvedRefs: c.unresolvedRefs,
         suggestion: c.suggestion
       })),
       migrationPlan: result.migrationPlan,
       meta: {
         sourcePackage: input.sourcePackage,
         blockedPatterns: input.blockedPatterns,
-        includeSubpackages: input.includeSubpackages
+        includeSubpackages: input.includeSubpackages,
+        strictMode: input.strictMode
       }
     }, null, 2);
   }
@@ -1186,7 +1488,34 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   lines.push('');
   lines.push(`**Blocked patterns**: ${input.blockedPatterns.join(', ')}`);
   lines.push(`**Scan time**: ${result.summary.scanTimeMs}ms`);
+  lines.push(`**Strict mode**: ${input.strictMode !== false ? 'ON (deep file analysis)' : 'OFF'}`);
   lines.push('');
+  
+  // CRITICAL WARNING about uncertain dependencies
+  if (totalUnresolved > 0) {
+    lines.push('## ⚠️ IMPORTANT WARNING');
+    lines.push('');
+    lines.push(`> **${uncertainClasses.length} classes** have **${totalUnresolved} type references** that could not be definitively resolved.`);
+    lines.push('>');
+    lines.push('> These may be same-package types, wildcard imports, or external dependencies.');
+    lines.push('> **ALWAYS verify with grep before migrating any class.**');
+    lines.push('');
+    
+    // Show top uncertain classes
+    const topUncertain = uncertainClasses.slice(0, 5);
+    if (topUncertain.length > 0) {
+      lines.push('### Classes with Uncertain Dependencies');
+      lines.push('');
+      for (const cls of topUncertain) {
+        const unresolvedNames = cls.unresolvedRefs.slice(0, 3).map(r => r.typeName).join(', ');
+        lines.push(`- \`${cls.fqn}\` - ${cls.unresolvedCount} unresolved: ${unresolvedNames}`);
+      }
+      if (uncertainClasses.length > 5) {
+        lines.push(`- ... and ${uncertainClasses.length - 5} more classes`);
+      }
+      lines.push('');
+    }
+  }
   
   // Summary (always shown)
   lines.push('## 📊 Summary');
@@ -1197,6 +1526,9 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   lines.push(`| ⚠️ Needs review | ${result.summary.needsReview} | ${((result.summary.needsReview / result.summary.totalClasses) * 100).toFixed(0)}% |`);
   lines.push(`| ❌ Blocked | ${result.summary.blocked} | ${((result.summary.blocked / result.summary.totalClasses) * 100).toFixed(0)}% |`);
   lines.push(`| **Total** | ${result.summary.totalClasses} | 100% |`);
+  if (uncertainClasses.length > 0) {
+    lines.push(`| ⚡ Uncertain resolution | ${uncertainClasses.length} | ${((uncertainClasses.length / result.summary.totalClasses) * 100).toFixed(0)}% |`);
+  }
   lines.push('');
   
   if (input.outputFormat === 'summary') {
@@ -1212,10 +1544,11 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   
   // Safe classes
   if (result.categories.safe.length > 0) {
-    lines.push('### ✅ Safe to Migrate (Score: 100)');
+    lines.push('### ✅ Safe to Migrate');
     lines.push('');
     for (const cls of result.categories.safe.slice(0, 50)) {
-      lines.push(`- \`${cls.fqn}\` (${cls.type}) - Score: ${cls.migrationScore}`);
+      const uncertainMarker = cls.hasUncertainDeps ? ' ⚡' : '';
+      lines.push(`- \`${cls.fqn}\` (${cls.type}) - Score: ${cls.migrationScore}${uncertainMarker}`);
     }
     if (result.categories.safe.length > 50) {
       lines.push(`- ... and ${result.categories.safe.length - 50} more`);
@@ -1225,11 +1558,12 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   
   // Review classes
   if (result.categories.review.length > 0) {
-    lines.push('### ⚠️ Needs Review (Score: 50-99)');
+    lines.push('### ⚠️ Needs Review');
     lines.push('');
     for (const cls of result.categories.review.slice(0, 30)) {
       const depList = cls.blockedDeps.slice(0, 3).map(d => d.target.split('.').pop()).join(', ');
-      lines.push(`- \`${cls.fqn}\` - Score: ${cls.migrationScore}, ${cls.blockedCount} blocked: ${depList}`);
+      const uncertainMarker = cls.hasUncertainDeps ? ' ⚡' : '';
+      lines.push(`- \`${cls.fqn}\` - Score: ${cls.migrationScore}, ${cls.blockedCount} blocked: ${depList}${uncertainMarker}`);
       if (cls.suggestion) {
         lines.push(`  - 💡 ${cls.suggestion}`);
       }
@@ -1242,7 +1576,7 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   
   // Blocked classes (show fewer, they're less actionable)
   if (result.categories.blocked.length > 0) {
-    lines.push('### ❌ Blocked (Score: 0-49)');
+    lines.push('### ❌ Blocked');
     lines.push('');
     for (const cls of result.categories.blocked.slice(0, 20)) {
       lines.push(`- \`${cls.fqn}\` - Score: ${cls.migrationScore}, ${cls.blockedCount} blocked deps`);
@@ -1252,6 +1586,10 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
     }
     lines.push('');
   }
+  
+  // Legend
+  lines.push('> **Legend**: ⚡ = has uncertain type resolution (verify with grep)');
+  lines.push('');
   
   if (input.outputFormat === 'detailed') {
     return lines.join('\n');
@@ -1293,6 +1631,18 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   // Suggested next steps
   lines.push('## 💡 Suggested Next Steps');
   lines.push('');
+  
+  // Always recommend verification first
+  lines.push('### 🔍 Before Migrating ANY Class');
+  lines.push('');
+  lines.push('1. **Verify with grep**: `grep -r "ClassName" --include="*.java" .`');
+  lines.push('2. **Check blocked package imports**: `grep -r "import.*blockedpattern" --include="*.java" .`');
+  lines.push('3. **Test compile in isolation** before committing');
+  lines.push('');
+  
+  // Then specific suggestions
+  lines.push('### 📋 Migration Order');
+  lines.push('');
   if (result.categories.safe.length > 0) {
     lines.push(`1. Start with Batch 1 (${result.migrationPlan.batches[0]?.fileCount || 0} files) - pure types with no dependencies`);
   }
@@ -1302,6 +1652,20 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   }
   if (result.categories.blocked.length > 0) {
     lines.push(`3. Leave ${result.categories.blocked.length} blocked classes for later - major refactoring needed`);
+  }
+  
+  // Add warning if there are uncertain deps
+  if (uncertainClasses.length > 0) {
+    lines.push('');
+    lines.push('### ⚠️ Uncertainty Warning');
+    lines.push('');
+    lines.push(`${uncertainClasses.length} classes have type references that could not be definitively resolved.`);
+    lines.push('These may reference blocked packages via:');
+    lines.push('- **Wildcard imports**: `import com.example.blocked.*;`');
+    lines.push('- **Same-package types**: Types from same package that don\'t need imports');
+    lines.push('- **Fully-qualified names**: `com.example.blocked.Type` in code');
+    lines.push('');
+    lines.push('**Always verify with grep before migrating!**');
   }
   
   return lines.join('\n');
