@@ -86,14 +86,34 @@ mcp-java-indexer/
 
 ## 🚀 Installation
 
-### Prerequisites
+### Option 1: Install from VS Code Marketplace (Recommended) ⚡
+
+**Just install and use - no build required!**
+
+1. Open VS Code
+2. Go to Extensions (`Ctrl+Shift+X`)
+3. Search for **"Java Indexer MCP"**
+4. Click **Install**
+5. Restart VS Code
+6. Done! Start using with `@java-indexer` in Copilot Chat
+
+[![Install from Marketplace](https://img.shields.io/badge/Install-VS%20Code%20Marketplace-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=ubanishathanvenkatesan.java-indexer-mcp)
+
+---
+
+### Option 2: Build from Source (For Development)
+
+<details>
+<summary>Click to expand build instructions</summary>
+
+#### Prerequisites
 
 - **Node.js** 18+ ([Download](https://nodejs.org/))
 - **Java** 8+ ([Download](https://adoptium.net/))
 - **Maven** 3.6+ ([Download](https://maven.apache.org/download.cgi))
 - **VS Code** with Copilot extension
 
-### Step 1: Build Everything (One Command)
+#### Step 1: Build Everything (One Command)
 
 **Windows (Recommended)**:
 ```cmd
@@ -121,7 +141,7 @@ This creates:
 - `java-indexer/target/java-indexer-1.0.0.jar` (with all dependencies)
 - `server/dist/index.js` (compiled TypeScript)
 
-### Step 2: Configure VS Code
+#### Step 2: Configure VS Code
 
 Add to your VS Code MCP configuration at:  
 `%APPDATA%\Code\User\globalStorage\github.copilot-chat\mcp.json`
@@ -144,9 +164,11 @@ Add to your VS Code MCP configuration at:
 - Update the path to match your actual installation directory
 - Create the file if it doesn't exist
 
-### Step 3: Restart VS Code
+#### Step 3: Restart VS Code
 
 Close and reopen VS Code completely to load the MCP server.
+
+</details>
 
 ## 🎮 Usage
 
