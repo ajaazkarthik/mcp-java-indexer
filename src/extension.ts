@@ -1,8 +1,71 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+/**
+ * Check if better-sqlite3 native module needs rebuilding and rebuild if necessary.
+ * This happens silently in the background - users don't need to do anything.
+ */
+async function ensureNativeModules(extensionPath: string): Promise<void> {
+	const serverPath = path.join(extensionPath, 'server');
+	const betterSqlite3Path = path.join(serverPath, 'node_modules', 'better-sqlite3');
+	
+	// Check if better-sqlite3 is installed
+	if (!fs.existsSync(betterSqlite3Path)) {
+		console.log('better-sqlite3 not installed, sql.js will be used as fallback');
+		return;
+	}
+
+	// Try to load better-sqlite3 to see if it works
+	try {
+		const testPath = path.join(betterSqlite3Path, 'build', 'Release', 'better_sqlite3.node');
+		if (fs.existsSync(testPath)) {
+			// Try to actually require it to verify it works with current Node.js
+			require(testPath);
+			console.log('better-sqlite3 native module is working');
+			return;
+		}
+	} catch (error: any) {
+		console.log('better-sqlite3 needs rebuilding:', error.message);
+	}
+
+	// Need to rebuild - do it in background
+	try {
+		console.log('Rebuilding better-sqlite3 native module...');
+		
+		// Show a non-blocking notification
+		vscode.window.withProgress({
+			location: vscode.ProgressLocation.Window,
+			title: 'Java Indexer: Optimizing database...',
+			cancellable: false
+		}, async () => {
+			try {
+				await execAsync('npm rebuild better-sqlite3', { 
+					cwd: serverPath,
+					timeout: 120000 // 2 minute timeout
+				});
+				console.log('better-sqlite3 rebuilt successfully');
+			} catch (rebuildError: any) {
+				// Silent failure - sql.js fallback will be used
+				console.log('Could not rebuild better-sqlite3, using sql.js fallback:', rebuildError.message);
+			}
+		});
+	} catch (error: any) {
+		console.log('Failed to start rebuild:', error.message);
+	}
+}
 
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Java Indexer MCP extension is now active');
+
+	// Check and rebuild native modules in background (non-blocking)
+	ensureNativeModules(context.extensionPath).catch(err => {
+		console.log('Native module check failed:', err);
+	});
 
 	try {
 		// Register MCP server provider
