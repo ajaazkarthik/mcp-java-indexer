@@ -279,10 +279,14 @@ function extractTypeReferencesFromLine(line: string, lineNum: number, result: Fi
   }
   
   // 15. Static field/method access (Type.CONSTANT or Type.staticMethod())
-  const staticAccessMatch = line.match(/\b([A-Z]\w*(?:\.[A-Z]\w*)*)\.\w+(?:\(|[^(])/g);
+  // Matches: ClassName.field or ClassName.method()
+  // For simple names (no dots), the first UpperCamelCase word is the type
+  const staticAccessMatch = line.match(/\b([A-Z][a-zA-Z0-9_]*)\.[a-zA-Z_]\w*(?:\(|[\s;,)\]=]|$)/g);
   if (staticAccessMatch) {
     for (const match of staticAccessMatch) {
-      const typeName = match.match(/^([A-Z]\w*(?:\.[A-Z]\w*)*)/)?.[1];
+      // Extract just the type name (first word before the dot)
+      const typeMatch = match.match(/^([A-Z][a-zA-Z0-9_]*)\./);
+      const typeName = typeMatch?.[1];
       if (typeName && !JAVA_LANG_TYPES.has(typeName) && !result.imports.has(typeName)) {
         addTypeReference(typeName, 'static_access', lineNum, result);
       }
@@ -532,7 +536,7 @@ export interface ScanMigrationInput {
   includeSubpackages?: boolean;    // Default: true
   maxSafeExternalDeps?: number;    // Default: 0 (strict isolation)
   groupBySubpackage?: boolean;     // Group results by sub-package
-  outputFormat?: "summary" | "detailed" | "json" | "migration-plan";
+  outputFormat?: "summary" | "detailed" | "json" | "migration-plan" | "tiered";
   
   // STRICT MODE - Deep file analysis for accurate same-package dependency detection
   // When enabled, parses file content directly instead of relying solely on the index
@@ -540,6 +544,21 @@ export interface ScanMigrationInput {
   
   // Additional patterns to treat as "safe" (won't be flagged as blocking)
   safePatterns?: string[];         // e.g., ["java.", "javax.", "org.springframework."]
+  
+  // ========== NEW: INTRA-MODULE DEPENDENCY DETECTION ==========
+  
+  // Patterns WITHIN sourcePackage that also block migration
+  // e.g., base classes that haven't been migrated yet
+  internalBlockedPatterns?: string[];  // e.g., ["com.atune.services.base", "com.atune.services.entity"]
+  
+  // Classes that are explicitly ALLOWED as dependencies (already migrated or in shared module)
+  // These bypass internal blocking checks
+  allowedDependencies?: string[];      // e.g., ["com.atune.services.api.Service", "com.atune.services.member.PlanMemberType"]
+  
+  // If true, ANY dependency on another class within sourcePackage blocks migration
+  // UNLESS that class is in allowedDependencies
+  // This is the STRICTEST mode for identifying truly independent files
+  treatInternalAsBlocked?: boolean;    // Default: false (backward compatible)
 }
 
 export interface DependencyInfo {
@@ -572,17 +591,26 @@ export interface ClassInfo {
   type: "class" | "interface" | "enum" | "record" | "annotation";
   
   // Dependency analysis
-  blockedDeps: DependencyInfo[];   // Why it can't migrate
-  internalDeps: string[];          // Depends on OTHER files in source package
+  blockedDeps: DependencyInfo[];   // Why it can't migrate (EXTERNAL blocked)
+  internalBlockedDeps: DependencyInfo[];  // NEW: Internal deps that block (within sourcePackage)
+  internalDeps: string[];          // Depends on OTHER files in source package (allowed)
   externalDeps: string[];          // Deps outside source package (OK)
   unresolvedRefs: UnresolvedRef[]; // Types that couldn't be definitively resolved - RISK!
   
   // Metrics
   totalDependencies: number;
-  blockedCount: number;
+  blockedCount: number;            // External blocked count
+  internalBlockedCount: number;    // NEW: Internal blocked count
   unresolvedCount: number;         // Number of uncertain type resolutions
   migrationRisk: "SAFE" | "LOW" | "MEDIUM" | "HIGH" | "BLOCKED";
   migrationScore: number;          // 0-100 score: 100 = safe, 0 = heavily blocked
+  
+  // NEW: Migration tier based on internal dependency chain
+  // Tier 0 = no internal deps at all (migrate first)
+  // Tier 1 = depends only on Tier 0 classes
+  // Tier 2 = depends on Tier 0-1, etc.
+  // Tier -1 = circular dependency (migrate together or refactor)
+  migrationTier: number;
   
   // Suggestions
   suggestion?: string;             // "Extract interface", "Move with X", etc.
@@ -648,8 +676,14 @@ export const scanMigrationCandidatesTool: Tool = {
   name: 'scan_migration_candidates',
   description: `Bulk analyze a package to identify migration-ready classes with COMPREHENSIVE dependency detection.
 
-**IMPORTANT**: This tool now includes STRICT MODE (enabled by default) that performs DEEP FILE ANALYSIS
-to detect ALL dependencies, including same-package types that don't require imports in Java.
+**CRITICAL**: This tool now detects INTRA-MODULE dependencies that previously caused false positives!
+
+**New in v2.8.0**:
+- \`internalBlockedPatterns\`: Block patterns WITHIN your source package (e.g., base classes)
+- \`allowedDependencies\`: Whitelist classes already migrated or in shared modules
+- \`treatInternalAsBlocked\`: STRICT mode - all internal deps block unless in allowlist
+- \`outputFormat: "tiered"\`: Shows migration order by internal dependency tier
+- \`migrationTier\`: Each class now has a tier (0 = no internal deps, migrate first)
 
 **When to use**: Planning module extraction, large-scale refactoring, dependency cleanup.
 
@@ -658,24 +692,30 @@ to detect ALL dependencies, including same-package types that don't require impo
 - Finds type references in: fields, method params, return types, local variables
 - Catches: throws/catch types, annotations, instanceof, casts, generics, method references
 - Identifies class literals (Entity.class) and static access patterns
+- **NEW**: Detects intra-module dependencies (e.g., GeneralLogicService, Entity)
 
-**Output includes**:
-- Summary: total/safe/review/blocked counts (ACCURATE numbers)
-- Categorized classes with ALL blocking dependencies listed
-- Migration plan with ordered batches
-
-Example:
+**Example - Find truly independent classes**:
+\`\`\`javascript
 scan_migration_candidates({
-  sourcePackage: "com.example.util",
-  blockedPatterns: ["com.example.business", "com.example.legacy"],
-  strictMode: true,  // RECOMMENDED - deep file analysis
-  outputFormat: "migration-plan"
+  sourcePackage: "com.atune.services.member",
+  blockedPatterns: ["com.atune.business", "biz.atune"],
+  internalBlockedPatterns: ["com.atune.services.base"],  // Block base classes
+  treatInternalAsBlocked: true,  // STRICT: all internal deps block
+  allowedDependencies: ["com.atune.services.api.Service"],  // Already in shared module
+  outputFormat: "tiered"  // Show migration order
 })
+\`\`\`
 
 **Risk Categories**:
-- SAFE: 0 blocked deps - migrate immediately (VERIFIED safe)
+- SAFE: 0 blocked deps (external AND internal) - migrate immediately
 - LOW/MEDIUM: 1-5 blocked deps - may need minor refactoring
-- BLOCKED: 6+ blocked deps - leave in place or major refactor`,
+- BLOCKED: 6+ blocked deps - leave in place or major refactor
+
+**Migration Tiers**:
+- Tier 0: No internal deps at all → migrate FIRST
+- Tier 1: Depends only on Tier 0 classes → migrate after Tier 0
+- Tier 2+: Higher tiers depend on lower tiers
+- Tier -1: Circular dependencies → migrate together or refactor`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -709,8 +749,8 @@ scan_migration_candidates({
       },
       outputFormat: {
         type: 'string',
-        enum: ['summary', 'detailed', 'json', 'migration-plan'],
-        description: 'Output format: summary (quick), detailed (full), json (structured), migration-plan (with batches)',
+        enum: ['summary', 'detailed', 'json', 'migration-plan', 'tiered'],
+        description: 'Output format: summary (quick), detailed (full), json (structured), migration-plan (with batches), tiered (migration order by dependency tier)',
         default: 'migration-plan'
       },
       strictMode: {
@@ -722,6 +762,22 @@ scan_migration_candidates({
         type: 'array',
         items: { type: 'string' },
         description: 'Additional package patterns to treat as safe (e.g., ["java.", "javax.", "org.springframework."])'
+      },
+      // ========== NEW PARAMETERS FOR INTRA-MODULE DEPENDENCY DETECTION ==========
+      internalBlockedPatterns: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Patterns WITHIN sourcePackage that also block migration (e.g., ["com.atune.services.base"] for base classes not yet migrated)'
+      },
+      allowedDependencies: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Classes explicitly ALLOWED as dependencies - already migrated or in shared module (e.g., ["com.atune.services.api.Service"])'
+      },
+      treatInternalAsBlocked: {
+        type: 'boolean',
+        description: 'If true, ANY internal dependency (within sourcePackage) blocks migration UNLESS in allowedDependencies. Use this to find truly independent classes.',
+        default: false
       }
     },
     required: ['sourcePackage', 'blockedPatterns']
@@ -751,6 +807,124 @@ function matchesBlockedPattern(fqn: string, blockedPatterns: string[]): boolean 
 }
 
 /**
+ * Check if a class is in the allowed dependencies list
+ * Supports exact match and package prefix matching
+ */
+function isAllowedDependency(fqn: string, allowedDependencies?: string[]): boolean {
+  if (!allowedDependencies || allowedDependencies.length === 0) {
+    return false;
+  }
+  
+  for (const allowed of allowedDependencies) {
+    // Exact match
+    if (fqn === allowed) {
+      return true;
+    }
+    // Package prefix with wildcard (e.g., "com.example.api.*")
+    if (allowed.endsWith('.*')) {
+      const prefix = allowed.slice(0, -2);
+      if (fqn.startsWith(prefix + '.')) {
+        return true;
+      }
+    }
+    // Package prefix match (e.g., "com.example.api" matches "com.example.api.Service")
+    if (fqn.startsWith(allowed + '.')) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Check if a class matches any internal blocked pattern
+ * These are patterns WITHIN the source package that should block migration
+ */
+function matchesInternalBlockedPattern(fqn: string, internalBlockedPatterns?: string[]): boolean {
+  if (!internalBlockedPatterns || internalBlockedPatterns.length === 0) {
+    return false;
+  }
+  return matchesBlockedPattern(fqn, internalBlockedPatterns);
+}
+
+/**
+ * Compute migration tiers based on internal dependency chains
+ * 
+ * Tier 0: Classes with NO internal dependencies at all (migrate first)
+ * Tier 1: Classes depending ONLY on Tier 0 classes
+ * Tier 2: Classes depending on Tier 0-1 classes
+ * ...
+ * Tier -1: Circular dependencies (must migrate together or refactor)
+ * 
+ * @param classes All classes being analyzed
+ * @returns Map of FQN to tier number
+ */
+function computeMigrationTiers(classes: ClassInfo[]): Map<string, number> {
+  const tiers = new Map<string, number>();
+  const classSet = new Set(classes.map(c => c.fqn));
+  const assigned = new Set<string>();
+  
+  // Helper to get internal deps that are in our class set
+  const getInternalDeps = (cls: ClassInfo): string[] => {
+    return cls.internalDeps.filter(d => classSet.has(d));
+  };
+  
+  // First pass: Tier 0 = classes with no internal dependencies
+  for (const cls of classes) {
+    // Also count internalBlockedDeps as internal deps for tier calculation
+    const internalDeps = getInternalDeps(cls);
+    const internalBlockedDeps = cls.internalBlockedDeps.map(d => d.target).filter(t => classSet.has(t));
+    const allInternalDeps = [...new Set([...internalDeps, ...internalBlockedDeps])];
+    
+    if (allInternalDeps.length === 0) {
+      tiers.set(cls.fqn, 0);
+      assigned.add(cls.fqn);
+    }
+  }
+  
+  // Iteratively assign higher tiers
+  let tier = 0;
+  let maxIterations = classes.length; // Prevent infinite loops
+  
+  while (assigned.size < classes.length && maxIterations-- > 0) {
+    tier++;
+    const newlyAssigned: string[] = [];
+    
+    for (const cls of classes) {
+      if (assigned.has(cls.fqn)) continue;
+      
+      // Get all internal deps (allowed + blocked)
+      const internalDeps = getInternalDeps(cls);
+      const internalBlockedDeps = cls.internalBlockedDeps.map(d => d.target).filter(t => classSet.has(t));
+      const allInternalDeps = [...new Set([...internalDeps, ...internalBlockedDeps])];
+      
+      // Check if all deps are in lower tiers
+      const allDepsAssigned = allInternalDeps.every(d => assigned.has(d));
+      
+      if (allDepsAssigned) {
+        tiers.set(cls.fqn, tier);
+        newlyAssigned.push(cls.fqn);
+      }
+    }
+    
+    if (newlyAssigned.length === 0) {
+      // Circular dependency detected - assign remaining to tier -1
+      for (const cls of classes) {
+        if (!assigned.has(cls.fqn)) {
+          tiers.set(cls.fqn, -1);
+          assigned.add(cls.fqn);
+        }
+      }
+      break;
+    }
+    
+    newlyAssigned.forEach(fqn => assigned.add(fqn));
+  }
+  
+  return tiers;
+}
+
+/**
  * Determine if a dependency can potentially be removed/extracted
  */
 function isRemovableDependency(depType: string): boolean {
@@ -760,12 +934,13 @@ function isRemovableDependency(depType: string): boolean {
 }
 
 /**
- * Calculate migration risk based on blocked dependency count
+ * Calculate migration risk based on blocked dependency count (external + internal)
  */
-function calculateRisk(blockedCount: number, maxSafeExternal: number): ClassInfo['migrationRisk'] {
-  if (blockedCount === 0) return 'SAFE';
-  if (blockedCount <= 2) return 'LOW';
-  if (blockedCount <= maxSafeExternal) return 'MEDIUM';
+function calculateRisk(blockedCount: number, internalBlockedCount: number, maxSafeExternal: number): ClassInfo['migrationRisk'] {
+  const totalBlocked = blockedCount + internalBlockedCount;
+  if (totalBlocked === 0) return 'SAFE';
+  if (totalBlocked <= 2) return 'LOW';
+  if (totalBlocked <= maxSafeExternal) return 'MEDIUM';
   return 'BLOCKED';
 }
 
@@ -777,17 +952,20 @@ function calculateRisk(blockedCount: number, maxSafeExternal: number): ClassInfo
  * Scoring:
  * - Start at 100
  * - extends blocked: -20 (hardest to fix)
+ * - extends internal blocked: -25 (even harder - need to migrate dependency first)
  * - implements blocked: -15 (hard to fix)
  * - method_call blocked: -5 each
  * - field_access blocked: -5 each
  * - instantiation blocked: -8 each (need DI)
+ * - internal blocked (non-extends): -10 each (need to migrate dependency first)
  * - other types: -3 each
  */
-function calculateMigrationScore(blockedDeps: DependencyInfo[]): number {
-  if (blockedDeps.length === 0) return 100;
+function calculateMigrationScore(blockedDeps: DependencyInfo[], internalBlockedDeps: DependencyInfo[]): number {
+  if (blockedDeps.length === 0 && internalBlockedDeps.length === 0) return 100;
   
   let score = 100;
   
+  // External blocked deps
   for (const dep of blockedDeps) {
     switch (dep.type) {
       case 'extends':
@@ -809,29 +987,59 @@ function calculateMigrationScore(blockedDeps: DependencyInfo[]): number {
     }
   }
   
+  // Internal blocked deps (within source package but not yet migrated)
+  // These are HARDER to fix because you need to migrate the dependency first
+  for (const dep of internalBlockedDeps) {
+    switch (dep.type) {
+      case 'extends':
+        score -= 25; // Even harder than external
+        break;
+      case 'implements':
+        score -= 18;
+        break;
+      default:
+        score -= 10; // Significant penalty for internal deps
+        break;
+    }
+  }
+  
   // Clamp to 0-100
   return Math.max(0, Math.min(100, score));
 }
 
 /**
- * Generate suggestion based on blocked dependencies
+ * Generate suggestion based on blocked dependencies (external + internal)
  */
 function generateSuggestion(classInfo: ClassInfo): string {
-  if (classInfo.blockedCount === 0) {
+  const totalBlocked = classInfo.blockedCount + classInfo.internalBlockedCount;
+  
+  if (totalBlocked === 0) {
     return 'Ready to migrate - no blocked dependencies';
   }
   
-  const depTypes = new Set(classInfo.blockedDeps.map(d => d.type));
+  const allBlockedDeps = [...classInfo.blockedDeps, ...classInfo.internalBlockedDeps];
+  const depTypes = new Set(allBlockedDeps.map(d => d.type));
   const suggestions: string[] = [];
   
+  // Check for internal blocked first (more actionable)
+  if (classInfo.internalBlockedCount > 0) {
+    const internalTargets = classInfo.internalBlockedDeps.map(d => d.target.split('.').pop()).slice(0, 3).join(', ');
+    suggestions.push(`Migrate these internal deps first: ${internalTargets}`);
+  }
+  
   if (depTypes.has('extends')) {
-    suggestions.push('Consider extracting interface from parent class');
+    const extendsInternal = classInfo.internalBlockedDeps.find(d => d.type === 'extends');
+    if (extendsInternal) {
+      suggestions.push(`Extends ${extendsInternal.target.split('.').pop()} - migrate parent class first`);
+    } else {
+      suggestions.push('Consider extracting interface from parent class');
+    }
   }
   if (depTypes.has('implements')) {
     suggestions.push('Interface dependency - may need to move interface first');
   }
   if (depTypes.has('method_call')) {
-    const removable = classInfo.blockedDeps.filter(d => d.type === 'method_call' && d.removable).length;
+    const removable = allBlockedDeps.filter(d => d.type === 'method_call' && d.removable).length;
     if (removable > 0) {
       suggestions.push(`${removable} method call(s) could be extracted to interface`);
     }
@@ -843,7 +1051,7 @@ function generateSuggestion(classInfo: ClassInfo): string {
     suggestions.push('Consider using getter/setter methods or constants');
   }
   
-  if (classInfo.blockedCount > 10) {
+  if (totalBlocked > 10) {
     suggestions.push('Too coupled - consider major refactoring or leave in place');
   }
   
@@ -990,7 +1198,11 @@ export async function handleScanMigrationCandidates(
       groupBySubpackage: args.groupBySubpackage === true,
       outputFormat: (args.outputFormat as ScanMigrationInput['outputFormat']) || 'migration-plan',
       strictMode: args.strictMode !== false, // Default to true for comprehensive analysis
-      safePatterns: (args.safePatterns as string[]) || ['java.', 'javax.', 'sun.', 'com.sun.']
+      safePatterns: (args.safePatterns as string[]) || ['java.', 'javax.', 'sun.', 'com.sun.'],
+      // NEW: Intra-module dependency detection parameters
+      internalBlockedPatterns: (args.internalBlockedPatterns as string[]) || [],
+      allowedDependencies: (args.allowedDependencies as string[]) || [],
+      treatInternalAsBlocked: args.treatInternalAsBlocked === true  // Default false for backward compatibility
     };
     
     if (!input.sourcePackage) {
@@ -1069,6 +1281,7 @@ export async function handleScanMigrationCandidates(
     
     for (const stub of packageClasses) {
       const blockedDeps: DependencyInfo[] = [];
+      const internalBlockedDeps: DependencyInfo[] = [];  // NEW: Internal blocked deps
       const internalDeps: string[] = [];
       const externalDeps: string[] = [];
       const unresolvedRefs: UnresolvedRef[] = [];
@@ -1080,6 +1293,22 @@ export async function handleScanMigrationCandidates(
           if (fqn.startsWith(pattern)) return true;
         }
         return false;
+      };
+      
+      // NEW: Helper to check if an internal dependency should block migration
+      const isInternalBlocked = (targetFqn: string): boolean => {
+        // If it's in the allowed dependencies list, it's OK
+        if (isAllowedDependency(targetFqn, input.allowedDependencies)) {
+          return false;
+        }
+        
+        // If treatInternalAsBlocked is true, ALL internal deps are blocked unless allowed
+        if (input.treatInternalAsBlocked) {
+          return true;
+        }
+        
+        // Otherwise, only block if it matches internalBlockedPatterns
+        return matchesInternalBlockedPattern(targetFqn, input.internalBlockedPatterns);
       };
       
       // STRICT MODE: Parse file content directly to catch ALL dependencies
@@ -1140,7 +1369,7 @@ export async function handleScanMigrationCandidates(
               }
             }
             
-            // Check if it's a blocked dependency
+            // Check if it's a blocked dependency (external)
             if (matchesBlockedPattern(resolvedFqn, input.blockedPatterns)) {
               blockedDeps.push({
                 target: resolvedFqn,
@@ -1152,16 +1381,24 @@ export async function handleScanMigrationCandidates(
             }
             // Check if it's an internal dependency (same package class)
             else if (packageFqns.has(resolvedFqn)) {
-              if (!internalDeps.includes(resolvedFqn)) {
+              // NEW: Check if this internal dependency should block migration
+              if (isInternalBlocked(resolvedFqn)) {
+                internalBlockedDeps.push({
+                  target: resolvedFqn,
+                  type: typeRef.kind as DependencyInfo['type'],
+                  location: `${stub.file}:${typeRef.line}`,
+                  removable: false,  // Internal deps can't be removed - need to migrate first
+                  confidence: resolution.confidence
+                });
+              } else if (!internalDeps.includes(resolvedFqn)) {
                 internalDeps.push(resolvedFqn);
               }
             }
             // Check if simple name matches a package class (same-package reference)
             else if (packageSimpleNames.has(typeRef.typeName)) {
               const actualFqn = packageSimpleNames.get(typeRef.typeName)!;
-              if (actualFqn !== stub.fqn && !internalDeps.includes(actualFqn)) {
-                internalDeps.push(actualFqn);
-                // Check if this is actually blocked
+              if (actualFqn !== stub.fqn) {
+                // Check if externally blocked
                 if (matchesBlockedPattern(actualFqn, input.blockedPatterns)) {
                   blockedDeps.push({
                     target: actualFqn,
@@ -1171,6 +1408,34 @@ export async function handleScanMigrationCandidates(
                     confidence: 'indexed'
                   });
                 }
+                // Check if internally blocked
+                else if (isInternalBlocked(actualFqn)) {
+                  internalBlockedDeps.push({
+                    target: actualFqn,
+                    type: 'same_package_type',
+                    location: `${stub.file}:${typeRef.line}`,
+                    removable: false,
+                    confidence: 'indexed'
+                  });
+                } else if (!internalDeps.includes(actualFqn)) {
+                  internalDeps.push(actualFqn);
+                }
+              }
+            }
+            // Check if it matches internalBlockedPatterns (even if not in same package)
+            // This catches dependencies like com.atune.services.base.Entity when scanning com.atune.services.member
+            else if (matchesInternalBlockedPattern(resolvedFqn, input.internalBlockedPatterns)) {
+              // Check if it's in the allowed list
+              if (!isAllowedDependency(resolvedFqn, input.allowedDependencies)) {
+                internalBlockedDeps.push({
+                  target: resolvedFqn,
+                  type: typeRef.kind as DependencyInfo['type'],
+                  location: `${stub.file}:${typeRef.line}`,
+                  removable: false,  // Internal blocked deps need to be migrated first
+                  confidence: resolution.confidence
+                });
+              } else if (!externalDeps.includes(resolvedFqn)) {
+                externalDeps.push(resolvedFqn);
               }
             }
             // External but not blocked
@@ -1207,7 +1472,7 @@ export async function handleScanMigrationCandidates(
         if (processedTargets.has(key)) continue;
         processedTargets.add(key);
         
-        // Check if it's a blocked dependency
+        // Check if it's a blocked dependency (external)
         if (matchesBlockedPattern(targetFqn, input.blockedPatterns)) {
           blockedDeps.push({
             target: targetFqn,
@@ -1219,8 +1484,31 @@ export async function handleScanMigrationCandidates(
         }
         // Check if it's an internal dependency (within source package)
         else if (packageFqns.has(targetFqn)) {
-          if (!internalDeps.includes(targetFqn)) {
+          // NEW: Check if this internal dependency should block migration
+          if (isInternalBlocked(targetFqn)) {
+            internalBlockedDeps.push({
+              target: targetFqn,
+              type: ref.kind as DependencyInfo['type'],
+              location: `${ref.file}:${ref.line}`,
+              removable: false,
+              confidence: 'indexed'
+            });
+          } else if (!internalDeps.includes(targetFqn)) {
             internalDeps.push(targetFqn);
+          }
+        }
+        // Check if it matches internalBlockedPatterns (cross-package internal deps)
+        else if (matchesInternalBlockedPattern(targetFqn, input.internalBlockedPatterns)) {
+          if (!isAllowedDependency(targetFqn, input.allowedDependencies)) {
+            internalBlockedDeps.push({
+              target: targetFqn,
+              type: ref.kind as DependencyInfo['type'],
+              location: `${ref.file}:${ref.line}`,
+              removable: false,
+              confidence: 'indexed'
+            });
+          } else if (!externalDeps.includes(targetFqn)) {
+            externalDeps.push(targetFqn);
           }
         }
         // External but not blocked
@@ -1277,7 +1565,7 @@ export async function handleScanMigrationCandidates(
             resolvedClass = samePackageMatch || matches[0] || calleeClass;
           }
           
-          // Check if it's a blocked dependency
+          // Check if it's a blocked dependency (external)
           if (matchesBlockedPattern(resolvedClass, input.blockedPatterns)) {
             blockedDeps.push({
               target: resolvedClass,
@@ -1289,8 +1577,31 @@ export async function handleScanMigrationCandidates(
           }
           // Check if it's an internal dependency
           else if (packageFqns.has(resolvedClass)) {
-            if (!internalDeps.includes(resolvedClass)) {
+            // NEW: Check if this internal dependency should block migration
+            if (isInternalBlocked(resolvedClass)) {
+              internalBlockedDeps.push({
+                target: resolvedClass,
+                type: 'method_call',
+                location: `${method.file}:${method.line}`,
+                removable: false,
+                confidence: 'indexed'
+              });
+            } else if (!internalDeps.includes(resolvedClass)) {
               internalDeps.push(resolvedClass);
+            }
+          }
+          // Check if it matches internalBlockedPatterns (cross-package internal deps)
+          else if (matchesInternalBlockedPattern(resolvedClass, input.internalBlockedPatterns)) {
+            if (!isAllowedDependency(resolvedClass, input.allowedDependencies)) {
+              internalBlockedDeps.push({
+                target: resolvedClass,
+                type: 'method_call',
+                location: `${method.file}:${method.line}`,
+                removable: false,
+                confidence: 'indexed'
+              });
+            } else if (!externalDeps.includes(resolvedClass)) {
+              externalDeps.push(resolvedClass);
             }
           }
           // External but not blocked
@@ -1314,8 +1625,29 @@ export async function handleScanMigrationCandidates(
             confidence: 'definite'
           });
         } else if (packageFqns.has(extendsClass)) {
-          if (!internalDeps.includes(extendsClass)) {
+          // NEW: Check if internal extends should block
+          if (isInternalBlocked(extendsClass)) {
+            internalBlockedDeps.push({
+              target: extendsClass,
+              type: 'extends',
+              location: `${stub.file}:${stub.line}`,
+              removable: false,
+              confidence: 'definite'
+            });
+          } else if (!internalDeps.includes(extendsClass)) {
             internalDeps.push(extendsClass);
+          }
+        }
+        // Check if extends matches internalBlockedPatterns (cross-package)
+        else if (matchesInternalBlockedPattern(extendsClass, input.internalBlockedPatterns)) {
+          if (!isAllowedDependency(extendsClass, input.allowedDependencies)) {
+            internalBlockedDeps.push({
+              target: extendsClass,
+              type: 'extends',
+              location: `${stub.file}:${stub.line}`,
+              removable: false,
+              confidence: 'definite'
+            });
           }
         }
       }
@@ -1332,14 +1664,35 @@ export async function handleScanMigrationCandidates(
             confidence: 'definite'
           });
         } else if (packageFqns.has(iface)) {
-          if (!internalDeps.includes(iface)) {
+          // NEW: Check if internal implements should block
+          if (isInternalBlocked(iface)) {
+            internalBlockedDeps.push({
+              target: iface,
+              type: 'implements',
+              location: `${stub.file}:${stub.line}`,
+              removable: false,
+              confidence: 'definite'
+            });
+          } else if (!internalDeps.includes(iface)) {
             internalDeps.push(iface);
+          }
+        }
+        // Check if implements matches internalBlockedPatterns (cross-package)
+        else if (matchesInternalBlockedPattern(iface, input.internalBlockedPatterns)) {
+          if (!isAllowedDependency(iface, input.allowedDependencies)) {
+            internalBlockedDeps.push({
+              target: iface,
+              type: 'implements',
+              location: `${stub.file}:${stub.line}`,
+              removable: false,
+              confidence: 'definite'
+            });
           }
         }
       }
       
-      // Calculate score with penalty for unresolved refs
-      const baseScore = calculateMigrationScore(blockedDeps);
+      // Calculate score with penalty for unresolved refs AND internal blocked deps
+      const baseScore = calculateMigrationScore(blockedDeps, internalBlockedDeps);
       const unresolvedPenalty = Math.min(unresolvedRefs.length * 5, 30); // Max 30 point penalty
       const adjustedScore = unresolvedRefs.length > 0 ? Math.max(0, baseScore - unresolvedPenalty) : baseScore;
       
@@ -1347,10 +1700,10 @@ export async function handleScanMigrationCandidates(
       const hasUncertainDeps = unresolvedRefs.length > 0 || 
         blockedDeps.some(d => d.confidence === 'wildcard' || d.confidence === 'assumed_same_package');
       
-      // Adjust risk based on uncertainty - never SAFE if uncertain
-      let risk = calculateRisk(blockedDeps.length, input.maxSafeExternalDeps ?? 5);
-      if (hasUncertainDeps && risk === 'SAFE') {
-        risk = 'LOW';  // Downgrade SAFE to LOW if there's uncertainty
+      // Adjust risk based on uncertainty AND internal blocked deps - never SAFE if uncertain or internal blocked
+      let risk = calculateRisk(blockedDeps.length, internalBlockedDeps.length, input.maxSafeExternalDeps ?? 5);
+      if ((hasUncertainDeps || internalBlockedDeps.length > 0) && risk === 'SAFE') {
+        risk = 'LOW';  // Downgrade SAFE to LOW if there's uncertainty or internal blocking
       }
       
       const classInfo: ClassInfo = {
@@ -1359,14 +1712,17 @@ export async function handleScanMigrationCandidates(
         filePath: stub.file,
         type: stub.kind as ClassInfo['type'],
         blockedDeps,
+        internalBlockedDeps,  // NEW
         internalDeps,
         externalDeps,
         unresolvedRefs,
-        totalDependencies: blockedDeps.length + internalDeps.length + externalDeps.length,
+        totalDependencies: blockedDeps.length + internalBlockedDeps.length + internalDeps.length + externalDeps.length,
         blockedCount: blockedDeps.length,
+        internalBlockedCount: internalBlockedDeps.length,  // NEW
         unresolvedCount: unresolvedRefs.length,
         migrationRisk: risk,
         migrationScore: adjustedScore,
+        migrationTier: 0,  // Will be computed after all classes are analyzed
         hasUncertainDeps
       };
       
@@ -1374,10 +1730,19 @@ export async function handleScanMigrationCandidates(
       classInfos.push(classInfo);
     }
     
-    // Categorize classes
+    // Compute migration tiers based on internal dependency chains
+    const migrationTiers = computeMigrationTiers(classInfos);
+    for (const classInfo of classInfos) {
+      classInfo.migrationTier = migrationTiers.get(classInfo.fqn) ?? -1;
+    }
+    
+    // Categorize classes - also consider internal blocked deps for categorization
     const categories = {
-      safe: classInfos.filter(c => c.migrationRisk === 'SAFE'),
-      review: classInfos.filter(c => c.migrationRisk === 'LOW' || c.migrationRisk === 'MEDIUM'),
+      safe: classInfos.filter(c => c.migrationRisk === 'SAFE' && c.internalBlockedCount === 0),
+      review: classInfos.filter(c => 
+        (c.migrationRisk === 'LOW' || c.migrationRisk === 'MEDIUM') ||
+        (c.migrationRisk === 'SAFE' && c.internalBlockedCount > 0)  // Downgrade SAFE with internal blocked
+      ),
       blocked: classInfos.filter(c => c.migrationRisk === 'BLOCKED' || c.migrationRisk === 'HIGH')
     };
     
@@ -1447,6 +1812,16 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   const uncertainClasses = allClasses.filter(c => c.hasUncertainDeps);
   const totalUnresolved = allClasses.reduce((sum, c) => sum + c.unresolvedCount, 0);
   
+  // NEW: Count classes with internal blocked dependencies
+  const internalBlockedClasses = allClasses.filter(c => c.internalBlockedCount > 0);
+  const totalInternalBlocked = allClasses.reduce((sum, c) => sum + c.internalBlockedCount, 0);
+  
+  // NEW: Get tier statistics
+  const tierCounts = new Map<number, number>();
+  for (const cls of allClasses) {
+    tierCounts.set(cls.migrationTier, (tierCounts.get(cls.migrationTier) || 0) + 1);
+  }
+  
   // JSON format - return raw structured data
   if (input.outputFormat === 'json') {
     return JSON.stringify({
@@ -1454,20 +1829,27 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
       warnings: {
         uncertainClassCount: uncertainClasses.length,
         totalUnresolvedRefs: totalUnresolved,
-        message: totalUnresolved > 0 
-          ? `${uncertainClasses.length} classes have ${totalUnresolved} type references that could not be definitively resolved. Verify with grep before migrating.`
+        internalBlockedClassCount: internalBlockedClasses.length,
+        totalInternalBlockedDeps: totalInternalBlocked,
+        message: totalUnresolved > 0 || totalInternalBlocked > 0
+          ? `${uncertainClasses.length} classes have unresolved refs. ${internalBlockedClasses.length} classes have internal blocked deps. Verify before migrating.`
           : null
       },
+      tierStatistics: Object.fromEntries(tierCounts),
       classes: allClasses.map(c => ({
         fqn: c.fqn,
         className: c.className,
         type: c.type,
         risk: c.migrationRisk,
-        score: c.migrationScore,  // 0-100 safety score
+        score: c.migrationScore,
+        migrationTier: c.migrationTier,  // NEW
         blockedCount: c.blockedCount,
+        internalBlockedCount: c.internalBlockedCount,  // NEW
         unresolvedCount: c.unresolvedCount,
         hasUncertainDeps: c.hasUncertainDeps,
         blockedDeps: c.blockedDeps,
+        internalBlockedDeps: c.internalBlockedDeps,  // NEW
+        internalDeps: c.internalDeps,  // NEW: Show allowed internal deps
         unresolvedRefs: c.unresolvedRefs,
         suggestion: c.suggestion
       })),
@@ -1475,6 +1857,9 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
       meta: {
         sourcePackage: input.sourcePackage,
         blockedPatterns: input.blockedPatterns,
+        internalBlockedPatterns: input.internalBlockedPatterns || [],  // NEW
+        allowedDependencies: input.allowedDependencies || [],  // NEW
+        treatInternalAsBlocked: input.treatInternalAsBlocked || false,  // NEW
         includeSubpackages: input.includeSubpackages,
         strictMode: input.strictMode
       }
@@ -1487,9 +1872,44 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   lines.push(`# Migration Scan: ${input.sourcePackage}`);
   lines.push('');
   lines.push(`**Blocked patterns**: ${input.blockedPatterns.join(', ')}`);
+  if (input.internalBlockedPatterns && input.internalBlockedPatterns.length > 0) {
+    lines.push(`**Internal blocked patterns**: ${input.internalBlockedPatterns.join(', ')}`);
+  }
+  if (input.allowedDependencies && input.allowedDependencies.length > 0) {
+    lines.push(`**Allowed dependencies**: ${input.allowedDependencies.join(', ')}`);
+  }
+  if (input.treatInternalAsBlocked) {
+    lines.push(`**Mode**: STRICT - all internal deps blocked unless in allowlist`);
+  }
   lines.push(`**Scan time**: ${result.summary.scanTimeMs}ms`);
   lines.push(`**Strict mode**: ${input.strictMode !== false ? 'ON (deep file analysis)' : 'OFF'}`);
   lines.push('');
+  
+  // NEW: Warning about internal blocked dependencies
+  if (totalInternalBlocked > 0) {
+    lines.push('## 🔗 INTERNAL DEPENDENCY WARNING');
+    lines.push('');
+    lines.push(`> **${internalBlockedClasses.length} classes** have **${totalInternalBlocked} internal blocked dependencies**.`);
+    lines.push('>');
+    lines.push('> These classes depend on other classes within the source package that must be migrated FIRST.');
+    lines.push('> Use `outputFormat: "tiered"` to see migration order by dependency tier.');
+    lines.push('');
+    
+    // Show top internal blocked classes
+    const topInternalBlocked = internalBlockedClasses.slice(0, 5);
+    if (topInternalBlocked.length > 0) {
+      lines.push('### Classes with Internal Blocked Dependencies');
+      lines.push('');
+      for (const cls of topInternalBlocked) {
+        const depList = cls.internalBlockedDeps.slice(0, 3).map(d => d.target.split('.').pop()).join(', ');
+        lines.push(`- \`${cls.fqn}\` → ${cls.internalBlockedCount} blocked: ${depList}`);
+      }
+      if (internalBlockedClasses.length > 5) {
+        lines.push(`- ... and ${internalBlockedClasses.length - 5} more classes`);
+      }
+      lines.push('');
+    }
+  }
   
   // CRITICAL WARNING about uncertain dependencies
   if (totalUnresolved > 0) {
@@ -1529,12 +1949,103 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   if (uncertainClasses.length > 0) {
     lines.push(`| ⚡ Uncertain resolution | ${uncertainClasses.length} | ${((uncertainClasses.length / result.summary.totalClasses) * 100).toFixed(0)}% |`);
   }
+  if (internalBlockedClasses.length > 0) {
+    lines.push(`| 🔗 Internal blocked deps | ${internalBlockedClasses.length} | ${((internalBlockedClasses.length / result.summary.totalClasses) * 100).toFixed(0)}% |`);
+  }
   lines.push('');
   
   if (input.outputFormat === 'summary') {
     // Just the summary
     lines.push(`**Estimated effort**: ${result.migrationPlan.estimatedEffort}`);
     lines.push(`**Risk assessment**: ${result.migrationPlan.riskAssessment}`);
+    return lines.join('\n');
+  }
+  
+  // NEW: Tiered output format - show classes organized by migration tier
+  if (input.outputFormat === 'tiered') {
+    lines.push('## 🏗️ Migration Tiers (by Internal Dependency Order)');
+    lines.push('');
+    lines.push('Classes are grouped by their migration tier. Lower tiers have fewer internal dependencies and should be migrated first.');
+    lines.push('');
+    
+    // Get max tier
+    const maxTier = Math.max(...Array.from(tierCounts.keys()).filter(t => t >= 0));
+    
+    // Tier 0 first (no internal deps)
+    const tier0Classes = allClasses.filter(c => c.migrationTier === 0);
+    if (tier0Classes.length > 0) {
+      lines.push('### 🥇 Tier 0: No Internal Dependencies (Migrate First!)');
+      lines.push(`*${tier0Classes.length} classes with zero internal deps - true leaf nodes*`);
+      lines.push('');
+      for (const cls of tier0Classes.slice(0, 30)) {
+        const blockedMarker = cls.blockedCount > 0 ? ` [${cls.blockedCount} ext blocked]` : '';
+        const uncertainMarker = cls.hasUncertainDeps ? ' ⚡' : '';
+        lines.push(`- \`${cls.fqn}\` - Score: ${cls.migrationScore}${blockedMarker}${uncertainMarker}`);
+      }
+      if (tier0Classes.length > 30) {
+        lines.push(`- ... and ${tier0Classes.length - 30} more`);
+      }
+      lines.push('');
+    }
+    
+    // Tier 1+
+    for (let tier = 1; tier <= maxTier; tier++) {
+      const tierClasses = allClasses.filter(c => c.migrationTier === tier);
+      if (tierClasses.length > 0) {
+        lines.push(`### 📦 Tier ${tier}: Depends on Tier 0-${tier - 1}`);
+        lines.push(`*${tierClasses.length} classes - migrate after lower tiers*`);
+        lines.push('');
+        for (const cls of tierClasses.slice(0, 20)) {
+          const internalList = cls.internalDeps.slice(0, 2).map(d => d.split('.').pop()).join(', ');
+          const internalBlockedList = cls.internalBlockedDeps.slice(0, 2).map(d => d.target.split('.').pop()).join(', ');
+          const depsInfo = internalBlockedList ? `🔗 ${internalBlockedList}` : (internalList ? `→ ${internalList}` : '');
+          const uncertainMarker = cls.hasUncertainDeps ? ' ⚡' : '';
+          lines.push(`- \`${cls.fqn}\` ${depsInfo}${uncertainMarker}`);
+        }
+        if (tierClasses.length > 20) {
+          lines.push(`- ... and ${tierClasses.length - 20} more`);
+        }
+        lines.push('');
+      }
+    }
+    
+    // Circular deps (tier -1)
+    const circularClasses = allClasses.filter(c => c.migrationTier === -1);
+    if (circularClasses.length > 0) {
+      lines.push('### ⚠️ Circular Dependencies (Migrate Together or Refactor)');
+      lines.push(`*${circularClasses.length} classes with circular internal deps*`);
+      lines.push('');
+      for (const cls of circularClasses.slice(0, 20)) {
+        const internalList = cls.internalDeps.slice(0, 3).map(d => d.split('.').pop()).join(', ');
+        lines.push(`- \`${cls.fqn}\` ↔ ${internalList}`);
+      }
+      if (circularClasses.length > 20) {
+        lines.push(`- ... and ${circularClasses.length - 20} more`);
+      }
+      lines.push('');
+    }
+    
+    // Legend
+    lines.push('> **Legend**: ⚡ = uncertain resolution | 🔗 = internal blocked dep | → = depends on');
+    lines.push('');
+    
+    // Suggested workflow
+    lines.push('## 💡 Tiered Migration Workflow');
+    lines.push('');
+    lines.push('1. **Migrate Tier 0 first** - these have NO internal deps and are safe to move');
+    lines.push('2. **Update your allowedDependencies** with the classes you just migrated');
+    lines.push('3. **Re-run scan** - Tier 1 classes will now show as Tier 0');
+    lines.push('4. **Repeat** until all classes are migrated');
+    lines.push('');
+    lines.push('**Example workflow:**');
+    lines.push('```javascript');
+    lines.push('// First run - find Tier 0');
+    lines.push(`scan_migration_candidates({ sourcePackage: "${input.sourcePackage}", blockedPatterns: [...], treatInternalAsBlocked: true })`);
+    lines.push('');
+    lines.push('// After migrating Tier 0, add them to allowlist');
+    lines.push(`scan_migration_candidates({ ..., allowedDependencies: ["com.example.Migrated1", "com.example.Migrated2"] })`);
+    lines.push('```');
+    
     return lines.join('\n');
   }
   
@@ -1548,7 +2059,8 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
     lines.push('');
     for (const cls of result.categories.safe.slice(0, 50)) {
       const uncertainMarker = cls.hasUncertainDeps ? ' ⚡' : '';
-      lines.push(`- \`${cls.fqn}\` (${cls.type}) - Score: ${cls.migrationScore}${uncertainMarker}`);
+      const tierMarker = cls.migrationTier >= 0 ? ` [Tier ${cls.migrationTier}]` : ' [⚠️ circular]';
+      lines.push(`- \`${cls.fqn}\` (${cls.type}) - Score: ${cls.migrationScore}${tierMarker}${uncertainMarker}`);
     }
     if (result.categories.safe.length > 50) {
       lines.push(`- ... and ${result.categories.safe.length - 50} more`);
@@ -1561,9 +2073,12 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
     lines.push('### ⚠️ Needs Review');
     lines.push('');
     for (const cls of result.categories.review.slice(0, 30)) {
-      const depList = cls.blockedDeps.slice(0, 3).map(d => d.target.split('.').pop()).join(', ');
+      const allBlocked = [...cls.blockedDeps, ...cls.internalBlockedDeps];
+      const totalBlocked = cls.blockedCount + cls.internalBlockedCount;
+      const depList = allBlocked.slice(0, 3).map(d => d.target.split('.').pop()).join(', ');
+      const internalMarker = cls.internalBlockedCount > 0 ? ` 🔗${cls.internalBlockedCount}` : '';
       const uncertainMarker = cls.hasUncertainDeps ? ' ⚡' : '';
-      lines.push(`- \`${cls.fqn}\` - Score: ${cls.migrationScore}, ${cls.blockedCount} blocked: ${depList}${uncertainMarker}`);
+      lines.push(`- \`${cls.fqn}\` - Score: ${cls.migrationScore}, ${totalBlocked} blocked: ${depList}${internalMarker}${uncertainMarker}`);
       if (cls.suggestion) {
         lines.push(`  - 💡 ${cls.suggestion}`);
       }
@@ -1579,7 +2094,9 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
     lines.push('### ❌ Blocked');
     lines.push('');
     for (const cls of result.categories.blocked.slice(0, 20)) {
-      lines.push(`- \`${cls.fqn}\` - Score: ${cls.migrationScore}, ${cls.blockedCount} blocked deps`);
+      const totalBlocked = cls.blockedCount + cls.internalBlockedCount;
+      const internalInfo = cls.internalBlockedCount > 0 ? ` (${cls.internalBlockedCount} internal)` : '';
+      lines.push(`- \`${cls.fqn}\` - Score: ${cls.migrationScore}, ${totalBlocked} blocked deps${internalInfo}`);
     }
     if (result.categories.blocked.length > 20) {
       lines.push(`- ... and ${result.categories.blocked.length - 20} more`);
@@ -1588,7 +2105,7 @@ function formatOutput(result: ScanMigrationResult, input: ScanMigrationInput): s
   }
   
   // Legend
-  lines.push('> **Legend**: ⚡ = has uncertain type resolution (verify with grep)');
+  lines.push('> **Legend**: ⚡ = uncertain resolution | 🔗 = internal blocked dep | [Tier N] = migration order');
   lines.push('');
   
   if (input.outputFormat === 'detailed') {
