@@ -1,6 +1,9 @@
 # MCP Java Indexer
 
-A complete **LOCAL** Model Context Protocol (MCP) extension for VS Code that performs IntelliJ-style Java code indexing and call-graph analysis. **Zero-config database storage** for efficient memory usage on large projects.
+[![Version](https://img.shields.io/badge/version-2.7.1-blue)](https://marketplace.visualstudio.com/items?itemName=ubanishathanvenkatesan.java-indexer-mcp)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-brightgreen)](https://marketplace.visualstudio.com/items?itemName=ubanishathanvenkatesan.java-indexer-mcp)
+
+A complete **LOCAL** Model Context Protocol (MCP) extension for VS Code that provides IntelliJ-style Java code intelligence. **18 powerful tools**, zero-config database storage, and AI-friendly code analysis.
 
 ## 🎯 Features
 
@@ -20,12 +23,18 @@ A complete **LOCAL** Model Context Protocol (MCP) extension for VS Code that per
 - **Impact Analysis**: Analyze what breaks when you change code, with risk scoring
 - **Pattern Detection**: Automatically detect Builder, Factory, Repository, and 20+ patterns
 
-### 🚀 Quality & Generation Tools (v1.4.0)
+### 🚀 Quality & Generation Tools
 - **Test Coverage**: Analyze test coverage, identify gaps, suggest test names
 - **Refactoring Suggestions**: Code health scoring, detect code smells, priority recommendations
 - **Code Generation**: Generate Builder, Repository, Service, DTO, Test, and more patterns
 
-👉 See [ADVANCED_TOOLS.md](ADVANCED_TOOLS.md) and [V1.4.0_COMPLETE.md](V1.4.0_COMPLETE.md) for details
+### 🔍 Codebase Exploration (v2.5+)
+- **Explore Codebase**: High-level overview of project structure, packages, and architecture
+- **Explore Class**: Deep dive into any class with full context (implementation, dependencies, usages)
+- **Batch Query**: Execute multiple queries efficiently in a single request
+- **Scan Migration Candidates**: Analyze entire codebase for migration-ready classes with dependency scoring
+
+👉 See [ADVANCED_TOOLS.md](ADVANCED_TOOLS.md) for detailed tool documentation
 
 ## 📁 Architecture
 
@@ -33,25 +42,31 @@ A complete **LOCAL** Model Context Protocol (MCP) extension for VS Code that per
 mcp-java-indexer/
 ├── server/                    # Node.js MCP Server (TypeScript)
 │   ├── src/
-│   │   ├── index.ts          # Main server entry
+│   │   ├── index.ts          # Main server entry (18 tools registered)
 │   │   ├── indexer-client.ts # Java process communication
-│   │   ├── memory-index.ts   # In-memory indices
-│   │   ├── persistence.ts    # JSON persistence
+│   │   ├── storage.ts        # SQLite database storage
+│   │   ├── memory-index.ts   # In-memory indices (fallback)
+│   │   ├── persistence.ts    # JSON persistence (fallback)
 │   │   ├── fs-watcher.ts     # File watcher
 │   │   └── tools/            # MCP tool implementations
-│   │       ├── index_project.ts     # Index entire project
-│   │       ├── reindex_file.ts      # Reindex single file
-│   │       ├── find_symbol.ts       # Find class/method/field
-│   │       ├── find_usages.ts       # Find all references
-│   │       ├── call_graph.ts        # Analyze call graph
-│   │       ├── goto_definition.ts   # Navigate to definition
-│   │       ├── search_text.ts           # Text search in code
-│   │       ├── explain_code.ts          # 🧠 Explain code in plain English
-│   │       ├── semantic_search.ts       # 🧠 Search by intent/pattern
-│   │       ├── analyze_impact.ts        # 🧠 Impact & risk analysis
-│   │       ├── test_coverage.ts         # 🚀 Test coverage analysis
+│   │       ├── index_project.ts          # Index entire project
+│   │       ├── reindex_file.ts           # Reindex single file
+│   │       ├── find_symbol.ts            # Find class/method/field
+│   │       ├── find_usages.ts            # Find all references
+│   │       ├── call_graph.ts             # Analyze call graph
+│   │       ├── goto_definition.ts        # Navigate to definition
+│   │       ├── search_text.ts            # Text search in code
+│   │       ├── explain_code.ts           # 🧠 Explain code in plain English
+│   │       ├── semantic_search.ts        # 🧠 Search by intent/pattern
+│   │       ├── analyze_impact.ts         # 🧠 Impact & risk analysis
+│   │       ├── test_coverage.ts          # 🚀 Test coverage analysis
 │   │       ├── refactoring_suggestions.ts # 🚀 Smart refactoring tips
-│   │       └── code_generation.ts       # 🚀 Pattern-based generation
+│   │       ├── code_generation.ts        # 🚀 Pattern-based generation
+│   │       ├── explore_codebase.ts       # 🔍 High-level project overview
+│   │       ├── explore_class.ts          # 🔍 Deep class exploration
+│   │       ├── batch_query.ts            # 🔍 Efficient batch queries
+│   │       ├── scan_migration_candidates.ts # 🔍 Migration analysis
+│   │       └── compact_index.ts          # Memory optimization
 │   ├── package.json
 │   └── tsconfig.json
 │
@@ -238,45 +253,97 @@ Found 12 usages of `com.example.service.UserService.getUser(String)` in 5 files:
 @java-indexer reindex_file with filePath: "C:/project/src/main/java/com/example/User.java"
 ```
 
-## 🔧 MCP Tools Reference
+### 8. Explore Codebase (v2.5+)
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
+Get a high-level overview of your project structure:
+```
+@java-indexer explore_codebase with rootDir: "C:/path/to/java/project"
+```
+
+**Output**: Package hierarchy, class counts, architecture patterns detected.
+
+### 9. Explore Class (v2.5+)
+
+Deep dive into any class with full context:
+```
+@java-indexer explore_class with className: "UserService"
+```
+
+**Output**: Implementation details, dependencies, who uses it, and related classes.
+
+### 10. Scan Migration Candidates (v2.7+)
+
+Analyze which classes are safe to migrate:
+```
+@java-indexer scan_migration_candidates with rootDir: "C:/path/to/project", blockedPatterns: ["com.legacy", "org.thirdparty"]
+```
+
+**Output**: Classes ranked by migration readiness with dependency scoring.
+
+## 🔧 MCP Tools Reference (18 Tools)
+
+### Core Indexing Tools
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
 | `index_project` | Scan and index all Java files in a project | `rootDir` (required), `sourceRoots` (optional) |
-| `reindex_file` | Reparse and update a single file | `filePath` (required), `sourceRoots` (optional) |
+| `reindex_file` | Reparse and update a single file | `filePath` (required) |
+| `compact_index` | Optimize memory usage | `aggressive` (optional) |
+
+### Navigation & Search Tools
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
 | `find_symbol` | Find symbol by name or FQN | `name` (required) |
 | `find_usages` | Find all references to a symbol | `fqn` (required) |
 | `call_graph` | Get inbound/outbound call graph | `fqn` (required) |
 | `goto_definition` | Get definition location | `symbol` (required) |
 | `search_text` | Search text pattern in files | `pattern` (required), `isRegex`, `maxResults` |
+| `semantic_search` | Search by intent/meaning | `query` (required), `limit` |
+
+### AI-Friendly Analysis Tools
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `explain_code` | Natural language code explanation | `symbol` (required), `detail` |
+| `analyze_impact` | Impact & risk analysis for changes | `fqn` (required), `depth` |
+| `test_coverage` | Analyze test coverage and gaps | `package` or `class` (required) |
+| `refactoring_suggestions` | Code health scoring and tips | `target` (required) |
+
+### Codebase Exploration Tools (v2.5+)
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `explore_codebase` | High-level project overview | `rootDir` (required) |
+| `explore_class` | Deep dive into a class | `className` (required) |
+| `batch_query` | Execute multiple queries at once | `queries` (required) |
+| `scan_migration_candidates` | Analyze migration readiness | `rootDir`, `blockedPatterns` |
+
+### Code Generation Tool
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `code_generation` | Generate code patterns | `type` (builder/repository/service/dto/test), `target` |
 
 ## 📊 Performance
 
 - **Indexing**: 10,000-20,000 Java classes in 30-40 seconds
 - **Incremental Update**: Single file reindex in <200ms
 - **Query Performance**: Call graph queries in <20ms
-- **Memory Usage**: ~500MB for 20k classes
-- **Index Size**: ~50MB JSON for 20k classes
+- **Memory Usage**: ~100MB for 20k classes (with SQLite storage)
+- **Index Size**: ~30-50MB database for 20k classes
 
 ## 🗂️ Index Storage
 
-All indices are stored in `.mcp-index/` directory at the project root:
+Indexes are stored in `.mcp-index/` directory at the project root:
 
 ```
 your-java-project/
 ├── .mcp-index/
-│   └── index.json          # Serialized in-memory indices
+│   ├── index.db           # SQLite database (primary)
+│   └── index.json         # JSON fallback (if DB unavailable)
 ├── src/
 └── pom.xml
 ```
 
-The index includes:
-- **symbols**: All classes, methods, fields, constructors
-- **files**: File metadata with hashes
-- **references**: All method calls, field accesses, instantiations
-- **callGraph**: Forward call graph (caller → callee)
-- **reverseCallGraph**: Reverse call graph (callee → caller)
-- **inheritance**: Class hierarchy relationships
+**Storage Modes** (automatic selection):
+- **SQLite (Default)**: Zero-config, WebAssembly-based, 90-99% less memory
+- **File-based (Fallback)**: JSON persistence with optional compression
 
 ## 🔄 Incremental Indexing
 
@@ -413,9 +480,9 @@ java -jar target/java-indexer-1.0.0.jar
 
 ## 🔐 Security
 
-- **Local Only**: No network communication
-- **No Database**: No persistent database server
-- **File Access**: Only reads indexed Java project files
+- **Local Only**: No network communication, all processing stays on your machine
+- **Zero-Config Database**: SQLite via WebAssembly - no external database server
+- **File Access**: Only reads/writes in the indexed project directory
 - **Sandboxed**: Runs in isolated Node.js and Java processes
 
 ## 📄 License
@@ -426,10 +493,13 @@ MIT License - Free for personal and commercial use.
 
 Built with:
 - [Model Context Protocol SDK](https://github.com/modelcontextprotocol/sdk)
-- [JavaParser](https://github.com/javaparser/javaparser)
-- [Chokidar](https://github.com/paulmillr/chokidar)
+- [JavaParser](https://github.com/javaparser/javaparser) - Java AST parsing
+- [sql.js](https://github.com/sql-js/sql.js) - SQLite in WebAssembly
+- [Chokidar](https://github.com/paulmillr/chokidar) - File watching
 - [TypeScript](https://www.typescriptlang.org/)
 
 ---
+
+**Version 2.7.1** | [Changelog](CHANGELOG.md) | [Issues](https://github.com/ubanishathanvenkatesan/mcp-java-indexer/issues)
 
 **Happy Coding! 🚀**
