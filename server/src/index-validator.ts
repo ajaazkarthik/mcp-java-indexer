@@ -211,6 +211,16 @@ export class IndexValidator {
       return result;
     }
 
+    // DEFENSIVE CHECK: Don't report bulk changes if we're within grace period
+    // This provides defense-in-depth in case checkStaleness() didn't catch it
+    if (this.lastIndexTime > 0 && Date.now() - this.lastIndexTime < this.POST_INDEX_GRACE_PERIOD_MS) {
+      result.skipped = true;
+      result.reason = 'Within grace period after recent index';
+      result.duration = Date.now() - startTime;
+      console.error(`[IndexValidator] Skipping refresh - within ${this.POST_INDEX_GRACE_PERIOD_MS}ms grace period after index_project`);
+      return result;
+    }
+
     // Check for bulk changes (like mvn clean build)
     const totalChanges = staleResult.changedFiles.length + 
                          staleResult.newFiles.length + 

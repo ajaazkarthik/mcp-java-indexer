@@ -5,6 +5,49 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.4] - 2025-12-01
+
+### 🔧 Bugfixes & Performance
+
+This release addresses issues reported in the v7 comprehensive analysis feedback.
+
+#### 🔴 Fixed: Stale Index False Positive Warning
+
+**Problem**: Immediately after a successful `index_project`, the next query tool would show "Index may be stale: Too many changes detected (2021)" even though the index was just built.
+
+**Solution**:
+1. Added grace period check in `refreshIndex()` as defense-in-depth
+2. Updated message handling to silently skip grace period and cooldown cases
+3. No more scary warnings after fresh indexing!
+
+#### 🟡 Fixed: Java Keywords in Unresolved Types
+
+**Problem**: Java keywords (`private`, `public`, `return`, `new`, `throws`) were being reported as "unresolved types" in scan_migration_candidates output:
+```
+3 unresolved: private, public, return
+```
+
+**Solution**:
+1. Added comprehensive `JAVA_KEYWORDS` set with all Java reserved words
+2. Updated `addTypeReference()` to filter out keywords
+3. Updated `resolveTypeFqnEnhanced()` to return early for keywords
+4. Keywords now correctly skipped as they are not valid type references
+
+#### 🟡 Improved: SQLite Performance Optimizations
+
+**Problem**: SQLite storage was 44-62% slower than file-shard storage.
+
+**Solution**: Added PRAGMA optimizations:
+- `cache_size = -65536` (64MB cache, up from 2MB default)
+- `mmap_size = 268435456` (256MB memory mapping)
+- `temp_store = MEMORY` (faster temp operations)
+- `journal_mode = MEMORY` (faster writes)
+- `synchronous = OFF` (speed over durability - data is in memory anyway)
+- Added `ANALYZE` on startup for better query planning
+- Added `optimize()` method for post-indexing optimization
+
+---
+
 ## [2.7.1] - 2025-11-30
 
 ### 🔧 Patch Release

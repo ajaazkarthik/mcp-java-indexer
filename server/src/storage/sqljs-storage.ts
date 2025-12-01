@@ -63,7 +63,42 @@ export class SqlJsStorage implements IIndexStorage {
     process.on('SIGINT', this.sigintHandler);
     process.on('SIGTERM', this.sigtermHandler);
 
+    // Apply PRAGMA optimizations for better performance
+    this.applyPragmaOptimizations();
+
     console.error('✅ sql.js storage initialized at', this.dbPath);
+  }
+
+  /**
+   * Apply SQLite PRAGMA settings for better performance.
+   * These settings optimize for read-heavy workloads typical in code indexing.
+   */
+  private applyPragmaOptimizations(): void {
+    if (!this.db) return;
+    
+    // Cache size: Increase to ~64MB (default is 2MB)
+    // Negative value = kilobytes, positive = pages
+    this.db.run('PRAGMA cache_size = -65536;'); // 64MB
+    
+    // Memory mapping: Use mmap for reads (faster for large DBs)
+    // sql.js runs in memory anyway, but this helps with large datasets
+    this.db.run('PRAGMA mmap_size = 268435456;'); // 256MB
+    
+    // Temp store in memory (faster temp table operations)
+    this.db.run('PRAGMA temp_store = MEMORY;');
+    
+    // Journal mode: WAL is faster for concurrent reads
+    // Note: sql.js doesn't support true WAL but setting it doesn't hurt
+    this.db.run('PRAGMA journal_mode = MEMORY;');
+    
+    // Synchronous: OFF for speed (data is in memory anyway)
+    this.db.run('PRAGMA synchronous = OFF;');
+    
+    // Analyze tables to update query optimizer statistics
+    // This helps with LIKE queries and index selection
+    this.db.run('ANALYZE;');
+    
+    console.error('✅ Applied SQLite PRAGMA optimizations');
   }
 
   private createTables(): void {
@@ -179,6 +214,28 @@ export class SqlJsStorage implements IIndexStorage {
 
   private markDirty(): void {
     this.dirty = true;
+  }
+
+  /**
+   * Optimize the database after bulk operations.
+   * This should be called after large indexing operations.
+   */
+  async optimize(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    
+    console.error('🔧 Optimizing SQLite database...');
+    const start = Date.now();
+    
+    // Update statistics for query optimizer
+    this.db.run('ANALYZE;');
+    
+    // Note: VACUUM is not very useful for sql.js since the DB is in memory
+    // and will be saved to disk as a single file anyway
+    // But we can still run it to reclaim space before save
+    // this.db.run('VACUUM;'); // Commented out - can be slow on large DBs
+    
+    const elapsed = Date.now() - start;
+    console.error(`✅ Database optimized in ${elapsed}ms`);
   }
 
   async exists(): Promise<boolean> {

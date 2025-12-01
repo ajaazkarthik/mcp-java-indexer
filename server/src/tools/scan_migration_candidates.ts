@@ -70,6 +70,29 @@ const JAVA_UTIL_TYPES = new Set([
 ]);
 
 /**
+ * Java keywords and reserved words that should never be treated as type names.
+ * These can appear in regex matches but are not valid type references.
+ */
+const JAVA_KEYWORDS = new Set([
+  // Access modifiers
+  'public', 'private', 'protected',
+  // Class modifiers
+  'abstract', 'final', 'static', 'strictfp', 'native', 'synchronized', 'transient', 'volatile',
+  // Class types
+  'class', 'interface', 'enum', 'record', 'annotation',
+  // Control flow
+  'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue', 'return',
+  // Exception handling
+  'try', 'catch', 'finally', 'throw', 'throws',
+  // Object/reference
+  'new', 'this', 'super', 'instanceof', 'null', 'true', 'false',
+  // Package/import
+  'package', 'import',
+  // Other keywords
+  'extends', 'implements', 'assert', 'const', 'goto', 'var', 'yield', 'sealed', 'non', 'permits'
+]);
+
+/**
  * Parse a Java file and extract all type references
  */
 function parseJavaFile(filePath: string): FileAnalysisResult | null {
@@ -376,6 +399,10 @@ function addTypeReference(typeName: string, kind: ExtractedTypeReference['kind']
   // Skip primitives
   if (PRIMITIVE_TYPES.has(typeName)) return;
   
+  // Skip Java keywords (private, public, return, new, throws, etc.)
+  // These can be captured by regex patterns but are not valid type references
+  if (JAVA_KEYWORDS.has(typeName)) return;
+  
   // Skip java.lang types
   if (JAVA_LANG_TYPES.has(typeName)) return;
   
@@ -420,6 +447,17 @@ function resolveTypeFqnEnhanced(
   context: TypeResolutionContext
 ): TypeResolutionResult {
   const { packageName, imports, wildcardImports, indexedTypes, blockedPatterns } = context;
+  
+  // Skip Java keywords - they can never be type names
+  // This prevents false positives like "private", "public", "return", "new", "throws"
+  if (JAVA_KEYWORDS.has(typeName)) {
+    return { fqn: typeName, confidence: 'definite', source: 'java_keyword' };
+  }
+  
+  // Skip primitives - they're not class types
+  if (PRIMITIVE_TYPES.has(typeName)) {
+    return { fqn: typeName, confidence: 'definite', source: 'primitive_type' };
+  }
   
   // Already FQN - highest confidence
   if (typeName.includes('.')) {

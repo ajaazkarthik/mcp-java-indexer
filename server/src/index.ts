@@ -369,7 +369,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const r = result.refreshResult;
         return `🔄 Auto-refreshed index: ${r.filesUpdated} updated, ${r.filesAdded} added, ${r.filesDeleted} deleted (${r.duration}ms)\n\n`;
       } else if (result.wasStale && result.refreshResult?.skipped) {
-        return `⚠️ Index may be stale: ${result.refreshResult.reason}\n\n`;
+        // Don't show warning for grace period or cooldown skips - these are expected behavior
+        const reason = result.refreshResult.reason || '';
+        if (reason.includes('grace period') || reason.includes('cooldown')) {
+          // Silently skip - index was just refreshed
+          return null;
+        }
+        return `⚠️ Index may be stale: ${reason}\n\n`;
       }
     } catch (error) {
       console.error('[ensureFreshIndex] Error:', error);
