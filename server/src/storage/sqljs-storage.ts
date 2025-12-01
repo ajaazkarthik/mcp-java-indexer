@@ -203,13 +203,13 @@ export class SqlJsStorage implements IIndexStorage {
           `INSERT OR REPLACE INTO symbols (fqn, name, kind, file, line, col, package, data)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            symbol.fqn,
-            symbol.name,
-            symbol.kind,
-            symbol.file,
-            symbol.line,
-            symbol.column,
-            symbol.packageName,
+            symbol.fqn || '',
+            symbol.name || '',
+            symbol.kind || 'class',
+            symbol.file || '',
+            symbol.line ?? 0,
+            symbol.column ?? 0,
+            symbol.packageName || '',
             JSON.stringify(symbol)
           ]
         );
@@ -331,7 +331,14 @@ export class SqlJsStorage implements IIndexStorage {
         this.db.run(
           `INSERT OR IGNORE INTO refs (from_fqn, to_fqn, file, line, col, kind)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [ref.fromFqn, ref.toFqn, ref.file, ref.line, ref.column, ref.kind]
+          [
+            ref.fromFqn || '',
+            ref.toFqn || '',
+            ref.file || '',
+            ref.line ?? 0,
+            ref.column ?? 0,
+            ref.kind || 'unknown'
+          ]
         );
       }
       this.db.run('COMMIT');
@@ -418,6 +425,79 @@ export class SqlJsStorage implements IIndexStorage {
     if (!this.db) throw new Error('Database not initialized');
     this.db.run('DELETE FROM refs WHERE file = ?', [file]);
     this.markDirty();
+  }
+
+  async getAllReferences(options?: StorageQueryOptions): Promise<Reference[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    let sql = 'SELECT from_fqn, to_fqn, file, line, col, kind FROM refs';
+    const params: any[] = [];
+
+    if (options?.limit) {
+      sql += ` LIMIT ${options.limit}`;
+      if (options.offset) {
+        sql += ` OFFSET ${options.offset}`;
+      }
+    }
+
+    const stmt = this.db.prepare(sql);
+    const results: Reference[] = [];
+    
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as {
+        from_fqn: string;
+        to_fqn: string;
+        file: string;
+        line: number;
+        col: number;
+        kind: string;
+      };
+      results.push({
+        fromFqn: row.from_fqn,
+        toFqn: row.to_fqn,
+        file: row.file,
+        line: row.line,
+        column: row.col,
+        kind: row.kind as any
+      });
+    }
+    stmt.free();
+
+    return results;
+  }
+
+  async getAllCallGraphEdges(options?: StorageQueryOptions): Promise<CallGraphEdge[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // We'll get forward edges (which represent all edges - forward and reverse are duplicates)
+    let sql = 'SELECT caller, callee, locations FROM call_edges_forward';
+    const params: any[] = [];
+
+    if (options?.limit) {
+      sql += ` LIMIT ${options.limit}`;
+      if (options.offset) {
+        sql += ` OFFSET ${options.offset}`;
+      }
+    }
+
+    const stmt = this.db.prepare(sql);
+    const results: CallGraphEdge[] = [];
+    
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as {
+        caller: string;
+        callee: string;
+        locations: string;
+      };
+      results.push({
+        caller: row.caller,
+        callee: row.callee,
+        locations: JSON.parse(row.locations)
+      });
+    }
+    stmt.free();
+
+    return results;
   }
 
   async saveCallEdge(edge: CallGraphEdge, direction: 'forward' | 'reverse'): Promise<void> {

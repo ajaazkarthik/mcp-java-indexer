@@ -398,6 +398,83 @@ export class FileShardStorage implements IIndexStorage {
     }
   }
 
+  async getAllReferences(options?: StorageQueryOptions): Promise<Reference[]> {
+    // Load all reference shards
+    const refsDir = path.join(this.shardsDir, 'refs');
+    const results: Reference[] = [];
+    
+    try {
+      const files = await fs.readdir(refsDir);
+      let count = 0;
+      const limit = options?.limit || Infinity;
+      const offset = options?.offset || 0;
+      let skipped = 0;
+      
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        
+        const filePath = path.join(refsDir, file);
+        const content = await fs.readFile(filePath, 'utf-8');
+        const refs: Reference[] = JSON.parse(content);
+        
+        for (const ref of refs) {
+          if (skipped < offset) {
+            skipped++;
+            continue;
+          }
+          if (count >= limit) break;
+          results.push(ref);
+          count++;
+        }
+        
+        if (count >= limit) break;
+      }
+    } catch {
+      // refs dir doesn't exist
+    }
+    
+    return results;
+  }
+
+  async getAllCallGraphEdges(options?: StorageQueryOptions): Promise<CallGraphEdge[]> {
+    // Load all forward call graph shards
+    const callsDir = path.join(this.shardsDir, 'calls');
+    const results: CallGraphEdge[] = [];
+    
+    try {
+      const files = await fs.readdir(callsDir);
+      let count = 0;
+      const limit = options?.limit || Infinity;
+      const offset = options?.offset || 0;
+      let skipped = 0;
+      
+      for (const file of files) {
+        // Only read forward shards to avoid duplicates
+        if (!file.startsWith('forward_') || !file.endsWith('.json')) continue;
+        
+        const filePath = path.join(callsDir, file);
+        const content = await fs.readFile(filePath, 'utf-8');
+        const edges: CallGraphEdge[] = JSON.parse(content);
+        
+        for (const edge of edges) {
+          if (skipped < offset) {
+            skipped++;
+            continue;
+          }
+          if (count >= limit) break;
+          results.push(edge);
+          count++;
+        }
+        
+        if (count >= limit) break;
+      }
+    } catch {
+      // calls dir doesn't exist
+    }
+    
+    return results;
+  }
+
   async saveCallEdge(edge: CallGraphEdge, direction: 'forward' | 'reverse'): Promise<void> {
     const key = direction === 'forward' ? edge.caller : edge.callee;
     const shardName = `${direction}_${key}`;

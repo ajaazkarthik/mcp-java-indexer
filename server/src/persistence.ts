@@ -1,18 +1,63 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { MemoryIndex } from './memory-index.js';
+import { MemoryIndex, Reference, FileInfo } from './memory-index.js';
 import * as zlib from 'zlib';
 import { promisify } from 'util';
+import { StorageFactory, StorageType } from './storage/storage-factory.js';
+import { IIndexStorage } from './storage/index-storage.js';
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
 
+/**
+ * Persistence class with automatic storage backend detection
+ * 
+ * Priority: SQLite (better-sqlite3) -> sql.js -> chunked gzip files (fallback)
+ * 
+ * This class maintains backward compatibility with the old JSON-based persistence
+ * while using more efficient storage backends when available.
+ */
 export class Persistence {
   private indexDir: string;
   private readonly CHUNK_SIZE = 5000; // Save in chunks to avoid memory issues
+  
+  // Storage backend (lazily initialized)
+  private storage: IIndexStorage | null = null;
+  private storageType: StorageType | 'json' = 'json';
+  private storageInitialized = false;
+  private storageInitPromise: Promise<void> | null = null;
 
   constructor(indexDir: string) {
     this.indexDir = indexDir;
+    // Start storage initialization in background
+    this.storageInitPromise = this.initializeStorage();
+  }
+
+  /**
+   * Initialize the best available storage backend
+   */
+  private async initializeStorage(): Promise<void> {
+    if (this.storageInitialized) return;
+    
+    try {
+      this.storage = await StorageFactory.create(this.indexDir);
+      this.storageType = StorageFactory.getDetectedType() || 'file-shard';
+      this.storageInitialized = true;
+      console.error(`✅ Persistence using ${this.storageType} storage backend`);
+    } catch (error) {
+      console.error('⚠️  Storage backend initialization failed, using JSON fallback:', error);
+      this.storageType = 'json';
+      this.storageInitialized = true;
+    }
+  }
+
+  /**
+   * Wait for storage to be ready
+   */
+  private async waitForStorage(): Promise<void> {
+    if (this.storageInitPromise) {
+      await this.storageInitPromise;
+    }
   }
 
   // Ensure index directory exists
@@ -24,12 +69,123 @@ export class Persistence {
     }
   }
 
-  // Save index to disk with chunking and compression
+  // Save index to disk - uses storage backend if available
   async save(memoryIndex: MemoryIndex): Promise<void> {
+    await this.waitForStorage();
     await this.ensureIndexDir();
 
     const data = memoryIndex.toJSON();
     
+    // If we have a storage backend, use it for efficient persistence
+    if (this.storage && this.storageType !== 'json') {
+      await this.saveToStorage(data);
+      return;
+    }
+    
+    // Fall back to JSON file persistence
+    await this.saveToJsonFiles(data);
+  }
+
+  /**
+   * Save to storage backend (SQLite or file shards)
+   * Each save method handles its own transactions internally
+   */
+  private async saveToStorage(data: any): Promise<void> {
+    if (!this.storage) return;
+    
+    const startTime = Date.now();
+    console.error(`💾 Saving to ${this.storageType} storage...`);
+    
+    try {
+      // Clear existing data first
+      await this.storage.clear();
+      
+      // data.symbols is [[fqn, stub], ...] from Map.entries()
+      // Convert to [stub, ...] for storage
+      if (data.symbols && data.symbols.length > 0) {
+        const symbolsToSave = data.symbols.map((entry: [string, any]) => entry[1]);
+        await this.storage.saveSymbols(symbolsToSave);
+      }
+      
+      // Save references in batches (handles own transaction)
+      if (data.references && data.references.length > 0) {
+        await this.storage.saveReferences(data.references);
+      }
+      
+      // Save call graph edges (handles own transaction)
+      if (data.callGraph && data.callGraph.length > 0) {
+        const forwardEdges: any[] = [];
+        for (const entry of data.callGraph) {
+          forwardEdges.push(...entry[1]);
+        }
+        if (forwardEdges.length > 0) {
+          await this.storage.saveCallEdges(forwardEdges, 'forward');
+        }
+      }
+      if (data.reverseCallGraph && data.reverseCallGraph.length > 0) {
+        const reverseEdges: any[] = [];
+        for (const entry of data.reverseCallGraph) {
+          reverseEdges.push(...entry[1]);
+        }
+        if (reverseEdges.length > 0) {
+          await this.storage.saveCallEdges(reverseEdges, 'reverse');
+        }
+      }
+      
+      // Save inheritance (handles own transaction)
+      if (data.inheritance && data.inheritance.length > 0) {
+        const relationships: Array<{ child: string; parent: string }> = [];
+        for (const [child, parents] of data.inheritance) {
+          for (const parent of parents) {
+            relationships.push({ child, parent });
+          }
+        }
+        if (relationships.length > 0) {
+          await this.storage.saveInheritances(relationships);
+        }
+      }
+      
+      // Save files - data.files is [[path, info], ...] from Map.entries()
+      if (data.files && data.files.length > 0) {
+        for (const entry of data.files) {
+          await this.storage.saveFile(entry[1]); // entry[1] is the FileInfo
+        }
+      }
+      
+      // Also save metadata JSON for compatibility
+      const metadata = {
+        version: '2.0', // Version 2.0 uses storage backend
+        timestamp: Date.now(),
+        projectRootDir: data.projectRootDir || '',
+        storageType: this.storageType,
+        stats: {
+          symbols: data.symbols?.length || 0,
+          files: data.files?.length || 0,
+          indexedFiles: data.indexedFiles?.length || 0,
+          references: data.references?.length || 0
+        }
+      };
+      
+      await fs.writeFile(
+        path.join(this.indexDir, 'metadata.json'),
+        JSON.stringify(metadata, null, 2),
+        'utf-8'
+      );
+      
+      const duration = Date.now() - startTime;
+      console.error(`✅ Index saved to ${this.storageType} storage (${duration}ms)`);
+      
+    } catch (error) {
+      console.error('❌ Storage save failed, falling back to JSON:', error);
+      // Fall back to JSON - data is already available
+      await this.saveToJsonFiles(data);
+    }
+  }
+
+  /**
+   * Save to JSON files (original implementation)
+   */
+  private async saveToJsonFiles(data: any): Promise<void> {
     try {
       // Save metadata separately (includes projectRootDir for validation on load)
       const metadata = {
@@ -105,6 +261,23 @@ export class Persistence {
 
   // Load index from disk with chunking support
   async load(memoryIndex: MemoryIndex): Promise<boolean> {
+    // Wait for storage to be ready
+    await this.storageInitPromise;
+    
+    // Try loading from storage backend first
+    if (this.storage) {
+      try {
+        const loaded = await this.loadFromStorage(memoryIndex);
+        if (loaded) {
+          console.error(`✅ Index loaded from ${this.storageType} storage`);
+          return true;
+        }
+      } catch (error) {
+        console.error('Storage load failed, falling back to JSON:', error);
+      }
+    }
+    
+    // Fall back to JSON files
     try {
       // Check if chunked format exists
       const metadataPath = path.join(this.indexDir, 'metadata.json');
@@ -127,6 +300,101 @@ export class Persistence {
       console.error('Failed to load index:', error);
       return false;
     }
+  }
+
+  /**
+   * Load index from storage backend (SQLite)
+   */
+  private async loadFromStorage(memoryIndex: MemoryIndex): Promise<boolean> {
+    if (!this.storage) return false;
+    
+    try {
+      // Check if storage has data
+      const stats = await this.storage.getStats();
+      if (stats.symbols === 0) {
+        return false; // Empty storage
+      }
+      
+      // Load all data from storage
+      const symbols = await this.storage.getAllSymbols();
+      const references = await this.storage.getAllReferences();
+      const callGraph = await this.storage.getAllCallGraphEdges();
+      const files = await this.storage.getAllFiles();
+      
+      // Convert to MemoryIndex format - symbols and files need to be [key, value] pairs for Map constructor
+      const data: any = {
+        projectRootDir: '',
+        symbols: symbols.map(s => [s.fqn, s]),  // Convert to [fqn, stub] pairs for Map
+        files: files.map(f => [f.path, f]),     // Convert to [path, info] pairs for Map
+        indexedFiles: files.map((f: FileInfo) => f.path),
+        references: references,
+        referencesByFile: this.groupReferencesByFile(references),
+        callGraph: this.convertCallGraphToArray(callGraph, 'outbound'),
+        reverseCallGraph: this.convertCallGraphToArray(callGraph, 'inbound'),
+        inheritance: [],
+        reverseInheritance: []
+      };
+      
+      // Load inheritance from symbols
+      for (const symbol of symbols) {
+        if (symbol.kind === 'class' || symbol.kind === 'interface') {
+          const parents: string[] = [];
+          if ((symbol as any).extendsClass) parents.push((symbol as any).extendsClass);
+          if ((symbol as any).implementsInterfaces) parents.push(...(symbol as any).implementsInterfaces);
+          if (parents.length > 0) {
+            data.inheritance.push([symbol.fqn, parents]);
+            // Build reverse inheritance
+            for (const parent of parents) {
+              const existing = data.reverseInheritance.find((r: any) => r[0] === parent);
+              if (existing) {
+                existing[1].push(symbol.fqn);
+              } else {
+                data.reverseInheritance.push([parent, [symbol.fqn]]);
+              }
+            }
+          }
+        }
+      }
+      
+      memoryIndex.fromJSON(data);
+      return true;
+    } catch (error) {
+      console.error('Failed to load from storage:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Group references by file for MemoryIndex format
+   */
+  private groupReferencesByFile(references: Reference[]): [string, Reference[]][] {
+    const byFile = new Map<string, Reference[]>();
+    for (const ref of references) {
+      const existing = byFile.get(ref.file);
+      if (existing) {
+        existing.push(ref);
+      } else {
+        byFile.set(ref.file, [ref]);
+      }
+    }
+    return Array.from(byFile.entries());
+  }
+
+  /**
+   * Convert call graph edges to MemoryIndex array format
+   */
+  private convertCallGraphToArray(edges: any[], direction: 'inbound' | 'outbound'): [string, any[]][] {
+    const byMethod = new Map<string, any[]>();
+    for (const edge of edges) {
+      const key = direction === 'outbound' ? edge.callerFqn : edge.calleeFqn;
+      const existing = byMethod.get(key);
+      if (existing) {
+        existing.push(edge);
+      } else {
+        byMethod.set(key, [edge]);
+      }
+    }
+    return Array.from(byMethod.entries());
   }
 
   // Load old format index
@@ -238,6 +506,21 @@ export class Persistence {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Get the current storage type being used
+   * Returns 'sqljs', 'better-sqlite3', 'file-shard', or 'json' (legacy)
+   */
+  getStorageType(): StorageType | 'json' {
+    return this.storageType || 'json';
+  }
+
+  /**
+   * Check if using a database storage backend (not file-based)
+   */
+  isUsingDatabaseStorage(): boolean {
+    return this.storageType === 'sqljs' || this.storageType === 'better-sqlite3';
   }
 
   // Clear index

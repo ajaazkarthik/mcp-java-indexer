@@ -330,6 +330,62 @@ export class SqliteStorage implements IIndexStorage {
     stmt.run(file);
   }
 
+  async getAllReferences(options?: StorageQueryOptions): Promise<Reference[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    let sql = 'SELECT from_fqn, to_fqn, file, line, col, kind FROM refs';
+    if (options?.limit) {
+      sql += ` LIMIT ${options.limit}`;
+      if (options.offset) {
+        sql += ` OFFSET ${options.offset}`;
+      }
+    }
+
+    const stmt = this.db.prepare(sql);
+    const rows = stmt.all() as Array<{
+      from_fqn: string;
+      to_fqn: string;
+      file: string;
+      line: number;
+      col: number;
+      kind: string;
+    }>;
+
+    return rows.map(row => ({
+      fromFqn: row.from_fqn,
+      toFqn: row.to_fqn,
+      file: row.file,
+      line: row.line,
+      column: row.col,
+      kind: row.kind as any
+    }));
+  }
+
+  async getAllCallGraphEdges(options?: StorageQueryOptions): Promise<CallGraphEdge[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    let sql = 'SELECT caller, callee, locations FROM call_edges_forward';
+    if (options?.limit) {
+      sql += ` LIMIT ${options.limit}`;
+      if (options.offset) {
+        sql += ` OFFSET ${options.offset}`;
+      }
+    }
+
+    const stmt = this.db.prepare(sql);
+    const rows = stmt.all() as Array<{
+      caller: string;
+      callee: string;
+      locations: string;
+    }>;
+
+    return rows.map(row => ({
+      caller: row.caller,
+      callee: row.callee,
+      locations: JSON.parse(row.locations)
+    }));
+  }
+
   async saveCallEdge(edge: CallGraphEdge, direction: 'forward' | 'reverse'): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 

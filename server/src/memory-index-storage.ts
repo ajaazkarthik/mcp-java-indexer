@@ -964,3 +964,85 @@ export class MemoryIndexWithStorage {
     }
   }
 }
+
+/**
+ * StoragePersistence - Backwards-compatible shim for Persistence class
+ * 
+ * This class provides the same interface as Persistence but delegates to
+ * MemoryIndexWithStorage's internal storage backend. This allows existing
+ * code (FileSystemWatcher, IndexValidator, etc.) to work without changes.
+ */
+export class StoragePersistence {
+  private memoryIndex: MemoryIndexWithStorage;
+  private indexDir: string;
+
+  constructor(indexDir: string, memoryIndex: MemoryIndexWithStorage) {
+    this.indexDir = indexDir;
+    this.memoryIndex = memoryIndex;
+  }
+
+  /**
+   * Save is now a no-op since storage backend handles persistence automatically.
+   * We just need to flush pending writes.
+   */
+  async save(memoryIndex: any): Promise<void> {
+    // Storage backend handles persistence - just ensure all writes are flushed
+    if (this.memoryIndex.flush) {
+      await this.memoryIndex.flush();
+    }
+    console.error('✅ Storage persistence flush complete');
+  }
+
+  /**
+   * Load is a no-op since storage backend loads data automatically on demand.
+   */
+  async load(memoryIndex: any): Promise<boolean> {
+    // Storage backend loads data automatically via initialize()
+    // Return true to indicate data is "loaded"
+    console.error('ℹ️  Storage backend - data loads automatically');
+    return true;
+  }
+
+  /**
+   * Check if storage exists
+   */
+  async exists(): Promise<boolean> {
+    // Check if the storage directory exists
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    try {
+      await fs.access(path.join(this.indexDir, 'index.db'));
+      return true;
+    } catch {
+      try {
+        await fs.access(path.join(this.indexDir, 'metadata.json'));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  }
+
+  /**
+   * Get metadata - returns info about storage state
+   */
+  async getMetadata(): Promise<{ timestamp: number; version: string; stats: any } | null> {
+    try {
+      const stats = this.memoryIndex.getStats();
+      return {
+        timestamp: Date.now(),
+        version: 'storage-backend',
+        stats
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Clear storage
+   */
+  async clear(): Promise<void> {
+    this.memoryIndex.clear();
+  }
+}

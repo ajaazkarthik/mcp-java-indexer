@@ -76,6 +76,11 @@ export interface IIndexStorage {
   saveReferences(refs: Reference[]): Promise<void>;
 
   /**
+   * Get all references (for full index load)
+   */
+  getAllReferences(options?: StorageQueryOptions): Promise<Reference[]>;
+
+  /**
    * Find all references to a symbol
    */
   findUsages(fqn: string): Promise<Reference[]>;
@@ -100,6 +105,11 @@ export interface IIndexStorage {
    * Save multiple call graph edges (batch operation)
    */
   saveCallEdges(edges: CallGraphEdge[], direction: 'forward' | 'reverse'): Promise<void>;
+
+  /**
+   * Get all call graph edges (for full index load)
+   */
+  getAllCallGraphEdges(options?: StorageQueryOptions): Promise<CallGraphEdge[]>;
 
   /**
    * Get outbound calls (what this method calls)
