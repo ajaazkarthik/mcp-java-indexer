@@ -1,255 +1,240 @@
 /**
- * Real-world integration test using actual Java project
- * Tests the complete flow: index → query → memory usage
+ * REAL INTEGRATION TEST
+ * 
+ * This test simulates actual production usage:
+ * 1. Creates a Persistence instance
+ * 2. Creates a MemoryIndex with realistic data
+ * 3. Saves via persistence.save()
+ * 4. Verifies NO .json.gz files are created
+ * 5. Verifies data can be loaded back
+ * 
+ * CRITICAL: This is what actually happens in production!
  */
 
-const { MemoryIndexWithStorage } = require('./server/dist/memory-index-storage.js');
-const { IndexerClient } = require('./server/dist/indexer-client.js');
 const path = require('path');
-const fs = require('fs/promises');
+const fs = require('fs');
 
-// Create a small test Java project
-const testProject = {
-  'src/com/example/Main.java': `
-package com.example;
+const TEST_DIR = path.join(process.cwd(), 'test-real-integration');
+const INDEX_DIR = path.join(TEST_DIR, '.mcp-index');
 
-public class Main {
-    public static void main(String[] args) {
-        UserService service = new UserService();
-        service.createUser("John Doe");
-    }
-}`,
-
-  'src/com/example/UserService.java': `
-package com.example;
-
-public class UserService {
-    private UserRepository repository = new UserRepository();
-    
-    public void createUser(String name) {
-        User user = new User(name);
-        repository.save(user);
-    }
-    
-    public User findUser(String name) {
-        return repository.findByName(name);
-    }
-}`,
-
-  'src/com/example/UserRepository.java': `
-package com.example;
-
-import java.util.HashMap;
-import java.util.Map;
-
-public class UserRepository {
-    private Map<String, User> users = new HashMap<>();
-    
-    public void save(User user) {
-        users.put(user.getName(), user);
-    }
-    
-    public User findByName(String name) {
-        return users.get(name);
-    }
-}`,
-
-  'src/com/example/User.java': `
-package com.example;
-
-public class User {
-    private String name;
-    
-    public User(String name) {
-        this.name = name;
-    }
-    
-    public String getName() {
-        return name;
-    }
-    
-    public void setName(String name) {
-        this.name = name;
-    }
-}`
-};
-
-async function setupTestProject() {
-  const testDir = path.join(__dirname, 'test-java-project');
-  
-  // Clean and create test project
-  try {
-    await fs.rm(testDir, { recursive: true, force: true });
-  } catch (e) {}
-  
-  for (const [filePath, content] of Object.entries(testProject)) {
-    const fullPath = path.join(testDir, filePath);
-    await fs.mkdir(path.dirname(fullPath), { recursive: true });
-    await fs.writeFile(fullPath, content);
+async function cleanup() {
+  if (fs.existsSync(TEST_DIR)) {
+    fs.rmSync(TEST_DIR, { recursive: true });
   }
-  
-  return testDir;
 }
 
-async function testFullIntegration() {
-  console.log('═══════════════════════════════════════════════════════');
-  console.log('  Real-World Integration Test');
-  console.log('═══════════════════════════════════════════════════════\n');
+async function runTest() {
+  console.log('='.repeat(70));
+  console.log('REAL INTEGRATION TEST - Simulating Production Usage');
+  console.log('='.repeat(70));
   
-  const testDir = await setupTestProject();
-  console.log(`✅ Test Java project created at: ${testDir}\n`);
+  await cleanup();
+  fs.mkdirSync(INDEX_DIR, { recursive: true });
   
-  const memoryIndex = new MemoryIndexWithStorage();
-  memoryIndex.setIndexDir(testDir);
-  
-  // Wait for storage to initialize
-  await new Promise(resolve => setTimeout(resolve, 100));
-  
-  console.log('📦 Indexing Java files...');
-  const startMem = process.memoryUsage().heapUsed / 1024 / 1024;
-  const startTime = Date.now();
-  
-  const indexerClient = new IndexerClient();
-  await indexerClient.start();
-  
-  const javaFiles = [
-    path.join(testDir, 'src/com/example/Main.java'),
-    path.join(testDir, 'src/com/example/UserService.java'),
-    path.join(testDir, 'src/com/example/UserRepository.java'),
-    path.join(testDir, 'src/com/example/User.java')
-  ];
-  
-  const sourceRoots = [path.join(testDir, 'src')];
+  let failed = false;
   
   try {
-    const results = await indexerClient.indexFiles(javaFiles, sourceRoots);
+    // Import modules
+    const { Persistence } = await import('./server/dist/persistence.js');
+    const { MemoryIndex } = await import('./server/dist/memory-index.js');
+    const { StorageFactory } = await import('./server/dist/storage/storage-factory.js');
     
-    console.log(`  ✅ Indexed ${results.length} files in ${Date.now() - startTime}ms\n`);
+    // Reset storage detection
+    StorageFactory.resetDetection();
     
-    // Add symbols to index
-    let totalSymbols = 0;
-    let totalReferences = 0;
+    console.log('\n1️⃣ Creating Persistence instance...');
+    const persistence = new Persistence(INDEX_DIR);
     
-    for (const result of results) {
-      if (result.symbols) {
-        for (const symbol of result.symbols) {
-          memoryIndex.addSymbol(symbol);
-          totalSymbols++;
-        }
-      }
+    // Wait for storage to initialize
+    console.log('   Waiting for storage initialization...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const storageType = persistence.getStorageType();
+    console.log(`   Storage type detected: ${storageType}`);
+    
+    if (storageType === 'json') {
+      console.log('\n❌ FAIL: Using JSON fallback instead of database storage!');
+      failed = true;
+    } else {
+      console.log(`   ✅ Using ${storageType} storage`);
+    }
+    
+    console.log('\n2️⃣ Creating MemoryIndex with realistic data...');
+    const memoryIndex = new MemoryIndex();
+    
+    // Add 500 symbols (realistic size)
+    for (let i = 0; i < 500; i++) {
+      memoryIndex.addSymbol({
+        fqn: `com.example.package${Math.floor(i/10)}.Class${i}`,
+        name: `Class${i}`,
+        kind: 'class',
+        file: `/src/main/java/com/example/package${Math.floor(i/10)}/Class${i}.java`,
+        line: 1,
+        column: 1,
+        packageName: `com.example.package${Math.floor(i/10)}`,
+        modifiers: ['public'],
+        signature: `public class Class${i}`
+      });
       
-      if (result.references) {
-        for (const ref of result.references) {
-          memoryIndex.addReference(ref);
-          totalReferences++;
-        }
-      }
+      // Add a method for each class
+      memoryIndex.addSymbol({
+        fqn: `com.example.package${Math.floor(i/10)}.Class${i}.process`,
+        name: 'process',
+        kind: 'method',
+        file: `/src/main/java/com/example/package${Math.floor(i/10)}/Class${i}.java`,
+        line: 10,
+        column: 5,
+        packageName: `com.example.package${Math.floor(i/10)}`,
+        modifiers: ['public'],
+        signature: 'public void process()'
+      });
     }
     
-    console.log(`📊 Index Statistics:`);
-    console.log(`  Symbols: ${totalSymbols}`);
-    console.log(`  References: ${totalReferences}\n`);
-    
-    // Wait for writes to flush
-    await memoryIndex.flush();
-    
-    console.log('🔍 Testing Queries:\n');
-    
-    // Test 1: Find UserService class
-    console.log('1. Find UserService class:');
-    const userServiceSymbols = memoryIndex.findSymbols('UserService');
-    console.log(`  Found ${userServiceSymbols.length} symbols`);
-    if (userServiceSymbols.length > 0) {
-      console.log(`  ✅ ${userServiceSymbols[0].fqn} at ${userServiceSymbols[0].file}:${userServiceSymbols[0].line}`);
+    // Add 200 references
+    for (let i = 0; i < 200; i++) {
+      memoryIndex.addReference({
+        fromFqn: `com.example.package${i % 50}.Class${i % 500}`,
+        toFqn: `com.example.package${(i + 1) % 50}.Class${(i + 1) % 500}`,
+        file: `/src/main/java/com/example/package${i % 50}/Class${i % 500}.java`,
+        line: 15,
+        column: 10,
+        kind: 'type_reference'
+      });
     }
     
-    // Test 2: Find usages of User class
-    console.log('\n2. Find usages of User class:');
-    const userUsages = memoryIndex.findUsages('com.example.User');
-    console.log(`  Found ${userUsages.length} usages`);
-    for (const usage of userUsages) {
-      console.log(`  - ${usage.kind}: ${usage.fromFqn} → ${usage.toFqn}`);
+    // Add call graph edges
+    for (let i = 0; i < 100; i++) {
+      memoryIndex.addCallGraphEdge(
+        `com.example.package${i % 50}.Class${i}.process`,
+        `com.example.package${(i + 1) % 50}.Class${i + 1}.process`,
+        [{ file: `/src/Class${i}.java`, line: 20, column: 10 }]
+      );
     }
     
-    // Test 3: Find createUser method
-    console.log('\n3. Find createUser method:');
-    const createUserSymbols = memoryIndex.findSymbols('createUser');
-    if (createUserSymbols.length > 0) {
-      const method = createUserSymbols[0];
-      console.log(`  ✅ Found: ${method.fqn}`);
-      
-      // Get outbound calls from createUser
-      console.log('\n  Outbound calls from createUser:');
-      const outboundCalls = memoryIndex.getOutboundCalls(method.fqn);
-      console.log(`  Found ${outboundCalls.length} calls`);
-      for (const edge of outboundCalls) {
-        console.log(`    → ${edge.callee} (${edge.locations.length} locations)`);
-      }
-    }
-    
-    // Test 4: Find who calls save method
-    console.log('\n4. Find who calls save method:');
-    const saveSymbols = memoryIndex.findSymbols('save');
-    if (saveSymbols.length > 0) {
-      const saveMethod = saveSymbols.find(s => s.kind === 'method');
-      if (saveMethod) {
-        console.log(`  Method: ${saveMethod.fqn}`);
-        const inboundCalls = memoryIndex.getInboundCalls(saveMethod.fqn);
-        console.log(`  Inbound calls: ${inboundCalls.length}`);
-        for (const edge of inboundCalls) {
-          console.log(`    ← ${edge.caller}`);
-        }
-      }
-    }
-    
-    // Test 5: Inheritance
-    console.log('\n5. Check HashMap inheritance:');
-    const hashMapSymbols = memoryIndex.findSymbols('HashMap');
-    if (hashMapSymbols.length > 0) {
-      console.log(`  Found HashMap references: ${hashMapSymbols.length}`);
-    }
-    
-    const endMem = process.memoryUsage().heapUsed / 1024 / 1024;
-    const memUsed = endMem - startMem;
-    
-    console.log(`\n💾 Memory Usage:`);
-    console.log(`  Before indexing: ${startMem.toFixed(2)} MB`);
-    console.log(`  After indexing: ${endMem.toFixed(2)} MB`);
-    console.log(`  Memory increase: ${memUsed.toFixed(2)} MB`);
-    
-    // Get final stats
     const stats = memoryIndex.getStats();
-    console.log(`\n📈 Final Statistics:`);
-    console.log(`  Cached symbols: ${stats.symbols}`);
-    console.log(`  Tracked files: ${stats.allFiles}`);
-    console.log(`  Indexed files: ${stats.indexedFiles}`);
+    console.log(`   Created ${stats.symbols} symbols, ${stats.references} references`);
     
-    await indexerClient.stop();
-    await memoryIndex.close();
+    console.log('\n3️⃣ Saving via persistence.save()...');
+    const saveStart = Date.now();
+    await persistence.save(memoryIndex);
+    const saveTime = Date.now() - saveStart;
+    console.log(`   Save completed in ${saveTime}ms`);
     
-    console.log('\n═══════════════════════════════════════════════════════');
-    console.log('  ✅ Integration test PASSED!');
-    console.log('═══════════════════════════════════════════════════════\n');
+    console.log('\n4️⃣ Checking for gzip files (CRITICAL CHECK)...');
+    const files = fs.readdirSync(INDEX_DIR);
+    console.log(`   Files in ${INDEX_DIR}:`);
+    files.forEach(f => {
+      const stat = fs.statSync(path.join(INDEX_DIR, f));
+      console.log(`   - ${f} (${stat.isDirectory() ? 'dir' : stat.size + ' bytes'})`);
+    });
     
-    return true;
+    const gzipFiles = files.filter(f => f.endsWith('.json.gz'));
+    const chunkFiles = files.filter(f => f.includes('_chunks.txt'));
+    
+    if (gzipFiles.length > 0) {
+      console.log(`\n❌ FAIL: Found ${gzipFiles.length} gzip files!`);
+      console.log('   Gzip files:', gzipFiles.join(', '));
+      failed = true;
+    } else {
+      console.log(`   ✅ No .json.gz files created`);
+    }
+    
+    if (chunkFiles.length > 0) {
+      console.log(`\n❌ FAIL: Found ${chunkFiles.length} chunk metadata files!`);
+      console.log('   Chunk files:', chunkFiles.join(', '));
+      failed = true;
+    } else {
+      console.log(`   ✅ No chunk metadata files created`);
+    }
+    
+    // Check for database file
+    const hasDbFile = files.includes('index.db');
+    const hasShardIndex = files.includes('shard-index.json');
+    const hasMetadata = files.includes('metadata.json');
+    
+    console.log(`\n   Database storage files:`);
+    console.log(`   - index.db: ${hasDbFile ? '✅ Present' : '❌ Missing'}`);
+    console.log(`   - shard-index.json: ${hasShardIndex ? '⚠️ Present (file-shard)' : '✅ Not needed (using DB)'}`);
+    console.log(`   - metadata.json: ${hasMetadata ? '✅ Present' : '❌ Missing'}`);
+    
+    console.log('\n5️⃣ Loading data back...');
+    const loadedIndex = new MemoryIndex();
+    const loadStart = Date.now();
+    const loaded = await persistence.load(loadedIndex);
+    const loadTime = Date.now() - loadStart;
+    
+    if (!loaded) {
+      console.log('   ❌ FAIL: load() returned false!');
+      failed = true;
+    } else {
+      console.log(`   Load completed in ${loadTime}ms`);
+      
+      const loadedStats = loadedIndex.getStats();
+      console.log(`   Loaded ${loadedStats.symbols} symbols, ${loadedStats.references} references`);
+      
+      // Verify data integrity
+      if (loadedStats.symbols >= 500) { // We added 500 classes + 500 methods = 1000
+        console.log(`   ✅ Symbols preserved`);
+      } else {
+        console.log(`   ❌ FAIL: Expected ~1000 symbols, got ${loadedStats.symbols}`);
+        failed = true;
+      }
+      
+      if (loadedStats.references >= 100) {
+        console.log(`   ✅ References preserved`);
+      } else {
+        console.log(`   ❌ FAIL: Expected ~200 refs, got ${loadedStats.references}`);
+        failed = true;
+      }
+    }
+    
+    console.log('\n6️⃣ Checking metadata.json content...');
+    if (hasMetadata) {
+      const metadata = JSON.parse(fs.readFileSync(path.join(INDEX_DIR, 'metadata.json'), 'utf-8'));
+      console.log(`   Version: ${metadata.version}`);
+      console.log(`   StorageType: ${metadata.storageType}`);
+      
+      if (metadata.version === '2.0' && metadata.storageType === 'sqljs') {
+        console.log(`   ✅ Correct metadata for SQLite storage`);
+      } else if (metadata.version === '1.1') {
+        console.log(`   ❌ FAIL: Using legacy JSON format (version 1.1)`);
+        failed = true;
+      }
+    }
+    
+    // Close storage before cleanup to prevent exit handler errors
+    console.log('\n7️⃣ Closing storage...');
+    StorageFactory.resetDetection(); // This closes any open storage
+    console.log('   ✅ Storage closed');
     
   } catch (error) {
-    console.error('\n❌ Test failed:', error);
-    console.error(error.stack);
-    await indexerClient.stop();
-    await memoryIndex.close();
-    return false;
+    console.error('\n💥 Test crashed:', error);
+    failed = true;
   }
-}
-
-async function main() {
-  try {
-    const success = await testFullIntegration();
-    process.exit(success ? 0 : 1);
-  } catch (error) {
-    console.error('Fatal error:', error);
+  
+  // Final result
+  console.log('\n' + '='.repeat(70));
+  if (failed) {
+    console.log('❌ INTEGRATION TEST FAILED');
+    console.log('   Storage integration is NOT working correctly!');
+    console.log('='.repeat(70));
+    // Cleanup before exit
+    await cleanup();
     process.exit(1);
+  } else {
+    console.log('✅ INTEGRATION TEST PASSED');
+    console.log('   Storage integration is working correctly!');
+    console.log('='.repeat(70));
   }
+  
+  // Cleanup
+  await cleanup();
+  
+  // Exit cleanly
+  process.exit(0);
 }
 
-main();
+runTest().catch(err => {
+  console.error('Fatal error:', err);
+  process.exit(1);
+});

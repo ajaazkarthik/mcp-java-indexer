@@ -650,8 +650,14 @@ export class FileShardStorage implements IIndexStorage {
     await this.saveShardIndex();
   }
 
+  async flush(): Promise<void> {
+    // Ensure shard index is saved
+    await this.saveShardIndex();
+  }
+
   async close(): Promise<void> {
-    // Nothing to close for file-based storage
+    // Save any pending shard index
+    await this.saveShardIndex();
   }
 
   async beginTransaction(): Promise<void> {

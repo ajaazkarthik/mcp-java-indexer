@@ -666,6 +666,10 @@ export class SqliteStorage implements IIndexStorage {
     `);
   }
 
+  async flush(): Promise<void> {
+    // better-sqlite3 is synchronous, writes are immediate - no flush needed
+  }
+
   async close(): Promise<void> {
     if (this.db) {
       this.db.close();

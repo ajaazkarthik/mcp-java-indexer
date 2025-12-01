@@ -182,6 +182,11 @@ export interface IIndexStorage {
   clear(): Promise<void>;
 
   /**
+   * Flush any pending writes to disk (for sql.js in-memory database)
+   */
+  flush(): Promise<void>;
+
+  /**
    * Close storage (cleanup resources)
    */
   close(): Promise<void>;

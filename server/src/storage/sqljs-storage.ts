@@ -21,6 +21,10 @@ export class SqlJsStorage implements IIndexStorage {
   private dirty = false;
   private autoSaveInterval: NodeJS.Timeout | null = null;
   private readonly AUTO_SAVE_MS = 30000; // Save every 30 seconds if dirty
+  private closed = false; // Track if storage has been closed
+  private exitHandler: (() => void) | null = null;
+  private sigintHandler: (() => void) | null = null;
+  private sigtermHandler: (() => void) | null = null;
 
   constructor(indexDir: string) {
     this.dbPath = path.join(indexDir, 'index.db');
@@ -50,10 +54,14 @@ export class SqlJsStorage implements IIndexStorage {
     // Set up periodic auto-save
     this.autoSaveInterval = setInterval(() => this.saveIfDirty(), this.AUTO_SAVE_MS);
 
-    // Handle process exit for graceful shutdown
-    process.on('exit', () => this.saveSync());
-    process.on('SIGINT', () => { this.saveSync(); process.exit(0); });
-    process.on('SIGTERM', () => { this.saveSync(); process.exit(0); });
+    // Handle process exit for graceful shutdown (store handlers so we can remove them)
+    this.exitHandler = () => this.saveSync();
+    this.sigintHandler = () => { this.saveSync(); process.exit(0); };
+    this.sigtermHandler = () => { this.saveSync(); process.exit(0); };
+    
+    process.on('exit', this.exitHandler);
+    process.on('SIGINT', this.sigintHandler);
+    process.on('SIGTERM', this.sigtermHandler);
 
     console.error('✅ sql.js storage initialized at', this.dbPath);
   }
@@ -141,21 +149,31 @@ export class SqlJsStorage implements IIndexStorage {
   }
 
   private saveIfDirty(): void {
-    if (this.dirty && this.db) {
+    if (this.dirty && this.db && !this.closed) {
       this.saveSync();
     }
   }
 
   private saveSync(): void {
-    if (!this.db) return;
+    if (!this.db || this.closed) return;
     
     try {
+      // Check if directory still exists before attempting to save
+      const dir = path.dirname(this.dbPath);
+      if (!fs.existsSync(dir)) {
+        // Directory was deleted, don't attempt to save
+        return;
+      }
+      
       const data = this.db.export();
       const buffer = Buffer.from(data);
       fs.writeFileSync(this.dbPath, buffer);
       this.dirty = false;
     } catch (error) {
-      console.error('Failed to save database:', error);
+      // Only log if not a "directory doesn't exist" error
+      if ((error as any).code !== 'ENOENT') {
+        console.error('Failed to save database:', error);
+      }
     }
   }
 
@@ -838,15 +856,42 @@ export class SqlJsStorage implements IIndexStorage {
     this.markDirty();
   }
 
+  async flush(): Promise<void> {
+    if (this.dirty) {
+      this.saveSync();
+    }
+  }
+
   async close(): Promise<void> {
+    // Mark as closed to prevent further operations
+    this.closed = true;
+    
+    // Clear auto-save interval
     if (this.autoSaveInterval) {
       clearInterval(this.autoSaveInterval);
       this.autoSaveInterval = null;
     }
+    
+    // Remove process exit handlers
+    if (this.exitHandler) {
+      process.removeListener('exit', this.exitHandler);
+      this.exitHandler = null;
+    }
+    if (this.sigintHandler) {
+      process.removeListener('SIGINT', this.sigintHandler);
+      this.sigintHandler = null;
+    }
+    if (this.sigtermHandler) {
+      process.removeListener('SIGTERM', this.sigtermHandler);
+      this.sigtermHandler = null;
+    }
 
     if (this.db) {
-      // Final save before closing
-      this.saveSync();
+      // Final save before closing (only if directory still exists)
+      const dir = path.dirname(this.dbPath);
+      if (fs.existsSync(dir)) {
+        this.saveSync();
+      }
       this.db.close();
       this.db = null;
     }

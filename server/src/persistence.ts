@@ -152,6 +152,9 @@ export class Persistence {
         }
       }
       
+      // CRITICAL: Flush to disk immediately (sql.js keeps data in-memory until flushed)
+      await this.storage.flush();
+      
       // Also save metadata JSON for compatibility
       const metadata = {
         version: '2.0', // Version 2.0 uses storage backend
