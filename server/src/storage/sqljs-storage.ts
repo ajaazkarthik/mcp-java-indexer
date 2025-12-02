@@ -177,10 +177,30 @@ export class SqlJsStorage implements IIndexStorage {
         path TEXT PRIMARY KEY,
         hash TEXT NOT NULL,
         last_indexed INTEGER NOT NULL,
+        mtime INTEGER,
         is_indexed INTEGER NOT NULL,
         symbols TEXT
       );
     `);
+
+    // Ensure newer columns exist when upgrading older databases
+    this.ensureColumnExists('files', 'mtime', 'INTEGER');
+  }
+
+  private ensureColumnExists(table: string, column: string, type: string): void {
+    if (!this.db) return;
+
+    const stmt = this.db.prepare(`PRAGMA table_info(${table});`);
+    const existingColumns: string[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as { name: string };
+      existingColumns.push(row.name);
+    }
+    stmt.free();
+
+    if (!existingColumns.includes(column)) {
+      this.db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type};`);
+    }
   }
 
   private saveIfDirty(): void {
@@ -189,8 +209,8 @@ export class SqlJsStorage implements IIndexStorage {
     }
   }
 
-  private saveSync(): void {
-    if (!this.db || this.closed) return;
+  private saveSync(force: boolean = false): void {
+    if (!this.db || (this.closed && !force)) return;
     
     try {
       // Check if directory still exists before attempting to save
@@ -791,9 +811,16 @@ export class SqlJsStorage implements IIndexStorage {
     if (!this.db) throw new Error('Database not initialized');
 
     this.db.run(
-      `INSERT OR REPLACE INTO files (path, hash, last_indexed, is_indexed, symbols)
-       VALUES (?, ?, ?, ?, ?)`,
-      [file.path, file.hash, file.lastIndexed, 1, JSON.stringify(file.symbols)]
+      `INSERT OR REPLACE INTO files (path, hash, last_indexed, mtime, is_indexed, symbols)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        file.path,
+        file.hash,
+        file.lastIndexed,
+        typeof file.mtime === 'number' ? file.mtime : file.lastIndexed,
+        1,
+        JSON.stringify(file.symbols)
+      ]
     );
     this.markDirty();
   }
@@ -811,6 +838,7 @@ export class SqlJsStorage implements IIndexStorage {
         path: row.path,
         hash: row.hash,
         lastIndexed: row.last_indexed,
+        mtime: typeof row.mtime === 'number' ? row.mtime : row.last_indexed,
         symbols: JSON.parse(row.symbols || '[]')
       };
     }
@@ -830,6 +858,7 @@ export class SqlJsStorage implements IIndexStorage {
         path: row.path,
         hash: row.hash,
         lastIndexed: row.last_indexed,
+        mtime: typeof row.mtime === 'number' ? row.mtime : row.last_indexed,
         symbols: JSON.parse(row.symbols || '[]')
       });
     }
@@ -947,7 +976,7 @@ export class SqlJsStorage implements IIndexStorage {
       // Final save before closing (only if directory still exists)
       const dir = path.dirname(this.dbPath);
       if (fs.existsSync(dir)) {
-        this.saveSync();
+        this.saveSync(true);
       }
       this.db.close();
       this.db = null;

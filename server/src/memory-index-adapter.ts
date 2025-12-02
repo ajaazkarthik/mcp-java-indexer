@@ -201,9 +201,9 @@ export class MemoryIndexAdapter {
   /**
    * Add file
    */
-  addFile(filePath: string, hash: string, symbols: string[], isIndexedFile: boolean = true): void {
+  addFile(filePath: string, hash: string, symbols: string[], isIndexedFile: boolean = true, mtime?: number): void {
     this.ensureInitialized().then(() => {
-      return this.indexV2.addFile(filePath, hash, symbols, isIndexedFile);
+      return this.indexV2.addFile(filePath, hash, symbols, isIndexedFile, mtime);
     }).catch(err => {
       console.error('Error adding file:', err);
     });

@@ -46,9 +46,19 @@ export class FileShardStorage implements IIndexStorage {
       const content = await fs.readFile(indexPath, 'utf-8');
       const data = JSON.parse(content);
       
+      const fileEntries: Array<[string, FileInfo]> = [];
+      for (const entry of data.files || []) {
+        const [filePath, info] = entry as [string, FileInfo];
+        const normalizedInfo: FileInfo = {
+          ...info,
+          mtime: typeof info.mtime === 'number' ? info.mtime : info.lastIndexed
+        };
+        fileEntries.push([filePath, normalizedInfo]);
+      }
+
       this.shardIndex = {
         symbols: new Map(data.symbols || []),
-        files: new Map(data.files || [])
+        files: new Map(fileEntries)
       };
       
       this.currentShard = data.currentShard || 0;
@@ -596,16 +606,30 @@ export class FileShardStorage implements IIndexStorage {
   }
 
   async saveFile(file: FileInfo): Promise<void> {
-    this.shardIndex.files.set(file.path, file);
+    const normalizedFile: FileInfo = {
+      ...file,
+      mtime: typeof file.mtime === 'number' ? file.mtime : file.lastIndexed
+    };
+    this.shardIndex.files.set(file.path, normalizedFile);
     await this.saveShardIndex();
   }
 
   async getFile(filePath: string): Promise<FileInfo | undefined> {
-    return this.shardIndex.files.get(filePath);
+    const info = this.shardIndex.files.get(filePath);
+    if (!info) return undefined;
+    if (typeof info.mtime !== 'number') {
+      info.mtime = info.lastIndexed;
+    }
+    return info;
   }
 
   async getAllFiles(): Promise<FileInfo[]> {
-    return Array.from(this.shardIndex.files.values());
+    return Array.from(this.shardIndex.files.values()).map(info => {
+      if (typeof info.mtime !== 'number') {
+        info.mtime = info.lastIndexed;
+      }
+      return info;
+    });
   }
 
   async deleteFile(filePath: string): Promise<void> {

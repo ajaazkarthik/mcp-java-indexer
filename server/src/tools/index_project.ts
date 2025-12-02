@@ -7,6 +7,52 @@ import { IndexerClient } from '../indexer-client.js';
 import { Persistence } from '../persistence.js';
 import { FileSystemWatcher } from '../fs-watcher.js';
 
+class Profiler {
+  private readonly enabled: boolean;
+  private readonly marks: { label: string; time: number }[] = [];
+
+  constructor(enabled: boolean) {
+    this.enabled = enabled;
+    if (enabled) {
+      this.mark('start');
+    }
+  }
+
+  mark(label: string) {
+    if (!this.enabled) {
+      return;
+    }
+    this.marks.push({ label, time: Date.now() });
+  }
+
+  getSummary(): { text: string; breakdown: { from: string; to: string; seconds: number }[] } | null {
+    if (!this.enabled || this.marks.length < 2) {
+      return null;
+    }
+
+    const breakdown: { from: string; to: string; seconds: number }[] = [];
+    for (let i = 1; i < this.marks.length; i++) {
+      const prev = this.marks[i - 1];
+      const curr = this.marks[i];
+      breakdown.push({
+        from: prev.label,
+        to: curr.label,
+        seconds: parseFloat(((curr.time - prev.time) / 1000).toFixed(2))
+      });
+    }
+
+    const totalSeconds = parseFloat(
+      ((this.marks[this.marks.length - 1].time - this.marks[0].time) / 1000).toFixed(2)
+    );
+    const lines = breakdown
+      .map(step => `  • ${step.from} → ${step.to}: ${step.seconds}s`)
+      .join('\n');
+
+    const text = `\n⏱️ Profiling Summary:\n${lines}\n  • Total: ${totalSeconds}s`;
+    return { text, breakdown };
+  }
+}
+
 // Normalize paths to use forward slashes consistently (needed for Windows compatibility)
 // Also resolves to absolute path to ensure consistent storage across sessions
 function normalizePath(p: string): string {
@@ -35,7 +81,9 @@ export const indexProjectTool: Tool = {
 
 **Tips:**
 - Don't call multiple times in same session (incremental updates are automatic)
-- Use forceFullIndex=true only if index seems corrupted`,
+- Use forceFullIndex=true only if index seems corrupted
+- Set profile=true to capture detailed stage timings
+- Set metricsOutputPath="relative/or/absolute/path.json" to persist run metrics`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -51,6 +99,14 @@ export const indexProjectTool: Tool = {
       forceFullIndex: {
         type: 'boolean',
         description: 'Force complete rebuild instead of incremental. Only use if index is corrupted. Default: false'
+      },
+      profile: {
+        type: 'boolean',
+        description: 'Enable detailed profiling logs for this run. Default: false'
+      },
+      metricsOutputPath: {
+        type: 'string',
+        description: 'Optional file path (absolute or relative to rootDir) to write JSON metrics for this run'
       }
     },
     required: ['rootDir']
@@ -67,9 +123,24 @@ export async function handleIndexProject(
   const rootDir = normalizePath(args.rootDir as string);
   const sourceRoots = (args.sourceRoots as string[]) || ['src/main/java', 'src'];
   const forceFullIndex = (args.forceFullIndex as boolean) || false;
+  const profileEnabled = Boolean(args.profile);
+  const profiler = new Profiler(profileEnabled);
+  const metricsOutputPathRaw = args.metricsOutputPath as string | undefined;
+  const metricsOutputPath = metricsOutputPathRaw
+    ? normalizePath(
+        path.isAbsolute(metricsOutputPathRaw)
+          ? metricsOutputPathRaw
+          : path.join(rootDir, metricsOutputPathRaw)
+      )
+    : undefined;
+
+  if (profileEnabled) {
+    console.error('⏱️ Profiling enabled for index_project run');
+  }
 
   try {
     const startTime = Date.now();
+    profiler.mark('init');
 
     // Diagnostic logging for debugging incremental index issues
     console.error(`\n📍 [index_project] Called with:`);
@@ -127,6 +198,8 @@ export async function handleIndexProject(
       memoryIndex.setIndexDir(rootDir);
     }
 
+    profiler.mark('persistence_ready');
+
     // Start Java indexer process
     await indexerClient.start();
 
@@ -137,6 +210,8 @@ export async function handleIndexProject(
     });
     // Normalize all paths to use forward slashes (critical for Windows compatibility)
     const javaFiles = javaFilesRaw.map(normalizePath);
+
+    profiler.mark('glob_complete');
 
     if (javaFiles.length === 0) {
       return {
@@ -222,6 +297,8 @@ ${freshnessInfo}
       filesToIndex = javaFiles;
     }
 
+    profiler.mark('change_detection_complete');
+
     // Conservative batch sizing to prevent OOM and buffer overflow
     // 100 files = safer for large projects, prevents JSON response buffer overflow
     const batchSize = 300; // Reduced for stability - prevents buffer overflow on large projects
@@ -230,6 +307,7 @@ ${freshnessInfo}
     let processedFiles = 0;
     let errorCount = 0;
     let batchCount = 0;
+    const batchMetrics: { batch: number; files: number; seconds: number }[] = [];
 
     console.error(`\n🔍 ${loadedExisting ? 'Incrementally indexing' : 'Indexing'} ${filesToIndex.length} files in batches of ${batchSize}...`);
     console.error(`⚡ Optimized batch size for performance and stability`);
@@ -237,6 +315,7 @@ ${freshnessInfo}
     for (let i = 0; i < filesToIndex.length; i += batchSize) {
       const batch = filesToIndex.slice(i, Math.min(i + batchSize, filesToIndex.length));
       batchCount++;
+      const batchStartTime = Date.now();
       
       const results = await indexerClient.indexFiles(batch, absoluteSourceRoots);
 
@@ -301,6 +380,14 @@ ${freshnessInfo}
       const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
       
       console.error(`📊 Batch ${batchCount}: ${progress}/${filesToIndex.length} (${percentage}%) - ${totalSymbols} symbols - ${rate} files/s - Heap: ${heapUsedMB}/${heapTotalMB}MB`);
+
+      if (profileEnabled) {
+        batchMetrics.push({
+          batch: batchCount,
+          files: batch.length,
+          seconds: parseFloat(((Date.now() - batchStartTime) / 1000).toFixed(2))
+        });
+      }
       
       // Emergency brake: REDUCED threshold from 2GB to 1.5GB for earlier intervention
       if (heapUsedMB > 1500) {
@@ -342,6 +429,8 @@ ${freshnessInfo}
       console.error(`✅ Index persisted successfully`);
     }
 
+    profiler.mark('persistence_saved');
+
     // Start file watcher
     const watcher = new FileSystemWatcher(rootDir, absoluteSourceRoots, memoryIndex, indexerClient, persistence);
     watcher.start();
@@ -349,6 +438,9 @@ ${freshnessInfo}
 
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
     const stats = memoryIndex.getStats();
+
+    profiler.mark('watcher_started');
+    profiler.mark('done');
 
     const indexMode = loadedExisting ? 
       (filesToIndex.length > 0 ? `Incremental update: ${filesToIndex.length} changed` : 'Up-to-date') :
@@ -359,6 +451,51 @@ ${freshnessInfo}
     const freshnessInfo = `\n🕐 Index Freshness:
   • Just indexed: ${now.toLocaleString()}
   • Status: ✅ Fresh`;
+
+    // Collect profiling summary
+    const profilingSummary = profiler.getSummary();
+
+    // Build metrics object
+    const metrics: Record<string, any> = {
+      rootDir,
+      timestamp: new Date().toISOString(),
+      incremental: loadedExisting,
+      elapsedSeconds: parseFloat(elapsedTime),
+      discoveredJavaFiles: javaFiles.length,
+      filesIndexed: filesToIndex.length,
+      processedFiles,
+      batchSize,
+      batchCount,
+      errors: errorCount,
+      totals: {
+        symbols: stats.symbols,
+        indexedFiles: stats.indexedFiles,
+        allFiles: stats.allFiles,
+        references: stats.references,
+        callGraphEdges: stats.callGraphEdges,
+        inheritanceRelations: stats.inheritanceRelations
+      }
+    };
+
+    if (profileEnabled && profilingSummary) {
+      metrics.profiling = {
+        steps: profilingSummary.breakdown,
+        batches: batchMetrics
+      };
+    }
+
+    // Write metrics JSON if path provided
+    if (metricsOutputPath) {
+      try {
+        await fs.mkdir(path.dirname(metricsOutputPath), { recursive: true });
+        await fs.writeFile(metricsOutputPath, JSON.stringify(metrics, null, 2), 'utf8');
+        console.error(`📄 Metrics written to ${metricsOutputPath}`);
+      } catch (writeError) {
+        console.error(`⚠️ Failed to write metrics file: ${writeError}`);
+      }
+    }
+
+    const profilingText = profilingSummary ? `${profilingSummary.text}\n` : '';
 
     return {
       content: [{
@@ -375,7 +512,7 @@ ${freshnessInfo}
 ${freshnessInfo}
 💾 Index location: ${memoryIndex.getIndexDir()}
 👁️ File watcher enabled for incremental updates
-
+${profilingText}
 ${loadedExisting ? '💡 Tip: Use forceFullIndex=true to force a complete rebuild' : ''}`
       }]
     };

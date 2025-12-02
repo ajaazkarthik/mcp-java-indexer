@@ -102,10 +102,23 @@ export class SqliteStorage implements IIndexStorage {
         path TEXT PRIMARY KEY,
         hash TEXT NOT NULL,
         last_indexed INTEGER NOT NULL,
+        mtime INTEGER,
         is_indexed INTEGER NOT NULL,  -- BOOLEAN as INTEGER
         symbols TEXT  -- JSON array of FQNs
       );
     `);
+
+    this.ensureColumnExists('files', 'mtime', 'INTEGER');
+  }
+
+  private ensureColumnExists(table: string, column: string, type: string): void {
+    if (!this.db) return;
+    const pragma = this.db.prepare(`PRAGMA table_info(${table})`);
+    const columns = pragma.all() as Array<{ name: string }>;
+    const exists = columns.some(col => col.name === column);
+    if (!exists) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type};`);
+    }
   }
 
   async exists(): Promise<boolean> {
@@ -564,14 +577,15 @@ export class SqliteStorage implements IIndexStorage {
     if (!this.db) throw new Error('Database not initialized');
 
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO files (path, hash, last_indexed, is_indexed, symbols)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO files (path, hash, last_indexed, mtime, is_indexed, symbols)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       file.path,
       file.hash,
       file.lastIndexed,
+      typeof file.mtime === 'number' ? file.mtime : file.lastIndexed,
       1, // TRUE
       JSON.stringify(file.symbols)
     );
@@ -589,6 +603,7 @@ export class SqliteStorage implements IIndexStorage {
       path: row.path,
       hash: row.hash,
       lastIndexed: row.last_indexed,
+      mtime: typeof row.mtime === 'number' ? row.mtime : row.last_indexed,
       symbols: JSON.parse(row.symbols || '[]')
     };
   }
@@ -603,6 +618,7 @@ export class SqliteStorage implements IIndexStorage {
       path: row.path,
       hash: row.hash,
       lastIndexed: row.last_indexed,
+      mtime: typeof row.mtime === 'number' ? row.mtime : row.last_indexed,
       symbols: JSON.parse(row.symbols || '[]')
     }));
   }

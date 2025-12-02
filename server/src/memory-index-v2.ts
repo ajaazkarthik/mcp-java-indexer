@@ -40,6 +40,7 @@ export interface FileInfo {
   path: string;
   hash: string;
   lastIndexed: number;
+  mtime?: number;
   symbols: string[];
 }
 
@@ -367,13 +368,14 @@ export class MemoryIndexV2 {
   /**
    * Add file metadata
    */
-  async addFile(filePath: string, hash: string, symbols: string[], isIndexedFile: boolean = true): Promise<void> {
+  async addFile(filePath: string, hash: string, symbols: string[], isIndexedFile: boolean = true, mtime?: number): Promise<void> {
     const storage = this.ensureStorage();
     
     const fileInfo: FileInfo = {
       path: filePath,
       hash,
       lastIndexed: Date.now(),
+      mtime: typeof mtime === 'number' ? mtime : Date.now(),
       symbols
     };
     

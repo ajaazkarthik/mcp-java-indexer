@@ -3,6 +3,7 @@ import { MemoryIndex } from '../memory-index.js';
 import { IndexerClient } from '../indexer-client.js';
 import { Persistence } from '../persistence.js';
 import * as path from 'path';
+import * as fs from 'fs/promises';
 
 export const reindexFileTool: Tool = {
   name: 'reindex_file',
@@ -70,7 +71,9 @@ export async function handleReindexFile(
     }
 
     const hash = await MemoryIndex.calculateFileHash(filePath);
-    memoryIndex.addFile(filePath, hash, symbolFqns);
+    const stats = await fs.stat(filePath);
+    const mtime = typeof stats.mtimeMs === 'number' ? stats.mtimeMs : stats.mtime.getTime();
+    memoryIndex.addFile(filePath, hash, symbolFqns, true, mtime);
 
     // Persist changes
     const persistence = new Persistence(memoryIndex.getIndexDir());

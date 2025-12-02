@@ -47,6 +47,7 @@ export interface FileInfo {
   path: string;
   hash: string;
   lastIndexed: number;
+  mtime?: number;
   symbols: string[];
 }
 
@@ -696,11 +697,12 @@ export class MemoryIndexWithStorage {
   /**
    * Add file - SYNCHRONOUS
    */
-  addFile(filePath: string, hash: string, symbols: string[], isIndexedFile: boolean = true): void {
+  addFile(filePath: string, hash: string, symbols: string[], isIndexedFile: boolean = true, mtime?: number): void {
     const fileInfo: FileInfo = {
       path: filePath,
       hash,
       lastIndexed: Date.now(),
+      mtime: typeof mtime === 'number' ? mtime : Date.now(),
       symbols
     };
     
