@@ -611,6 +611,17 @@ export class MemoryIndex {
     return this.files.get(normalizePath(filePath));
   }
 
+  // Update file mtime without reindexing (for syncing mtime after git operations)
+  updateFileMtime(filePath: string, mtime: number): boolean {
+    const normalizedPath = normalizePath(filePath);
+    const fileInfo = this.files.get(normalizedPath);
+    if (fileInfo && mtime > (fileInfo.mtime || 0)) {
+      fileInfo.mtime = mtime;
+      return true;
+    }
+    return false;
+  }
+
   getAllFiles(): FileInfo[] {
     return Array.from(this.files.values());
   }

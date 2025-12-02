@@ -86,8 +86,10 @@ async function testMemoryIndexAPI() {
   log('\nTesting file management methods:');
   assertMethodExists(index, 'addFile', 'MemoryIndex');
   assertMethodExists(index, 'getFile', 'MemoryIndex');
+  assertMethodExists(index, 'updateFileMtime', 'MemoryIndex');
   assertMethodExists(index, 'removeFile', 'MemoryIndex');
   assertMethodExists(index, 'getIndexedFiles', 'MemoryIndex');
+  assertMethodExists(index, 'needsReindex', 'MemoryIndex');
   
   log('\nTesting utility methods:');
   assertMethodExists(index, 'getStats', 'MemoryIndex');

@@ -38,7 +38,7 @@ import { exploreCodebaseTool, handleExploreCodebase } from './tools/explore_code
 const server = new Server(
   {
     name: 'mcp-java-indexer',
-    version: '2.6.3',
+    version: '2.8.6',
   },
   {
     capabilities: {

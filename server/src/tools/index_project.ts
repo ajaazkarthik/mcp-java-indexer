@@ -232,11 +232,27 @@ export async function handleIndexProject(
       // Incremental: only index changed or new files
       console.error(`🔍 Checking for changes in ${javaFiles.length} files...`);
       
+      let mtimeSyncCount = 0;
       for (const file of javaFiles) {
         const needsReindex = await memoryIndex.needsReindex(file);
         if (needsReindex) {
           filesToIndex.push(file);
+        } else {
+          // FIX: Sync mtime for files that pass hash check but have newer mtime
+          // This prevents false positives in index-validator after git operations
+          // (git checkout/pull/merge touch file mtime but don't change content)
+          try {
+            const stats = await fs.stat(file);
+            if (memoryIndex.updateFileMtime(file, stats.mtimeMs)) {
+              mtimeSyncCount++;
+            }
+          } catch {
+            // File might have been deleted, ignore
+          }
         }
+      }
+      if (mtimeSyncCount > 0) {
+        console.error(`🕐 Synced mtime for ${mtimeSyncCount} unchanged files`);
       }
       
       // Remove files that no longer exist

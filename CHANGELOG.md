@@ -5,6 +5,54 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.6] - 2025-12-03
+
+### 🔧 Bugfixes
+
+#### 🔴 Fixed: Stale Index Warning After Git Operations
+
+**Problem**: Users saw constant "Index may be stale" warnings after git operations (checkout, pull, merge) even though the file content hadn't changed. The warning would report thousands of "changed" files.
+
+**Root Cause**: Logic mismatch between hash-based and mtime-based staleness detection:
+- `index_project` uses **hash comparison** to detect actual content changes
+- `index-validator` uses **mtime comparison** for fast staleness checks
+- Git operations touch file mtimes without changing content
+- Files that passed the hash check didn't get their mtime updated, causing perpetual false positives
+
+**Solution**:
+1. Added `updateFileMtime(filePath, mtime)` method to `MemoryIndex` class
+2. Modified `index_project` to sync mtime for files that pass hash check:
+   - When a file doesn't need reindexing (hash matches), update its stored mtime to match disk
+   - This prevents the validator from flagging it as "changed" later
+3. Logs mtime sync count: "🕐 Synced mtime for X unchanged files"
+
+**Files Modified**:
+- `server/src/memory-index.ts` - Added `updateFileMtime()` method
+- `server/src/tools/index_project.ts` - Added mtime sync logic during incremental check
+
+### 🧪 Testing Improvements
+
+#### Added: Comprehensive Mtime/Hash Synchronization Tests
+
+New test file `tests/test-mtime-hash-sync.js` with 23 test cases covering:
+- `updateFileMtime()` API behavior (8 tests)
+- Hash vs mtime detection logic (5 tests)
+- Index validator staleness scenarios (2 tests)
+- Bulk git operation simulation (3 tests)
+- Edge cases: undefined mtime, same mtime, path normalization (5 tests)
+
+#### Why This Bug Was Missed
+
+The existing test suite had no coverage for:
+- `needsReindex()` method behavior
+- Mtime handling in file indexing
+- `IndexValidator` staleness detection
+- The interaction between hash-based and mtime-based change detection
+
+This has now been addressed with comprehensive tests.
+
+---
+
 ## [2.8.4] - 2025-12-01
 
 ### 🔧 Bugfixes & Performance
