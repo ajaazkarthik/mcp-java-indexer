@@ -1,11 +1,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-
-// Normalize file paths to use forward slashes for consistent comparison
-function normalizePath(filePath: string): string {
-  return filePath.replace(/\\/g, '/');
-}
+import { normalizePath } from './utils/path-utils.js';
 
 export interface SymbolStub {
   fqn: string; // Fully Qualified Name
@@ -313,6 +309,11 @@ export class MemoryIndex {
   // IMPORTANT: References are stored with variable names (e.g., "session.close") not class FQNs
   // So we need flexible matching: user queries "Session.close()" but ref has "session.close"
   findUsages(fqn: string): Reference[] {
+    // Defensive: ensure fqn is a string
+    if (!fqn || typeof fqn !== 'string') {
+      return [];
+    }
+    
     // First try exact match
     const exactMatches = this.references.filter(ref => ref.toFqn === fqn);
     if (exactMatches.length > 0) {
@@ -446,6 +447,11 @@ export class MemoryIndex {
 
   // Add call graph edge
   private addCallGraphEdge(caller: string, callee: string, file: string, line: number, column: number): void {
+    // Defensive: ensure both caller and callee are valid strings
+    if (!caller || typeof caller !== 'string' || !callee || typeof callee !== 'string') {
+      return;
+    }
+
     // Forward edge
     if (!this.callGraph.has(caller)) {
       this.callGraph.set(caller, []);
@@ -473,6 +479,11 @@ export class MemoryIndex {
 
   // Get outbound calls (what this method calls)
   getOutboundCalls(fqn: string): CallGraphEdge[] {
+    // Defensive: ensure fqn is valid
+    if (!fqn || typeof fqn !== 'string') {
+      return [];
+    }
+    
     // Try exact match first
     const exact = this.callGraph.get(fqn);
     if (exact && exact.length > 0) {
@@ -489,6 +500,11 @@ export class MemoryIndex {
       const methodName = parenIndex > 0 ? fqn.substring(lastDot + 1, parenIndex) : fqn.substring(lastDot + 1);
       
       for (const [caller, edges] of this.callGraph.entries()) {
+        // Defensive: skip invalid entries
+        if (!caller || typeof caller !== 'string') {
+          continue;
+        }
+        
         // Match callers that end with the method signature or method name
         if (caller.endsWith('.' + methodName + '(') || caller.includes('.' + methodName + '(')) {
           const callerParen = caller.indexOf('(');
@@ -507,6 +523,11 @@ export class MemoryIndex {
 
   // Get inbound calls (who calls this method) - uses fuzzy matching
   getInboundCalls(fqn: string): CallGraphEdge[] {
+    // Defensive: ensure fqn is a string
+    if (!fqn || typeof fqn !== 'string') {
+      return [];
+    }
+    
     // Try exact match first
     const exact = this.reverseCallGraph.get(fqn);
     if (exact && exact.length > 0) {
@@ -538,6 +559,11 @@ export class MemoryIndex {
     
     // Search through all reverse call graph entries for fuzzy matches
     for (const [callee, edges] of this.reverseCallGraph.entries()) {
+      // Defensive: skip invalid entries
+      if (!callee || typeof callee !== 'string') {
+        continue;
+      }
+      
       // Match patterns: varName.methodName, ClassName.methodName, etc.
       const calleeLastDot = callee.lastIndexOf('.');
       const calleeMethod = calleeLastDot > 0 ? callee.substring(calleeLastDot + 1) : callee;
