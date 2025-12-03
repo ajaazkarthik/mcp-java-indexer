@@ -16,6 +16,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { IIndexStorage } from './storage/index-storage.js';
 import { StorageFactory } from './storage/storage-factory.js';
+import { normalizePath } from './utils/path-utils.js';
 
 export interface SymbolStub {
   fqn: string;
@@ -122,8 +123,8 @@ export class MemoryIndexWithStorage {
    * Set index directory and initialize storage
    */
   setIndexDir(dir: string): void {
-    // Normalize and store the project root
-    const normalizedDir = dir.replace(/\\/g, '/');
+    // Normalize and store the project root (handles Windows case sensitivity)
+    const normalizedDir = normalizePath(dir);
     this.projectRootDir = normalizedDir;
     this.indexDir = path.join(dir, '.mcp-index');
     
@@ -140,7 +141,7 @@ export class MemoryIndexWithStorage {
   // Check if the current index matches the expected project root
   isForProject(rootDir: string): boolean {
     if (!this.projectRootDir) return false;
-    const normalizedInput = rootDir.replace(/\\/g, '/');
+    const normalizedInput = normalizePath(rootDir);
     return normalizedInput === this.projectRootDir;
   }
 

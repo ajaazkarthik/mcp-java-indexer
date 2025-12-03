@@ -4,6 +4,7 @@ import { glob } from 'glob';
 import { MemoryIndex } from './memory-index.js';
 import { IndexerClient } from './indexer-client.js';
 import { Persistence } from './persistence.js';
+import { normalizePath, normalizeAbsolutePath } from './utils/path-utils.js';
 
 export interface StaleCheckResult {
   isStale: boolean;
@@ -97,18 +98,17 @@ export class IndexValidator {
     try {
       // Get all currently indexed files
       const indexedFiles = memoryIndex.getAllFiles();
-      // Normalize paths for consistent comparison
-      const normalizePath = (p: string) => p.replace(/\\/g, '/');
+      // Use shared normalizePath for consistent comparison (handles Windows case sensitivity)
       const indexedFileMap = new Map(indexedFiles.map(f => [normalizePath(f.path), f]));
 
       // Find all current Java files on disk
-      const pattern = path.join(this.rootDir, '**/*.java').replace(/\\/g, '/');
+      const pattern = normalizePath(path.join(this.rootDir, '**/*.java'));
       const currentFiles = await glob(pattern, {
         ignore: ['**/node_modules/**', '**/.git/**', '**/target/**', '**/build/**', '**/.mcp-index/**']
       });
 
-      // Normalize glob results for consistent comparison
-      const normalizedCurrentFiles = currentFiles.map(normalizePath);
+      // Normalize glob results for consistent comparison (handles Windows case sensitivity)
+      const normalizedCurrentFiles = currentFiles.map(normalizeAbsolutePath);
       const currentFileSet = new Set(normalizedCurrentFiles);
 
       // Check for deleted files
@@ -256,7 +256,7 @@ export class IndexValidator {
         }
 
         const absoluteSourceRoots = this.sourceRoots.map(sr => 
-          path.join(this.rootDir, sr).replace(/\\/g, '/')
+          normalizeAbsolutePath(path.join(this.rootDir, sr))
         );
 
         // Process in batches

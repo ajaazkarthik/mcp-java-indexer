@@ -218,16 +218,19 @@ export class SqliteStorage implements IIndexStorage {
   async getAllSymbols(options?: StorageQueryOptions): Promise<SymbolStub[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    const limit = options?.limit || 10000;
-    const offset = options?.offset || 0;
-
-    const stmt = this.db.prepare(`
-      SELECT data FROM symbols
-      LIMIT ? OFFSET ?
-    `);
-
-    const rows = stmt.all(limit, offset) as Array<{ data: string }>;
-    return rows.map(row => JSON.parse(row.data));
+    // No limit by default - load all symbols
+    // Only apply LIMIT clause if explicitly requested
+    if (options?.limit) {
+      const offset = options?.offset || 0;
+      const stmt = this.db.prepare(`SELECT data FROM symbols LIMIT ? OFFSET ?`);
+      const rows = stmt.all(options.limit, offset) as Array<{ data: string }>;
+      return rows.map(row => JSON.parse(row.data));
+    } else {
+      // No limit - fetch all symbols
+      const stmt = this.db.prepare(`SELECT data FROM symbols`);
+      const rows = stmt.all() as Array<{ data: string }>;
+      return rows.map(row => JSON.parse(row.data));
+    }
   }
 
   async deleteSymbol(fqn: string): Promise<void> {

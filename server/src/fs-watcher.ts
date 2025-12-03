@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import { MemoryIndex } from './memory-index.js';
 import { IndexerClient } from './indexer-client.js';
 import { Persistence } from './persistence.js';
+import { normalizePath, normalizeAbsolutePath } from './utils/path-utils.js';
 
 /**
  * FileSystemWatcher - Optional file watcher with heavy debouncing
@@ -132,7 +133,8 @@ export class FileSystemWatcher {
   private queueChange(relativePath: string): void {
     if (!this.enabled) return;
 
-    const fullPath = `${this.rootDir}/${relativePath}`.replace(/\\/g, '/');
+    // Use normalizePath for consistent handling (Windows case sensitivity)
+    const fullPath = normalizePath(`${this.rootDir}/${relativePath}`);
     
     // Remove from deletes if it was there (file recreated)
     this.pendingDeletes.delete(fullPath);
@@ -153,7 +155,8 @@ export class FileSystemWatcher {
   private queueDelete(relativePath: string): void {
     if (!this.enabled) return;
 
-    const fullPath = `${this.rootDir}/${relativePath}`.replace(/\\/g, '/');
+    // Use normalizePath for consistent handling (Windows case sensitivity)
+    const fullPath = normalizePath(`${this.rootDir}/${relativePath}`);
     
     // Remove from changes if it was there
     this.pendingChanges.delete(fullPath);
@@ -286,9 +289,9 @@ export class FileSystemWatcher {
 
       console.error(`[FileWatcher] Reindexing ${filesToReindex.length} files...`);
 
-      // Reindex in batch
+      // Reindex in batch (use normalizePath for consistent handling)
       const absoluteSourceRoots = this.sourceRoots.map(sr => 
-        `${this.rootDir}/${sr}`.replace(/\\/g, '/')
+        normalizePath(`${this.rootDir}/${sr}`)
       );
 
       const results = await this.indexerClient.indexFiles(filesToReindex, absoluteSourceRoots);

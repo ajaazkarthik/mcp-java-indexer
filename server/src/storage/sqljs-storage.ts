@@ -370,20 +370,32 @@ export class SqlJsStorage implements IIndexStorage {
   async getAllSymbols(options?: StorageQueryOptions): Promise<SymbolStub[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    const limit = options?.limit || 10000;
-    const offset = options?.offset || 0;
+    // No limit by default - load all symbols
+    // Only apply LIMIT clause if explicitly requested
+    if (options?.limit) {
+      const offset = options?.offset || 0;
+      const stmt = this.db.prepare('SELECT data FROM symbols LIMIT ? OFFSET ?');
+      stmt.bind([options.limit, offset]);
 
-    const stmt = this.db.prepare('SELECT data FROM symbols LIMIT ? OFFSET ?');
-    stmt.bind([limit, offset]);
+      const results: SymbolStub[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as { data: string };
+        results.push(JSON.parse(row.data));
+      }
+      stmt.free();
+      return results;
+    } else {
+      // No limit - fetch all symbols
+      const stmt = this.db.prepare('SELECT data FROM symbols');
 
-    const results: SymbolStub[] = [];
-    while (stmt.step()) {
-      const row = stmt.getAsObject() as { data: string };
-      results.push(JSON.parse(row.data));
+      const results: SymbolStub[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as { data: string };
+        results.push(JSON.parse(row.data));
+      }
+      stmt.free();
+      return results;
     }
-    stmt.free();
-
-    return results;
   }
 
   async deleteSymbol(fqn: string): Promise<void> {

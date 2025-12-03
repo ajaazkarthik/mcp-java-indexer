@@ -5,6 +5,75 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.12] - 2025-12-04
+
+### 🔧 Critical Bugfixes
+
+#### 🔴 Fixed: Symbol Limit of 10,000 (Issues #2 & #3)
+
+**Problem**: When loading index from disk, `getAllSymbols()` had a hardcoded `LIMIT 10000` that truncated results. This caused:
+- Incorrect symbol counts on large projects
+- Missing inheritance relationships
+- Incomplete code analysis
+
+**Root Cause**: Both storage implementations had this arbitrary limit:
+```typescript
+const limit = options?.limit || 10000;  // BUG: Arbitrary limit
+```
+
+**Solution**: Changed to only apply LIMIT clause when explicitly requested:
+```typescript
+if (options?.limit) {
+    // Apply limit when explicitly requested
+} else {
+    // No limit - fetch all symbols
+}
+```
+
+**Files Modified**:
+- `server/src/storage/sqljs-storage.ts` - Removed 10,000 limit default
+- `server/src/storage/sqlite-storage.ts` - Removed 10,000 limit default
+
+**Why Tests Didn't Catch This**:
+- Existing tests only created 50 symbols (well below 10,000 limit)
+- No test case verified behavior with datasets larger than 10,000 symbols
+- Added new test `test-symbol-limit-fix.js` with 15,000 symbols
+
+### ⚡ Performance Improvements
+
+#### 🚀 Parallel Indexing with Multiple JVM Workers (Issue #4)
+
+**Problem**: Single Java process handles all files sequentially (~5 files/second on large projects).
+
+**Solution**: Implemented parallel processing with multiple JVM workers:
+- Spawn N parallel Java indexer processes (N = CPU cores - 1, max 4)
+- Split file batches across workers
+- Process in parallel with `Promise.all()`
+- Add JVM optimization flags
+
+**JVM Optimizations Added**:
+```typescript
+spawn('java', [
+  '-Xmx4g',                        // 4GB heap
+  '-XX:+UseG1GC',                  // G1 garbage collector
+  '-XX:+UseStringDeduplication',   // Reduce string memory
+  '-XX:ParallelGCThreads=4',       // Parallel GC threads
+  '-jar', javaIndexerJar
+])
+```
+
+**Files Modified**:
+- `server/src/indexer-client.ts` - Added parallel worker management
+
+**Expected Performance Improvement**:
+| Metric | Before | After |
+|--------|--------|-------|
+| Full index (3,773 files) | 730s | ~255s (3x faster) |
+| Symbols on incremental | 10,000 (truncated) | 176,671 (all) |
+| Inheritance entries | 228 (truncated) | 3,793 (all) |
+
+---
+
 ## [2.8.6] - 2025-12-03
 
 ### 🔧 Bugfixes

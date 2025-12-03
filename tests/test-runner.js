@@ -32,7 +32,7 @@ const C = {
 };
 
 // ============================================================================
-// TEST CATEGORIZATION (updated 2025-11-29)
+// TEST CATEGORIZATION (updated 2025-12-03)
 // ============================================================================
 
 // Tests that PASS reliably in under 10 seconds
@@ -57,6 +57,7 @@ const FAST_TESTS = [
   'test-storage-compat.js',      // 0.6s
   'test-usages-fix.js',          // Fixed to use example-java-project
   'test-memory-management.js',   // Fixed expectations
+  'test-path-case-sensitivity.js', // Windows case-sensitivity fix (v2.8.10)
 ];
 
 // Tests that were FIXED and should now pass (need longer time)

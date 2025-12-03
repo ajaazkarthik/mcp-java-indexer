@@ -6,6 +6,7 @@ import { MemoryIndex } from '../memory-index.js';
 import { IndexerClient } from '../indexer-client.js';
 import { Persistence } from '../persistence.js';
 import { FileSystemWatcher } from '../fs-watcher.js';
+import { normalizeAbsolutePath, normalizePath } from '../utils/path-utils.js';
 
 class Profiler {
   private readonly enabled: boolean;
@@ -51,12 +52,6 @@ class Profiler {
     const text = `\n⏱️ Profiling Summary:\n${lines}\n  • Total: ${totalSeconds}s`;
     return { text, breakdown };
   }
-}
-
-// Normalize paths to use forward slashes consistently (needed for Windows compatibility)
-// Also resolves to absolute path to ensure consistent storage across sessions
-function normalizePath(p: string): string {
-  return path.resolve(p).replace(/\\/g, '/');
 }
 
 export const indexProjectTool: Tool = {
@@ -120,14 +115,15 @@ export async function handleIndexProject(
   setWatcher: (watcher: FileSystemWatcher, persistence: Persistence) => void
 ) {
   // Normalize rootDir to use forward slashes consistently (critical for Windows)
-  const rootDir = normalizePath(args.rootDir as string);
+  // Use normalizeAbsolutePath to resolve to absolute path AND handle case sensitivity
+  const rootDir = normalizeAbsolutePath(args.rootDir as string);
   const sourceRoots = (args.sourceRoots as string[]) || ['src/main/java', 'src'];
   const forceFullIndex = (args.forceFullIndex as boolean) || false;
   const profileEnabled = Boolean(args.profile);
   const profiler = new Profiler(profileEnabled);
   const metricsOutputPathRaw = args.metricsOutputPath as string | undefined;
   const metricsOutputPath = metricsOutputPathRaw
-    ? normalizePath(
+    ? normalizeAbsolutePath(
         path.isAbsolute(metricsOutputPathRaw)
           ? metricsOutputPathRaw
           : path.join(rootDir, metricsOutputPathRaw)
@@ -168,7 +164,7 @@ export async function handleIndexProject(
           // CRITICAL: Validate the loaded index is for THIS project
           // Prevents cross-project contamination when switching between projects
           const loadedRootDir = memoryIndex.getProjectRootDir();
-          if (loadedRootDir && loadedRootDir !== rootDir.replace(/\\/g, '/')) {
+          if (loadedRootDir && loadedRootDir !== rootDir) {
             console.error(`⚠️  Loaded index is for different project: ${loadedRootDir}`);
             console.error(`   Current project: ${rootDir}`);
             console.error(`   Clearing stale index and doing full reindex...`);
@@ -203,13 +199,14 @@ export async function handleIndexProject(
     // Start Java indexer process
     await indexerClient.start();
 
-    // Find all Java files and normalize paths to forward slashes for consistent comparison
-    const pattern = path.join(rootDir, '**/*.java').replace(/\\/g, '/');
+    // Find all Java files and normalize paths for consistent comparison
+    // Use normalizePath on glob results for Windows case-insensitivity
+    const pattern = normalizePath(path.join(rootDir, '**/*.java'));
     const javaFilesRaw = await glob(pattern, {
       ignore: ['**/node_modules/**', '**/.git/**', '**/target/**', '**/build/**', '**/.mcp-index/**']
     });
-    // Normalize all paths to use forward slashes (critical for Windows compatibility)
-    const javaFiles = javaFilesRaw.map(normalizePath);
+    // Normalize all paths - critical for Windows case-insensitive comparison
+    const javaFiles = javaFilesRaw.map(normalizeAbsolutePath);
 
     profiler.mark('glob_complete');
 
@@ -222,8 +219,8 @@ export async function handleIndexProject(
       };
     }
 
-    // Convert source roots to absolute paths
-    const absoluteSourceRoots = sourceRoots.map(sr => path.join(rootDir, sr).replace(/\\/g, '/'));
+    // Convert source roots to absolute paths (normalized for case sensitivity)
+    const absoluteSourceRoots = sourceRoots.map(sr => normalizeAbsolutePath(path.join(rootDir, sr)));
 
     // Determine which files need indexing
     let filesToIndex: string[] = [];

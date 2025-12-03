@@ -530,6 +530,73 @@ async function testStorageSpecificBehavior() {
 }
 
 // ============================================================================
+// TEST SUITE: Path Case Sensitivity (Windows Bug Fix)
+// ============================================================================
+
+async function testPathCaseSensitivity() {
+  log('\n🧪 Test Suite: Path Case Sensitivity (Windows Bug Fix)\n');
+  
+  const { MemoryIndex } = require('../server/dist/memory-index.js');
+  const index = new MemoryIndex();
+  
+  log('Testing file path case-insensitive matching (Windows fix):');
+  
+  // Add a file with a specific case
+  const originalPath = 'D:\\MyProject\\src\\Main.java';
+  index.addFile(originalPath, 'hash123', ['com.example.Main'], true);
+  
+  if (process.platform === 'win32') {
+    // Test retrieval with different cases
+    const lowerPath = originalPath.toLowerCase();
+    const upperPath = originalPath.toUpperCase();
+    const mixedPath = 'D:/myProject/Src/MAIN.java';
+    
+    const file1 = index.getFile(lowerPath);
+    const file2 = index.getFile(upperPath);
+    const file3 = index.getFile(mixedPath);
+    
+    assert(file1 !== undefined, 'File found with lowercase path');
+    assert(file2 !== undefined, 'File found with uppercase path');
+    assert(file3 !== undefined, 'File found with mixed case path');
+    
+    // Verify all return the same file info
+    if (file1 && file2 && file3) {
+      assert(file1.hash === file2.hash && file2.hash === file3.hash, 
+        'All case variants return same file info');
+    }
+  } else {
+    log('  ⏭️  Skipping Windows-specific case tests (not on Windows)');
+    // On Unix, just verify the original path works
+    const file = index.getFile(originalPath);
+    assert(file !== undefined, 'File found with original path on Unix');
+  }
+  
+  log('\nTesting symbol file path normalization:');
+  
+  // Add a symbol with a path
+  index.addSymbol({
+    fqn: 'com.example.Test',
+    name: 'Test',
+    kind: 'class',
+    file: 'D:\\MyProject\\Src\\Test.java',
+    line: 1,
+    column: 1,
+    packageName: 'com.example',
+    modifiers: ['public']
+  });
+  
+  // Get the symbol and check its file path is normalized
+  const symbol = index.getSymbol('com.example.Test');
+  if (symbol) {
+    assert(!symbol.file.includes('\\'), 'Symbol file path has forward slashes');
+    if (process.platform === 'win32') {
+      assert(symbol.file === symbol.file.toLowerCase(), 
+        'Symbol file path is lowercase on Windows');
+    }
+  }
+}
+
+// ============================================================================
 // RUN ALL TESTS
 // ============================================================================
 
@@ -551,6 +618,7 @@ async function runAllTests() {
     await testSymbolLookupEdgeCases();
     await testFileManagementEdgeCases();
     await testStorageSpecificBehavior();
+    await testPathCaseSensitivity();
     
     await cleanup();
     
