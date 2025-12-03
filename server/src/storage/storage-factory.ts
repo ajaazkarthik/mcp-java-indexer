@@ -1,12 +1,17 @@
 /**
  * Storage factory - auto-detects best available storage backend
- * Priority: better-sqlite3 (fastest) -> sql.js (zero-config) -> file shards (fallback)
+ * Priority: better-sqlite3 (fastest) -> sql.js (zero-config)
+ * 
+ * NOTE: File shard storage is DISABLED. Only database backends are supported.
+ * To re-enable file storage, uncomment the file-shard fallback code below.
  */
 
 import { IIndexStorage } from './index-storage.js';
-import { FileShardStorage } from './file-shard-storage.js';
+// File shard storage is disabled - uncomment to re-enable
+// import { FileShardStorage } from './file-shard-storage.js';
 
-export type StorageType = 'better-sqlite3' | 'sqljs' | 'file-shard';
+export type StorageType = 'better-sqlite3' | 'sqljs';
+// To re-enable file storage, change to: export type StorageType = 'better-sqlite3' | 'sqljs' | 'file-shard';
 
 export class StorageFactory {
   private static detectedType: StorageType | null = null;
@@ -16,7 +21,8 @@ export class StorageFactory {
    * Priority:
    * 1. better-sqlite3 (native, fastest) - requires C++ compilation
    * 2. sql.js (WebAssembly, zero-config) - works everywhere, slightly slower
-   * 3. file-shard (pure JS, fallback) - last resort
+   * 
+   * NOTE: File shard storage is DISABLED. Database backend is required.
    */
   static async create(indexDir: string): Promise<IIndexStorage> {
     const type = await this.detectStorageType();
@@ -34,16 +40,22 @@ export class StorageFactory {
       await storage.initialize();
       return storage;
     } else {
-      console.error('📁 Using file shard storage (fallback mode)');
-      const storage = new FileShardStorage(indexDir);
-      await storage.initialize();
-      return storage;
+      // File shard storage is disabled - throw error instead
+      throw new Error('No database backend available. Please install sql.js: npm install sql.js');
+      
+      // To re-enable file storage, uncomment the following:
+      // console.error('📁 Using file shard storage (fallback mode)');
+      // const storage = new FileShardStorage(indexDir);
+      // await storage.initialize();
+      // return storage;
     }
   }
 
   /**
    * Detect which storage type to use
    * Caches result to avoid repeated detection
+   * 
+   * NOTE: File shard fallback is DISABLED. Will throw if no DB available.
    */
   private static async detectStorageType(): Promise<StorageType> {
     if (this.detectedType) {
@@ -67,12 +79,16 @@ export class StorageFactory {
       console.error('✅ sql.js available (zero-config WebAssembly)');
       return 'sqljs';
     } catch (error) {
-      console.error('⚠️  sql.js not available, using file shard fallback');
+      console.error('❌ sql.js not available');
     }
 
-    // Fall back to file shards
-    this.detectedType = 'file-shard';
-    return 'file-shard';
+    // File shard fallback is DISABLED - throw error
+    throw new Error('No database backend available. Please install sql.js: npm install sql.js');
+    
+    // To re-enable file storage, uncomment the following:
+    // console.error('⚠️  sql.js not available, using file shard fallback');
+    // this.detectedType = 'file-shard';
+    // return 'file-shard';
   }
 
   /**

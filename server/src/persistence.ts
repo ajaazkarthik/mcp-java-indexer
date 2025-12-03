@@ -35,19 +35,20 @@ export class Persistence {
 
   /**
    * Initialize the best available storage backend
+   * NOTE: File storage is DISABLED. Only database backends (better-sqlite3, sql.js) are supported.
    */
   private async initializeStorage(): Promise<void> {
     if (this.storageInitialized) return;
     
     try {
       this.storage = await StorageFactory.create(this.indexDir);
-      this.storageType = StorageFactory.getDetectedType() || 'file-shard';
+      this.storageType = StorageFactory.getDetectedType() || 'json';
       this.storageInitialized = true;
       console.error(`✅ Persistence using ${this.storageType} storage backend`);
     } catch (error) {
-      console.error('⚠️  Storage backend initialization failed, using JSON fallback:', error);
-      this.storageType = 'json';
-      this.storageInitialized = true;
+      console.error('❌ Storage backend initialization failed:', error);
+      // File storage is disabled - rethrow the error
+      throw new Error(`Database storage required but not available: ${error}`);
     }
   }
 
@@ -513,7 +514,8 @@ export class Persistence {
 
   /**
    * Get the current storage type being used
-   * Returns 'sqljs', 'better-sqlite3', 'file-shard', or 'json' (legacy)
+   * Returns 'sqljs', 'better-sqlite3', or 'json' (legacy fallback)
+   * NOTE: File shard storage is DISABLED
    */
   getStorageType(): StorageType | 'json' {
     return this.storageType || 'json';

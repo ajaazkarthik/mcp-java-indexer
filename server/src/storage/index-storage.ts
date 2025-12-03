@@ -1,7 +1,9 @@
 /**
  * Storage abstraction for Java index data
- * Enables multiple backend implementations (SQLite, file shards, etc.)
+ * Enables multiple backend implementations (SQLite, sql.js, etc.)
  * while maintaining zero-config deployment
+ * 
+ * NOTE: File shard storage is DISABLED. Only database backends are supported.
  */
 
 import { SymbolStub, Reference, CallGraphEdge, FileInfo } from '../memory-index.js';
@@ -22,7 +24,8 @@ export interface StorageQueryOptions {
 
 /**
  * Abstraction for index storage backend
- * Implementations: SqliteStorage (fast), FileShardStorage (fallback)
+ * Implementations: SqliteStorage (native), SqlJsStorage (WebAssembly)
+ * NOTE: FileShardStorage is DISABLED - can be re-enabled in storage-factory.ts
  */
 export interface IIndexStorage {
   /**
