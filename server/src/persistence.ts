@@ -1,29 +1,23 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MemoryIndex, Reference, FileInfo } from './memory-index.js';
-import * as zlib from 'zlib';
-import { promisify } from 'util';
 import { StorageFactory, StorageType } from './storage/storage-factory.js';
 import { IIndexStorage } from './storage/index-storage.js';
-
-const gzip = promisify(zlib.gzip);
-const gunzip = promisify(zlib.gunzip);
 
 /**
  * Persistence class with automatic storage backend detection
  * 
- * Priority: SQLite (better-sqlite3) -> sql.js -> chunked gzip files (fallback)
+ * Priority: SQLite (better-sqlite3) -> sql.js
  * 
- * This class maintains backward compatibility with the old JSON-based persistence
- * while using more efficient storage backends when available.
+ * NOTE: JSON file storage is DISABLED. Database storage is required.
+ * This class requires either better-sqlite3 (native, fastest) or sql.js (WebAssembly, zero-config).
  */
 export class Persistence {
   private indexDir: string;
-  private readonly CHUNK_SIZE = 5000; // Save in chunks to avoid memory issues
   
   // Storage backend (lazily initialized)
   private storage: IIndexStorage | null = null;
-  private storageType: StorageType | 'json' = 'json';
+  private storageType: StorageType = 'sqljs'; // Default to sqljs, will be updated on init
   private storageInitialized = false;
   private storageInitPromise: Promise<void> | null = null;
 
@@ -35,19 +29,23 @@ export class Persistence {
 
   /**
    * Initialize the best available storage backend
-   * NOTE: File storage is DISABLED. Only database backends (better-sqlite3, sql.js) are supported.
+   * NOTE: Only database backends (better-sqlite3, sql.js) are supported. JSON fallback is DISABLED.
    */
   private async initializeStorage(): Promise<void> {
     if (this.storageInitialized) return;
     
     try {
       this.storage = await StorageFactory.create(this.indexDir);
-      this.storageType = StorageFactory.getDetectedType() || 'json';
+      const detectedType = StorageFactory.getDetectedType();
+      if (!detectedType) {
+        throw new Error('No database backend available. Please install sql.js: npm install sql.js');
+      }
+      this.storageType = detectedType;
       this.storageInitialized = true;
       console.error(`✅ Persistence using ${this.storageType} storage backend`);
     } catch (error) {
       console.error('❌ Storage backend initialization failed:', error);
-      // File storage is disabled - rethrow the error
+      // Database storage is required - rethrow the error
       throw new Error(`Database storage required but not available: ${error}`);
     }
   }
@@ -70,21 +68,19 @@ export class Persistence {
     }
   }
 
-  // Save index to disk - uses storage backend if available
+  // Save index to disk - uses database storage backend (required)
   async save(memoryIndex: MemoryIndex): Promise<void> {
     await this.waitForStorage();
     await this.ensureIndexDir();
 
     const data = memoryIndex.toJSON();
     
-    // If we have a storage backend, use it for efficient persistence
-    if (this.storage && this.storageType !== 'json') {
-      await this.saveToStorage(data);
-      return;
+    // Database storage is required
+    if (!this.storage) {
+      throw new Error('Database storage not initialized. Please install sql.js: npm install sql.js');
     }
     
-    // Fall back to JSON file persistence
-    await this.saveToJsonFiles(data);
+    await this.saveToStorage(data);
   }
 
   /**
@@ -180,128 +176,47 @@ export class Persistence {
       console.error(`✅ Index saved to ${this.storageType} storage (${duration}ms)`);
       
     } catch (error) {
-      console.error('❌ Storage save failed, falling back to JSON:', error);
-      // Fall back to JSON - data is already available
-      await this.saveToJsonFiles(data);
+      console.error('❌ Storage save failed:', error);
+      // Database storage is required - rethrow the error
+      throw new Error(`Failed to save index to ${this.storageType} storage: ${error}`);
     }
   }
 
   /**
-   * Save to JSON files (original implementation)
+   * @deprecated JSON file storage is disabled. Database storage is required.
+   * This method is kept for reference only and will be removed in a future version.
    */
-  private async saveToJsonFiles(data: any): Promise<void> {
-    try {
-      // Save metadata separately (includes projectRootDir for validation on load)
-      const metadata = {
-        version: '1.1', // Bumped version for projectRootDir support
-        timestamp: Date.now(),
-        projectRootDir: data.projectRootDir || '', // Store the project root
-        stats: {
-          symbols: data.symbols.length,
-          files: data.files.length,
-          indexedFiles: data.indexedFiles.length,
-          references: data.references.length,
-          referencesByFile: data.referencesByFile.length,
-          callGraph: data.callGraph.length,
-          reverseCallGraph: data.reverseCallGraph.length,
-          inheritance: data.inheritance.length,
-          reverseInheritance: data.reverseInheritance.length
-        }
-      };
-      
-      await fs.writeFile(
-        path.join(this.indexDir, 'metadata.json'),
-        JSON.stringify(metadata, null, 2),
-        'utf-8'
-      );
-
-      // Save large arrays in chunks with compression
-      await this.saveChunked('symbols', data.symbols);
-      await this.saveChunked('files', data.files);
-      await this.saveChunked('references', data.references);
-      await this.saveChunked('referencesByFile', data.referencesByFile);
-      await this.saveChunked('callGraph', data.callGraph);
-      await this.saveChunked('reverseCallGraph', data.reverseCallGraph);
-      await this.saveChunked('inheritance', data.inheritance);
-      await this.saveChunked('reverseInheritance', data.reverseInheritance);
-      
-      // Save indexedFiles as plain JSON (small)
-      await fs.writeFile(
-        path.join(this.indexDir, 'indexedFiles.json'),
-        JSON.stringify(data.indexedFiles),
-        'utf-8'
-      );
-
-      console.error('✅ Index saved successfully with compression');
-    } catch (error) {
-      console.error('Failed to save index:', error);
-      throw error;
-    }
+  private async saveToJsonFiles(_data: any): Promise<void> {
+    throw new Error('JSON storage is disabled. Database storage (sql.js or better-sqlite3) is required.');
   }
 
-  // Save array data in chunks with compression
-  private async saveChunked(name: string, data: any[]): Promise<void> {
-    const totalChunks = Math.ceil(data.length / this.CHUNK_SIZE);
-    
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * this.CHUNK_SIZE;
-      const end = Math.min(start + this.CHUNK_SIZE, data.length);
-      const chunk = data.slice(start, end);
-      
-      const chunkData = JSON.stringify(chunk);
-      const compressed = await gzip(chunkData);
-      
-      const chunkPath = path.join(this.indexDir, `${name}_${i}.json.gz`);
-      await fs.writeFile(chunkPath, compressed);
-    }
-    
-    // Save chunk count
-    await fs.writeFile(
-      path.join(this.indexDir, `${name}_chunks.txt`),
-      totalChunks.toString(),
-      'utf-8'
-    );
+  /**
+   * @deprecated JSON chunked storage is disabled. Database storage is required.
+   */
+  private async saveChunked(_name: string, _data: any[]): Promise<void> {
+    throw new Error('JSON storage is disabled. Database storage is required.');
   }
 
-  // Load index from disk with chunking support
+  // Load index from disk - uses database storage backend (required)
   async load(memoryIndex: MemoryIndex): Promise<boolean> {
     // Wait for storage to be ready
     await this.storageInitPromise;
     
-    // Try loading from storage backend first
-    if (this.storage) {
-      try {
-        const loaded = await this.loadFromStorage(memoryIndex);
-        if (loaded) {
-          console.error(`✅ Index loaded from ${this.storageType} storage`);
-          return true;
-        }
-      } catch (error) {
-        console.error('Storage load failed, falling back to JSON:', error);
-      }
+    // Database storage is required
+    if (!this.storage) {
+      console.error('❌ Database storage not initialized');
+      return false;
     }
     
-    // Fall back to JSON files
     try {
-      // Check if chunked format exists
-      const metadataPath = path.join(this.indexDir, 'metadata.json');
-      
-      try {
-        await fs.access(metadataPath);
-        // New chunked format
-        return await this.loadChunked(memoryIndex);
-      } catch {
-        // Try old format
-        const oldPath = path.join(this.indexDir, 'index.json');
-        try {
-          await fs.access(oldPath);
-          return await this.loadOldFormat(memoryIndex);
-        } catch {
-          return false;
-        }
+      const loaded = await this.loadFromStorage(memoryIndex);
+      if (loaded) {
+        console.error(`✅ Index loaded from ${this.storageType} storage`);
+        return true;
       }
+      return false; // Empty storage
     } catch (error) {
-      console.error('Failed to load index:', error);
+      console.error('❌ Failed to load from database storage:', error);
       return false;
     }
   }
@@ -401,85 +316,27 @@ export class Persistence {
     return Array.from(byMethod.entries());
   }
 
-  // Load old format index
-  private async loadOldFormat(memoryIndex: MemoryIndex): Promise<boolean> {
-    const filePath = path.join(this.indexDir, 'index.json');
-    
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const data = JSON.parse(content);
-      memoryIndex.fromJSON(data);
-      return true;
-    } catch (error) {
-      return false;
-    }
+  /**
+   * @deprecated JSON file storage is disabled. Database storage is required.
+   */
+  private async loadOldFormat(_memoryIndex: MemoryIndex): Promise<boolean> {
+    console.error('❌ JSON storage is disabled. Please re-index with database storage.');
+    return false;
   }
 
-  // Load chunked format index
-  private async loadChunked(memoryIndex: MemoryIndex): Promise<boolean> {
-    try {
-      // Load metadata first to get projectRootDir
-      const metadataPath = path.join(this.indexDir, 'metadata.json');
-      const metadataContent = await fs.readFile(metadataPath, 'utf-8');
-      const metadata = JSON.parse(metadataContent);
-      
-      const data: any = {
-        projectRootDir: metadata.projectRootDir || '', // Restore from metadata
-        symbols: [],
-        files: [],
-        indexedFiles: [],
-        references: [],
-        callGraph: [],
-        reverseCallGraph: [],
-        inheritance: [],
-        reverseInheritance: []
-      };
-
-      // Load each chunked array
-      data.symbols = await this.loadChunkedArray('symbols');
-      data.files = await this.loadChunkedArray('files');
-      data.references = await this.loadChunkedArray('references');
-      data.referencesByFile = await this.loadChunkedArray('referencesByFile');
-      data.callGraph = await this.loadChunkedArray('callGraph');
-      data.reverseCallGraph = await this.loadChunkedArray('reverseCallGraph');
-      data.inheritance = await this.loadChunkedArray('inheritance');
-      data.reverseInheritance = await this.loadChunkedArray('reverseInheritance');
-      
-      // Load indexedFiles
-      const indexedFilesPath = path.join(this.indexDir, 'indexedFiles.json');
-      const indexedFilesContent = await fs.readFile(indexedFilesPath, 'utf-8');
-      data.indexedFiles = JSON.parse(indexedFilesContent);
-
-      memoryIndex.fromJSON(data);
-      return true;
-    } catch (error) {
-      console.error('Failed to load chunked index:', error);
-      return false;
-    }
+  /**
+   * @deprecated JSON chunked storage is disabled. Database storage is required.
+   */
+  private async loadChunked(_memoryIndex: MemoryIndex): Promise<boolean> {
+    console.error('❌ JSON chunked storage is disabled. Please re-index with database storage.');
+    return false;
   }
 
-  // Load chunked array data
-  private async loadChunkedArray(name: string): Promise<any[]> {
-    try {
-      const chunksPath = path.join(this.indexDir, `${name}_chunks.txt`);
-      const chunksContent = await fs.readFile(chunksPath, 'utf-8');
-      const totalChunks = parseInt(chunksContent, 10);
-      
-      const result: any[] = [];
-      
-      for (let i = 0; i < totalChunks; i++) {
-        const chunkPath = path.join(this.indexDir, `${name}_${i}.json.gz`);
-        const compressed = await fs.readFile(chunkPath);
-        const decompressed = await gunzip(compressed);
-        const chunk = JSON.parse(decompressed.toString('utf-8'));
-        result.push(...chunk);
-      }
-      
-      return result;
-    } catch (error) {
-      console.error(`Failed to load ${name}:`, error);
-      return [];
-    }
+  /**
+   * @deprecated JSON chunked storage is disabled. Database storage is required.
+   */
+  private async loadChunkedArray(_name: string): Promise<any[]> {
+    return [];
   }
 
   // Check if index exists
@@ -517,8 +374,8 @@ export class Persistence {
    * Returns 'sqljs', 'better-sqlite3', or 'json' (legacy fallback)
    * NOTE: File shard storage is DISABLED
    */
-  getStorageType(): StorageType | 'json' {
-    return this.storageType || 'json';
+  getStorageType(): StorageType {
+    return this.storageType;
   }
 
   /**
