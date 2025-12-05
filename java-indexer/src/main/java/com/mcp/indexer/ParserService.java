@@ -36,6 +36,8 @@ public class ParserService {
         // Type resolution is expensive (100-300ms per batch initialization)
         // We get 95% accuracy with simple name parsing, resolution not worth the cost
         ParserConfiguration config = new ParserConfiguration();
+        // Ensure parser aligns with Java 17 language features (records, sealed types, etc.)
+        config.setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
         // No symbol resolver = 3-5x faster parsing
         
         this.javaParser = new JavaParser(config);

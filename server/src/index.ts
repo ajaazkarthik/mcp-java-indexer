@@ -16,6 +16,7 @@ import { getIndexValidator } from './index-validator.js';
 import { Persistence } from './persistence.js';
 import { serverInstructions } from './server-instructions.js';
 import { annotateTools } from './tool-annotations.js';
+import { withTimer, addTimingToResult } from './utils/timer.js';
 import { indexProjectTool, handleIndexProject } from './tools/index_project.js';
 import { reindexFileTool, handleReindexFile } from './tools/reindex_file.js';
 import { findSymbolTool, handleFindSymbol } from './tools/find_symbol.js';
@@ -385,24 +386,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
-      case 'index_project':
-        const indexResult = await handleIndexProject(args, memoryIndex, indexerClient, (watcher, newPersistence) => {
-          fsWatcher = watcher;
-          persistence = newPersistence;
-          // Configure the validator with project info
-          const rootDir = args?.rootDir as string;
-          const sourceRoots = (args?.sourceRoots as string[]) || ['src/main/java', 'src'];
-          indexValidator.configure(rootDir, sourceRoots);
-          indexValidator.resetCooldowns();
-        });
-        return indexResult;
+      case 'index_project': {
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleIndexProject(args, memoryIndex, indexerClient, (watcher, newPersistence) => {
+            fsWatcher = watcher;
+            persistence = newPersistence;
+            // Configure the validator with project info
+            const rootDir = args?.rootDir as string;
+            const sourceRoots = (args?.sourceRoots as string[]) || ['src/main/java', 'src'];
+            indexValidator.configure(rootDir, sourceRoots);
+            indexValidator.resetCooldowns();
+          })
+        );
+        addTimingToResult(result, 'index_project', elapsedFormatted);
+        return result;
+      }
 
-      case 'reindex_file':
-        return await handleReindexFile(args, memoryIndex, indexerClient);
+      case 'reindex_file': {
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleReindexFile(args, memoryIndex, indexerClient)
+        );
+        addTimingToResult(result, 'reindex_file', elapsedFormatted);
+        return result;
+      }
 
       case 'find_symbol': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleFindSymbol(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleFindSymbol(args, memoryIndex)
+        );
+        addTimingToResult(result, 'find_symbol', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -411,7 +424,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'find_usages': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleFindUsages(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleFindUsages(args, memoryIndex)
+        );
+        addTimingToResult(result, 'find_usages', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -420,7 +436,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'call_graph': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleCallGraph(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleCallGraph(args, memoryIndex)
+        );
+        addTimingToResult(result, 'call_graph', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -429,7 +448,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'goto_definition': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleGotoDefinition(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleGotoDefinition(args, memoryIndex)
+        );
+        addTimingToResult(result, 'goto_definition', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -438,7 +460,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'search_text': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleSearchText(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleSearchText(args, memoryIndex)
+        );
+        addTimingToResult(result, 'search_text', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -447,7 +472,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'analyze_impact': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleAnalyzeImpact(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleAnalyzeImpact(args, memoryIndex)
+        );
+        addTimingToResult(result, 'analyze_impact', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -456,7 +484,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'semantic_search': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleSemanticSearch(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleSemanticSearch(args, memoryIndex)
+        );
+        addTimingToResult(result, 'semantic_search', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -465,7 +496,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'explain_code': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleExplainCode(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleExplainCode(args, memoryIndex)
+        );
+        addTimingToResult(result, 'explain_code', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -474,25 +508,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'test_coverage': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleTestCoverage(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleTestCoverage(args, memoryIndex)
+        );
+        addTimingToResult(result, 'test_coverage', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
         return result;
       }
 
-      case 'refactoring_suggestions':
-        return await handleRefactoringSuggestions(args, memoryIndex);
+      case 'refactoring_suggestions': {
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleRefactoringSuggestions(args, memoryIndex)
+        );
+        addTimingToResult(result, 'refactoring_suggestions', elapsedFormatted);
+        return result;
+      }
 
-      case 'code_generation':
-        return await handleCodeGeneration(args, memoryIndex);
+      case 'code_generation': {
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleCodeGeneration(args, memoryIndex)
+        );
+        addTimingToResult(result, 'code_generation', elapsedFormatted);
+        return result;
+      }
 
-      case 'compact_index':
-        return await handleCompactIndex(args, memoryIndex);
+      case 'compact_index': {
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleCompactIndex(args, memoryIndex)
+        );
+        addTimingToResult(result, 'compact_index', elapsedFormatted);
+        return result;
+      }
 
       case 'explore_class': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleExploreClass(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleExploreClass(args, memoryIndex)
+        );
+        addTimingToResult(result, 'explore_class', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -501,7 +556,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'batch_query': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleBatchQuery(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleBatchQuery(args, memoryIndex)
+        );
+        addTimingToResult(result, 'batch_query', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -510,7 +568,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'scan_migration_candidates': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleScanMigrationCandidates(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleScanMigrationCandidates(args, memoryIndex)
+        );
+        addTimingToResult(result, 'scan_migration_candidates', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }
@@ -519,7 +580,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'explore_codebase': {
         const refreshMsg = await ensureFreshIndex();
-        const result = await handleExploreCodebase(args, memoryIndex);
+        const { result, elapsedFormatted } = await withTimer(() => 
+          handleExploreCodebase(args, memoryIndex)
+        );
+        addTimingToResult(result, 'explore_codebase', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }

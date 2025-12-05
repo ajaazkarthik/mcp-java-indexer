@@ -72,6 +72,13 @@ spawn('java', [
 | Symbols on incremental | 10,000 (truncated) | 176,671 (all) |
 | Inheritance entries | 228 (truncated) | 3,793 (all) |
 
+#### 🧭 Runtime & Compatibility
+
+- **Java 17 support & detection**: The indexer now tries to use Java 17 automatically. If `java -version` does not report Java 17, the indexer will attempt to use `JAVA_HOME` or the `MCP_JAVA_PATH`/`INDEXER_JAVA_PATH` environment variables; otherwise it will log a warning and fall back to PATH `java`. (`server/src/indexer-client.ts`)
+- **Parser Language Level**: JavaParser is set to Java 17 language level to parse modern Java features (records, sealed classes). (`java-indexer/src/main/java/com/mcp/indexer/ParserService.java`)
+- **Worker Default Increase**: The number of JVM workers defaults to 8 on most machines (bounded by CPU count); configurable via `MCP_INDEXER_WORKERS` or `INDEXER_WORKER_COUNT`. (`server/src/indexer-client.ts`)
+- **Batch Size Increase**: The index validator batches up to 500 files during refresh by default; configurable via `MCP_MAX_BATCH_SIZE`/`INDEXER_MAX_BATCH_SIZE`. (`server/src/index-validator.ts`)
+
 ---
 
 ## [2.8.6] - 2025-12-03

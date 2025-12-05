@@ -37,9 +37,16 @@ export class IndexerClient {
   
   // Parallel processing support
   private parallelWorkers: WorkerProcess[] = [];
-  private numWorkers = Math.max(1, Math.min(4, os.cpus().length - 1));
+  // Default to 8 workers but respect CPU count and environment overrides
+  private numWorkers = (() => {
+    const defaultWorkers = 8;
+    const env = process.env.MCP_INDEXER_WORKERS || process.env.INDEXER_WORKER_COUNT;
+    const requested = env ? parseInt(env, 10) : defaultWorkers;
+    return Math.max(1, Math.min(requested, Math.max(1, os.cpus().length - 1)));
+  })();
   private useParallel = true;
   private javaIndexerJar: string = '';
+  private javaExec: string = 'java';
 
   constructor() {}
 
@@ -47,13 +54,61 @@ export class IndexerClient {
   async start(): Promise<void> {
     // Use __dirname to get the directory of this module, then navigate to the jar
     this.javaIndexerJar = path.join(__dirname, '..', '..', 'java-indexer', 'target', 'java-indexer-1.0.0.jar');
+    // Respect an explicit path to java executable if provided
+    const envJavaPath = process.env.MCP_JAVA_PATH || process.env.INDEXER_JAVA_PATH;
+    const javaHome = process.env.JAVA_HOME;
+    let javaExec = 'java';
+    if (envJavaPath && envJavaPath.trim().length > 0) {
+      javaExec = envJavaPath;
+    } else if (javaHome && javaHome.trim().length > 0) {
+      javaExec = path.join(javaHome, 'bin', 'java');
+    } else {
+      // Try to detect that 'java' on PATH is Java 17 or later
+      try {
+        const { spawnSync } = await import('child_process');
+        const r = spawnSync('java', ['-version']);
+        const stderr = (r.stderr || r.stdout || Buffer.from('')).toString();
+        const match = stderr.match(/version \"?(\d+)(?:\.|\D)/);
+        if (match && parseInt(match[1], 10) >= 17) {
+          javaExec = 'java';
+        } else {
+          // Try common Windows JDK17 paths if they exist
+          const candidates = [
+            'D:/workspace/software/jdk-17.0.17/bin/java',
+            'C:/Program Files/Eclipse Adoptium/jdk-17/bin/java',
+            'C:/Program Files/Java/jdk-17/bin/java'
+          ];
+          let found = false;
+          const { stat } = await import('fs/promises');
+          for (const candidate of candidates) {
+            try {
+              await stat(candidate);
+              javaExec = candidate;
+              found = true;
+              break;
+            } catch {
+              // Try next candidate
+            }
+          }
+          if (!found) {
+            // Fallback to 'java' and warn
+            console.warn('[IndexerClient] Java binary on PATH is not Java 17; consider setting MCP_JAVA_PATH to a JDK 17 binary. Falling back to PATH `java`.');
+            javaExec = 'java';
+          }
+        }
+      } catch (err) {
+        console.warn('[IndexerClient] Java version detection failed; falling back to PATH `java`.', err);
+        javaExec = 'java';
+      }
+    }
     
     // Add JVM optimization flags for better performance
-    this.javaProcess = spawn('java', [
+    this.javaExec = javaExec;
+    this.javaProcess = spawn(this.javaExec, [
       '-Xmx4g',                        // 4GB heap
       '-XX:+UseG1GC',                  // G1 garbage collector
       '-XX:+UseStringDeduplication',   // Reduce string memory
-      '-XX:ParallelGCThreads=4',       // Parallel GC threads
+      `-XX:ParallelGCThreads=${Math.max(1, Math.min(os.cpus().length, this.numWorkers))}`,
       '-jar', this.javaIndexerJar
     ], {
       stdio: ['pipe', 'pipe', 'pipe']
@@ -250,9 +305,9 @@ export class IndexerClient {
     
     for (let i = 0; i < this.numWorkers - 1; i++) {
       const worker: WorkerProcess = {
-        process: spawn('java', [
+        process: spawn(this.javaExec, [
           '-Xmx4g', '-XX:+UseG1GC', '-XX:+UseStringDeduplication',
-          '-XX:ParallelGCThreads=4', '-jar', this.javaIndexerJar
+          `-XX:ParallelGCThreads=${Math.max(1, Math.min(os.cpus().length, this.numWorkers))}`, '-jar', this.javaIndexerJar
         ], { stdio: ['pipe', 'pipe', 'pipe'] }),
         messageBuffer: '',
         pendingRequests: new Map(),

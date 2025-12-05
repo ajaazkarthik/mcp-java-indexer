@@ -123,6 +123,23 @@ Configure in VS Code settings (`settings.json`):
 }
 ```
 
+## ⚙️ Runtime & Tuning (Env variables)
+
+You can customize the internal runtime & performance tuning via these environment variables. These are useful for CI agents or machines where you want to tune resource usage.
+
+| Env var | Purpose | Default |
+|---|---|---|
+| `MCP_JAVA_PATH`, `INDEXER_JAVA_PATH` | Explicit path to the Java executable (overrides PATH/`JAVA_HOME`) — useful if you need to point at JDK 17 | Not set (auto-detected) |
+| `MCP_INDEXER_WORKERS`, `INDEXER_WORKER_COUNT` | Number of parallel Java indexer processes (default 8, bounded by CPU count) | 8 |
+| `MCP_MAX_BATCH_SIZE`, `INDEXER_MAX_BATCH_SIZE` | Max files per reindex batch during incremental refresh (default 500) | 500 |
+
+Examples (PowerShell):
+```powershell
+$env:MCP_JAVA_PATH = 'C:/workspace/softwaretools/java/jdk17/bin/java';
+$env:MCP_INDEXER_WORKERS = '8';
+$env:MCP_MAX_BATCH_SIZE = '500';
+```
+
 ## 📊 Performance
 
 | Operation | Time |

@@ -46,7 +46,12 @@ export class IndexValidator {
   // Configuration
   private readonly CHECK_COOLDOWN_MS = 5000; // Don't check more than once per 5s
   private readonly REFRESH_COOLDOWN_MS = 10000; // Don't refresh more than once per 10s
-  private readonly MAX_BATCH_SIZE = 50; // Max files to reindex in one batch
+  private readonly MAX_BATCH_SIZE: number = (() => {
+    const env = process.env.MCP_MAX_BATCH_SIZE || process.env.INDEXER_MAX_BATCH_SIZE;
+    const defaultVal = 500; // Increase default batch size
+    const parsed = env ? parseInt(env, 10) : defaultVal;
+    return Math.max(1, isNaN(parsed) ? defaultVal : parsed);
+  })(); // Max files to reindex in one batch
   private readonly BULK_CHANGE_THRESHOLD = 100; // If more files changed, suggest full reindex
   private readonly POST_INDEX_GRACE_PERIOD_MS = 30000; // 30s grace period after index_project
   private readonly MTIME_TOLERANCE_MS = 2000; // 2s tolerance for mtime comparison (filesystem precision)
