@@ -7,17 +7,17 @@ import { IIndexStorage } from './storage/index-storage.js';
 /**
  * Persistence class with automatic storage backend detection
  * 
- * Priority: SQLite (better-sqlite3) -> sql.js
- * 
- * NOTE: JSON file storage is DISABLED. Database storage is required.
- * This class requires either better-sqlite3 (native, fastest) or sql.js (WebAssembly, zero-config).
+ * Priority: SQLite (better-sqlite3 only)
+ *
+ * NOTE: sql.js and file-shard fallbacks are disabled. better-sqlite3 is required to
+ * support very large indexes (5GB+) reliably.
  */
 export class Persistence {
   private indexDir: string;
   
   // Storage backend (lazily initialized)
   private storage: IIndexStorage | null = null;
-  private storageType: StorageType = 'sqljs'; // Default to sqljs, will be updated on init
+  private storageType: StorageType = 'better-sqlite3'; // Single supported backend
   private storageInitialized = false;
   private storageInitPromise: Promise<void> | null = null;
 
@@ -29,7 +29,6 @@ export class Persistence {
 
   /**
    * Initialize the best available storage backend
-   * NOTE: Only database backends (better-sqlite3, sql.js) are supported. JSON fallback is DISABLED.
    */
   private async initializeStorage(): Promise<void> {
     if (this.storageInitialized) return;
@@ -38,15 +37,14 @@ export class Persistence {
       this.storage = await StorageFactory.create(this.indexDir);
       const detectedType = StorageFactory.getDetectedType();
       if (!detectedType) {
-        throw new Error('No database backend available. Please install sql.js: npm install sql.js');
+        throw new Error('No storage backend available. Please install better-sqlite3: npm install better-sqlite3');
       }
       this.storageType = detectedType;
       this.storageInitialized = true;
       console.error(`✅ Persistence using ${this.storageType} storage backend`);
     } catch (error) {
       console.error('❌ Storage backend initialization failed:', error);
-      // Database storage is required - rethrow the error
-      throw new Error(`Database storage required but not available: ${error}`);
+      throw new Error(`Storage backend required but not available: ${error}`);
     }
   }
 
@@ -75,9 +73,8 @@ export class Persistence {
 
     const data = memoryIndex.toJSON();
     
-    // Database storage is required
     if (!this.storage) {
-      throw new Error('Database storage not initialized. Please install sql.js: npm install sql.js');
+      throw new Error('Storage not initialized. Please install better-sqlite3: npm install better-sqlite3');
     }
     
     await this.saveToStorage(data);
@@ -149,7 +146,7 @@ export class Persistence {
         }
       }
       
-      // CRITICAL: Flush to disk immediately (sql.js keeps data in-memory until flushed)
+      // Flush to disk immediately (noop for better-sqlite3 but required by interface)
       await this.storage.flush();
       
       // Also save metadata JSON for compatibility
@@ -187,7 +184,7 @@ export class Persistence {
    * This method is kept for reference only and will be removed in a future version.
    */
   private async saveToJsonFiles(_data: any): Promise<void> {
-    throw new Error('JSON storage is disabled. Database storage (sql.js or better-sqlite3) is required.');
+    throw new Error('JSON storage is disabled. Database storage (better-sqlite3) is required.');
   }
 
   /**
@@ -202,9 +199,8 @@ export class Persistence {
     // Wait for storage to be ready
     await this.storageInitPromise;
     
-    // Database storage is required
     if (!this.storage) {
-      console.error('❌ Database storage not initialized');
+      console.error('❌ Storage not initialized');
       return false;
     }
     
@@ -371,8 +367,7 @@ export class Persistence {
 
   /**
    * Get the current storage type being used
-   * Returns 'sqljs', 'better-sqlite3', or 'json' (legacy fallback)
-   * NOTE: File shard storage is DISABLED
+   * Returns 'better-sqlite3'
    */
   getStorageType(): StorageType {
     return this.storageType;
@@ -382,7 +377,7 @@ export class Persistence {
    * Check if using a database storage backend (not file-based)
    */
   isUsingDatabaseStorage(): boolean {
-    return this.storageType === 'sqljs' || this.storageType === 'better-sqlite3';
+    return this.storageType === 'better-sqlite3';
   }
 
   // Clear index

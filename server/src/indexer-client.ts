@@ -32,6 +32,7 @@ export class IndexerClient {
   private messageBuffer: string = '';
   private pendingRequests: Map<number, PendingRequest> = new Map();
   private nextRequestId: number = 1;
+  private startPromise: Promise<void> | null = null;
   private readonly REQUEST_TIMEOUT = 600000; // 10 minutes
   private readonly MAX_BUFFER_SIZE = 500 * 1024 * 1024; // 500MB max buffer - increased for large projects
   
@@ -52,6 +53,24 @@ export class IndexerClient {
 
   // Start Java indexer process
   async start(): Promise<void> {
+    // Idempotent start: if already starting or running, reuse existing processes
+    if (this.startPromise) {
+      return this.startPromise;
+    }
+    if (this.javaProcess) {
+      return;
+    }
+
+    this.startPromise = this.startInternal();
+    try {
+      await this.startPromise;
+    } finally {
+      // Allow future restarts if the process exits
+      this.startPromise = null;
+    }
+  }
+
+  private async startInternal(): Promise<void> {
     // Use __dirname to get the directory of this module, then navigate to the jar
     this.javaIndexerJar = path.join(__dirname, '..', '..', 'java-indexer', 'target', 'java-indexer-1.0.0.jar');
     // Respect an explicit path to java executable if provided
@@ -151,8 +170,8 @@ export class IndexerClient {
     // Wait for ready signal
     await this.waitForReady();
     
-    // Start parallel workers for multi-core indexing
-    if (this.useParallel && this.numWorkers > 1) {
+    // Start parallel workers for multi-core indexing (once)
+    if (this.useParallel && this.numWorkers > 1 && this.parallelWorkers.length === 0) {
       await this.startParallelWorkers();
     }
   }
@@ -273,6 +292,7 @@ export class IndexerClient {
   
   // Stop the process
   async stop(): Promise<void> {
+    this.startPromise = null;
     // Stop parallel workers first
     for (const worker of this.parallelWorkers) {
       this.rejectWorkerPending(worker, 'Stopping');

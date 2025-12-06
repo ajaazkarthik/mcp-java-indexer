@@ -1,9 +1,6 @@
 /**
  * Storage abstraction for Java index data
- * Enables multiple backend implementations (SQLite, sql.js, etc.)
- * while maintaining zero-config deployment
- * 
- * NOTE: File shard storage is DISABLED. Only database backends are supported.
+ * Backed by better-sqlite3 (single required backend)
  */
 
 import { SymbolStub, Reference, CallGraphEdge, FileInfo } from '../memory-index.js';
@@ -24,8 +21,7 @@ export interface StorageQueryOptions {
 
 /**
  * Abstraction for index storage backend
- * Implementations: SqliteStorage (native), SqlJsStorage (WebAssembly)
- * NOTE: FileShardStorage is DISABLED - can be re-enabled in storage-factory.ts
+ * Implementation: SqliteStorage (better-sqlite3)
  */
 export interface IIndexStorage {
   /**
@@ -185,7 +181,7 @@ export interface IIndexStorage {
   clear(): Promise<void>;
 
   /**
-   * Flush any pending writes to disk (for sql.js in-memory database)
+   * Flush any pending writes to disk (noop for better-sqlite3, required by interface)
    */
   flush(): Promise<void>;
 

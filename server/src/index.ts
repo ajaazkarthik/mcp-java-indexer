@@ -27,7 +27,6 @@ import { searchTextTool, handleSearchText } from './tools/search_text.js';
 import { analyzeImpactTool, handleAnalyzeImpact } from './tools/analyze_impact.js';
 import { semanticSearchTool, handleSemanticSearch } from './tools/semantic_search.js';
 import { explainCodeTool, handleExplainCode } from './tools/explain_code.js';
-import { testCoverageTool, handleTestCoverage } from './tools/test_coverage.js';
 import { refactoringSuggestionsTool, handleRefactoringSuggestions } from './tools/refactoring_suggestions.js';
 import { codeGenerationTool, handleCodeGeneration } from './tools/code_generation.js';
 import { compactIndexTool, handleCompactIndex } from './tools/compact_index.js';
@@ -129,7 +128,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     analyzeImpactTool,
     semanticSearchTool,
     explainCodeTool,
-    testCoverageTool,
     refactoringSuggestionsTool,
     codeGenerationTool,
     compactIndexTool,
@@ -500,18 +498,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           handleExplainCode(args, memoryIndex)
         );
         addTimingToResult(result, 'explain_code', elapsedFormatted);
-        if (refreshMsg && result.content?.[0]?.type === 'text') {
-          result.content[0].text = refreshMsg + result.content[0].text;
-        }
-        return result;
-      }
-
-      case 'test_coverage': {
-        const refreshMsg = await ensureFreshIndex();
-        const { result, elapsedFormatted } = await withTimer(() => 
-          handleTestCoverage(args, memoryIndex)
-        );
-        addTimingToResult(result, 'test_coverage', elapsedFormatted);
         if (refreshMsg && result.content?.[0]?.type === 'text') {
           result.content[0].text = refreshMsg + result.content[0].text;
         }

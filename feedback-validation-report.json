@@ -1,7 +1,7 @@
 {
   "total": 12,
-  "passed": 7,
-  "failed": 5,
+  "passed": 4,
+  "failed": 8,
   "skipped": 0,
   "tests": [
     {
@@ -10,7 +10,8 @@
     },
     {
       "name": "Symbol identified as class",
-      "status": "PASS"
+      "status": "FAIL",
+      "expected": "class"
     },
     {
       "name": "Find symbol by full FQN",
@@ -26,12 +27,14 @@
       "error": "No usages found or symbol not found"
     },
     {
-      "name": "Call graph for method (was broken in 1.4.2)",
-      "status": "PASS"
+      "name": "Call graph for method",
+      "status": "FAIL",
+      "error": "Symbol not found or no call graph"
     },
     {
-      "name": "Semantic search finds relevant UserService",
-      "status": "PASS"
+      "name": "Semantic search relevance",
+      "status": "FAIL",
+      "error": "UserService not in results"
     },
     {
       "name": "Impact analysis shows dependencies (was 0 in 1.4.2)",

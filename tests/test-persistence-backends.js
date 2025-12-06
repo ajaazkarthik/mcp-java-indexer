@@ -9,8 +9,7 @@
  * - Edge cases with special characters
  * - Performance with large datasets
  * 
- * Note: Full Persistence tests with sql.js backends are covered in
- * test-comprehensive-components.js which uses MemoryIndexWithStorage.
+ * Note: Storage backend is better-sqlite3 only (sql.js/file-shard disabled).
  * 
  * Created: 2025-12-03
  */

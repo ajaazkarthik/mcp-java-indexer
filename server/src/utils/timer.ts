@@ -18,8 +18,10 @@ export function formatElapsed(ms: number): string {
     return `${(ms / 1000).toFixed(2)}s`;
   } else {
     const minutes = Math.floor(ms / 60000);
-    const seconds = ((ms % 60000) / 1000).toFixed(1);
-    return `${minutes}m ${seconds}s`;
+    const secondsWhole = Math.round((ms % 60000) / 1000);
+    const seconds = secondsWhole === 60 ? 0 : secondsWhole;
+    const minsAdjusted = secondsWhole === 60 ? minutes + 1 : minutes;
+    return `${minsAdjusted}:${seconds.toString().padStart(2, '0')}s`;
   }
 }
 
@@ -48,7 +50,8 @@ export function addTimingToResult(
   elapsedFormatted: string
 ): void {
   if (result.content && result.content.length > 0 && result.content[0].type === 'text' && result.content[0].text) {
-    const timerPrefix = `⏱️ \`${toolName}\` completed in **${elapsedFormatted}**\n\n`;
+    const timerTitle = `Running ${toolName} - Java Indexer (MCP server) - ${elapsedFormatted}`;
+    const timerPrefix = `⏱️ ${timerTitle}\n\n`;
     result.content[0].text = timerPrefix + result.content[0].text;
   }
 }

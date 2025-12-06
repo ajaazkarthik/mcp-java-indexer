@@ -7,7 +7,7 @@
  * - 40 total tests (8 obsolete moved to tests/obsolete/)
  * - 27 PASS in --all mode (100% pass rate)  
  * - 6 performance tests need long timeout (--filter performance)
- * - 6 SQLite tests need better-sqlite3 (--filter sqlite)
+ * - SQLite backend required (better-sqlite3); sql.js/file-shard disabled
  * - 1 stuck diagnostic test (--filter stuck)
  * 
  * Usage:
@@ -32,83 +32,45 @@ const C = {
 };
 
 // ============================================================================
-// TEST CATEGORIZATION (updated 2025-12-03)
+// TEST CATEGORIZATION (updated 2025-12-06)
 // ============================================================================
 
-// Tests that PASS reliably in under 10 seconds
+// Tests that exist and PASS reliably (actual files in tests/ directory)
 const FAST_TESTS = [
-  // NOTE: Removed test-advanced-cases.js, test-all-tools.js, test-edge-cases.js
-  // These test inherited symbol resolution which is a known limitation
-  'test-call-graph-fix.js',      // 6.7s
-  'test-constructor-tracking.js', // 2.1s
-  'test-deep-inheritance.js',    // 2.7s
-  'test-feature-preservation.js', // 1.3s
-  'test-feedback-detailed.js',   // 6.5s
-  'test-feedback-fixes.js',      // 2.0s
-  'test-feedback-validation.js', // 5.7s
-  'test-fixes.js',               // 0.6s
-  'test-inheritance.js',         // 1.0s
-  'test-reflection-legacy.js',   // 4.5s
-  'test-v2.2.3-fixes.js',        // 1.5s
-  'test-watcher-storage.js',     // 2.7s
-  'test-all-tools-storage.js',   // 4.1s
-  'test-direct-storage.js',      // 1.1s
-  'test-real-integration.js',    // 1.4s
-  'test-storage-compat.js',      // 0.6s
-  'test-usages-fix.js',          // Fixed to use example-java-project
-  'test-memory-management.js',   // Fixed expectations
-  'test-path-case-sensitivity.js', // Windows case-sensitivity fix (v2.8.10)
+  'test-storage-backend-single.js', // verifies better-sqlite3-only backend
+  'test-persistence-backends.js',   // tests storage backend selection
+  'test-memory-index-api.js',       // memory index API tests
+  'test-tool-handlers.js',          // tool handler tests
+  'test-mtime-hash-sync.js',        // file change detection
+  'test-intra-module-deps.js',      // module dependency tests
+  'test-index.js',                  // basic indexing tests
 ];
 
-// Tests that were FIXED and should now pass (need longer time)
+// Tests that exist and need longer time
 const MEDIUM_TESTS = [
-  'test-oom-fix.js',             // 13s - tests memory limits
-  'test-incremental-indexing.js' // 12s - tests incremental updates
+  'test-comprehensive-components.js', // comprehensive component tests
+  'test-extended-edge-cases.js',     // edge case tests
+  'test-100-additional.js',          // additional tests
+  'test-scan-migration-enhanced.js', // migration tests
 ];
 
 // Tests that PASS but need more time (10-30s) or spawn MCP servers
-const SLOW_TESTS = [
-  'test-indexing.js',            // 17s - spawns MCP server
-  'test-v1.5.0.js',              // 10.3s
-  'test-regression-references-zero.js', // 5-15s
-  'test-advanced-tools.js',      // 3s - spawns MCP server, needs inherited stdio
-];
+const SLOW_TESTS = [];
 
-// Tests that need storage fallback (work with FileShardStorage)
-const SQLITE_TESTS = [
-  'test-dual-comparison.js',       // Expects exact outbound call counts
-  'test-e2e-storage.js',           // Long timeout needed
-  'test-file-vs-db-mode.js'        // Process handling
-];
+// SQLite-specific tests (now all use better-sqlite3)
+const SQLITE_TESTS = [];
 
 // Stuck tests - diagnostic only, should NOT be run normally
-const STUCK_TESTS = [
-  'test-stuck-indexing.js'         // Diagnostic for stuck states
-];
+const STUCK_TESTS = [];
 
-// Known-failing tests - test features not yet implemented (inherited symbol resolution)
-const KNOWN_FAILING_TESTS = [
-  'test-advanced-cases.js',          // Tests inherited constant resolution (known limitation)
-  'test-all-tools.js',               // Tests various tool features (some not implemented)
-  'test-edge-cases.js',              // Tests complex inheritance patterns (known limitation)
-];
+// Known-failing tests - test features not yet implemented
+const KNOWN_FAILING_TESTS = [];
 
 // Performance tests requiring longer timeout
-const PERFORMANCE_TESTS = [
-  'test-performance.js',              // Performance benchmarks
-  'test-pure-java-performance.js',    // Java parser perf
-  'test-comprehensive-v2.2.3.js'      // Full test suite
-];
+const PERFORMANCE_TESTS = [];
 
 // Tests requiring large-java-project (12k files, very long timeout)
-const LARGE_PROJECT_TESTS = [
-  'test-large-project.js',            // 5-10 min
-  'test-large-project-comparison.js', // 10+ min
-  'test-large-optimized.js',          // 5+ min
-  'test-large-db-mode.js',            // 5+ min  
-  'test-large-storage-benchmark.js',  // 5+ min
-  'test-run-all-storage.js',          // Runs sub-tests
-];
+const LARGE_PROJECT_TESTS = [];
 
 // Obsolete tests moved to tests/obsolete/
 // - test-bugfixes-v2.1.js (tests unimplemented features)
@@ -209,7 +171,8 @@ class TestRunner {
       // Clean index for tests that need it
       this.cleanIndexIfNeeded(testFile);
       
-      const testPath = path.join(__dirname, '..', testFile);
+      // Tests are in the same directory as this runner
+      const testPath = path.join(__dirname, testFile);
       const start = Date.now();
       let resolved = false;
       
@@ -220,7 +183,8 @@ class TestRunner {
         'test-incremental-indexing.js',
         'test-oom-fix.js'
       ];
-      const useInherit = config.verbose || needsInheritedStdio.includes(testFile);
+      // Always use inherit mode to avoid PowerShell stderr issues with Unicode
+      const useInherit = true;
       
       const proc = spawn('node', [testPath], {
         stdio: useInherit ? 'inherit' : 'pipe',
@@ -275,7 +239,7 @@ class TestRunner {
     this.log(`   ✓ Fast tests (< 10s):     ${FAST_TESTS.length}`, C.green);
     this.log(`   ✓ Slow tests (10-20s):    ${SLOW_TESTS.length}`, C.yellow);
     this.log(`   ✓ Medium tests (fixed):   ${MEDIUM_TESTS.length}`, C.green);
-    this.log(`   ⊘ SQLite tests:           ${SQLITE_TESTS.length} (need better-sqlite3)`, C.gray);
+    this.log(`   ⊘ SQLite tests:           ${SQLITE_TESTS.length} (better-sqlite3 required)`, C.gray);
     this.log(`   ⊘ Stuck tests:            ${STUCK_TESTS.length} (diagnostic only)`, C.gray);
     this.log(`   ⊘ Performance tests:      ${PERFORMANCE_TESTS.length} (need long timeout)`, C.gray);
     this.log(`   ⊘ Obsolete (archived):    8 (in tests/obsolete/)`, C.gray);
