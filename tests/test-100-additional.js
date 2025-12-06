@@ -716,7 +716,9 @@ async function testFileManagement() {
     
     const allFiles = index.getAllFiles();
     assert(allFiles.length === 1, 'getAllFiles returns correct count');
-    assert(allFiles[0].path === '/src/Test.java', 'getAllFiles has correct file');
+    // On Windows, paths are normalized to lowercase
+    const expectedPath = process.platform === 'win32' ? '/src/test.java' : '/src/Test.java';
+    assert(allFiles[0].path === expectedPath, 'getAllFiles has correct file');
   }
   
   // Test 86-90: needsReindex with real files
@@ -844,7 +846,9 @@ async function testPathNormalization() {
     });
     
     const symbol = index.getSymbol('com.example.Mixed');
-    assert(symbol.file === 'D:/workspace/Mixed.java', 'Symbol file path normalized');
+    // On Windows, paths are normalized to lowercase
+    const expectedSymbolPath = process.platform === 'win32' ? 'd:/workspace/mixed.java' : 'D:/workspace/Mixed.java';
+    assert(symbol.file === expectedSymbolPath, 'Symbol file path normalized');
     
     // References with mixed paths
     index.addReference({
@@ -856,7 +860,9 @@ async function testPathNormalization() {
     });
     
     const refs = index.findUsages('com.b.B.n()');
-    assert(refs.length === 1 && refs[0].file === 'E:/code/A.java', 'Reference file path normalized');
+    // On Windows, paths are normalized to lowercase
+    const expectedRefPath = process.platform === 'win32' ? 'e:/code/a.java' : 'E:/code/A.java';
+    assert(refs.length === 1 && refs[0].file === expectedRefPath, 'Reference file path normalized');
   }
   
   // Test 106-110: Case sensitivity
