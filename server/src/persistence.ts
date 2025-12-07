@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { MemoryIndex, Reference, FileInfo } from './memory-index.js';
+import { MemoryIndex, Reference, FileInfo, SymbolStub } from './memory-index.js';
 import { StorageFactory, StorageType } from './storage/storage-factory.js';
 import { IIndexStorage } from './storage/index-storage.js';
 
@@ -107,19 +107,27 @@ export class Persistence {
       }
       
       // Save call graph edges (handles own transaction)
+      // FIX: Use iterative push instead of spread operator to prevent stack overflow with 1.5M+ edges
       if (data.callGraph && data.callGraph.length > 0) {
         const forwardEdges: any[] = [];
         for (const entry of data.callGraph) {
-          forwardEdges.push(...entry[1]);
+          const edges = entry[1];
+          for (let i = 0; i < edges.length; i++) {
+            forwardEdges.push(edges[i]);
+          }
         }
         if (forwardEdges.length > 0) {
           await this.storage.saveCallEdges(forwardEdges, 'forward');
         }
       }
+      // FIX: Use iterative push instead of spread operator to prevent stack overflow with 1.5M+ edges
       if (data.reverseCallGraph && data.reverseCallGraph.length > 0) {
         const reverseEdges: any[] = [];
         for (const entry of data.reverseCallGraph) {
-          reverseEdges.push(...entry[1]);
+          const edges = entry[1];
+          for (let i = 0; i < edges.length; i++) {
+            reverseEdges.push(edges[i]);
+          }
         }
         if (reverseEdges.length > 0) {
           await this.storage.saveCallEdges(reverseEdges, 'reverse');
@@ -176,6 +184,59 @@ export class Persistence {
       console.error('❌ Storage save failed:', error);
       // Database storage is required - rethrow the error
       throw new Error(`Failed to save index to ${this.storageType} storage: ${error}`);
+    }
+  }
+
+  /**
+   * Save only a single file's data incrementally (for reindex_file operations)
+   * This is MUCH faster than full save() - only saves the changed file's symbols, references, etc.
+   * 
+   * @param filePath - Path to the file that was reindexed
+   * @param symbols - New symbols from the file
+   * @param references - New references from the file
+   * @param fileInfo - File metadata (hash, mtime, etc.)
+   */
+  async saveFileIncremental(
+    filePath: string,
+    symbols: SymbolStub[],
+    references: Reference[],
+    fileInfo: FileInfo
+  ): Promise<void> {
+    await this.waitForStorage();
+    
+    if (!this.storage) {
+      throw new Error('Storage not initialized. Please install better-sqlite3.');
+    }
+    
+    const startTime = Date.now();
+    console.error(`💾 Incremental save for ${filePath}...`);
+    
+    try {
+      // Delete old data for this file first
+      await this.storage.deleteFile(filePath);
+      
+      // Save new symbols
+      if (symbols.length > 0) {
+        await this.storage.saveSymbols(symbols);
+      }
+      
+      // Save new references
+      if (references.length > 0) {
+        await this.storage.saveReferences(references);
+      }
+      
+      // Save file metadata
+      await this.storage.saveFile(fileInfo);
+      
+      // Flush to ensure data is persisted
+      await this.storage.flush();
+      
+      const duration = Date.now() - startTime;
+      console.error(`✅ Incremental save complete: ${symbols.length} symbols, ${references.length} refs (${duration}ms)`);
+      
+    } catch (error) {
+      console.error('❌ Incremental save failed:', error);
+      throw new Error(`Failed incremental save for ${filePath}: ${error}`);
     }
   }
 
@@ -251,11 +312,17 @@ export class Persistence {
       };
       
       // Load inheritance from symbols
+      // FIX: Use iterative push instead of spread operator to prevent stack overflow
       for (const symbol of symbols) {
         if (symbol.kind === 'class' || symbol.kind === 'interface') {
           const parents: string[] = [];
           if ((symbol as any).extendsClass) parents.push((symbol as any).extendsClass);
-          if ((symbol as any).implementsInterfaces) parents.push(...(symbol as any).implementsInterfaces);
+          if ((symbol as any).implementsInterfaces) {
+            const interfaces = (symbol as any).implementsInterfaces;
+            for (let i = 0; i < interfaces.length; i++) {
+              parents.push(interfaces[i]);
+            }
+          }
           if (parents.length > 0) {
             data.inheritance.push([symbol.fqn, parents]);
             // Build reverse inheritance

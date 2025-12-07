@@ -69,6 +69,8 @@ export class IndexValidator {
   /**
    * Check if the index is stale by comparing file mtimes
    * This is FAST - uses fs.stat() instead of reading file content
+   * 
+   * Can be disabled via INDEX_VALIDATOR_DISABLED=true environment variable
    */
   async checkStaleness(memoryIndex: MemoryIndex): Promise<StaleCheckResult> {
     const startTime = Date.now();
@@ -79,6 +81,12 @@ export class IndexValidator {
       newFiles: [],
       checkDuration: 0
     };
+
+    // FIX: Allow disabling the validator entirely via environment variable
+    if (process.env.INDEX_VALIDATOR_DISABLED === 'true') {
+      result.checkDuration = Date.now() - startTime;
+      return result; // Validator disabled, always return not stale
+    }
 
     // Cooldown check
     if (Date.now() - this.lastCheckTime < this.CHECK_COOLDOWN_MS) {
@@ -309,11 +317,17 @@ export class IndexValidator {
           }
         }
 
-        // Persist changes
-        try {
-          await persistence.save(memoryIndex);
-        } catch (error) {
-          console.error('[IndexValidator] Failed to persist index:', error);
+        // Persist changes - ONLY if files were actually updated
+        // FIX: Skip persistence if no files changed (was causing 4-7 min saves with 0 changes!)
+        const totalChanged = result.filesUpdated + result.filesAdded + result.filesDeleted;
+        if (totalChanged > 0) {
+          try {
+            await persistence.save(memoryIndex);
+          } catch (error) {
+            console.error('[IndexValidator] Failed to persist index:', error);
+          }
+        } else {
+          console.error('[IndexValidator] No files changed, skipping persistence');
         }
       }
 

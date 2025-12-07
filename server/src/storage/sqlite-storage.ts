@@ -261,6 +261,9 @@ export class SqliteStorage implements IIndexStorage {
     stmt.run(ref.fromFqn, ref.toFqn, ref.file, ref.line, ref.column, ref.kind);
   }
 
+  // FIX: Batch size for processing large reference sets to prevent memory pressure
+  private static readonly REFERENCE_BATCH_SIZE = 50000; // 50K refs per batch
+
   async saveReferences(refs: Reference[]): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
     if (refs.length === 0) return;
@@ -276,7 +279,20 @@ export class SqliteStorage implements IIndexStorage {
       }
     });
 
-    saveTransaction(refs);
+    // FIX: Process in batches to prevent memory pressure with 631K+ references
+    const batchSize = SqliteStorage.REFERENCE_BATCH_SIZE;
+    if (refs.length > batchSize) {
+      console.error(`💾 Saving ${refs.length} references in ${Math.ceil(refs.length / batchSize)} batches...`);
+      for (let i = 0; i < refs.length; i += batchSize) {
+        const batch = refs.slice(i, Math.min(i + batchSize, refs.length));
+        saveTransaction(batch);
+        if ((i / batchSize + 1) % 5 === 0 || i + batchSize >= refs.length) {
+          console.error(`  Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(refs.length / batchSize)} saved (${i + batch.length}/${refs.length})`);
+        }
+      }
+    } else {
+      saveTransaction(refs);
+    }
   }
 
   async findUsages(fqn: string): Promise<Reference[]> {

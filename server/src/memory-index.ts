@@ -511,7 +511,10 @@ export class MemoryIndex {
           if (callerParen > 0) {
             const callerMethod = caller.substring(caller.lastIndexOf('.', callerParen) + 1, callerParen);
             if (callerMethod === methodName) {
-              results.push(...edges);
+              // FIX: Use iterative push instead of spread to prevent stack overflow
+              for (let i = 0; i < edges.length; i++) {
+                results.push(edges[i]);
+              }
             }
           }
         }
@@ -569,14 +572,21 @@ export class MemoryIndex {
       const calleeMethod = calleeLastDot > 0 ? callee.substring(calleeLastDot + 1) : callee;
       
       if (calleeMethod === methodName) {
+        // FIX: Use iterative push instead of spread to prevent stack overflow
         // If class name is known, prefer matches that include it
         if (className && callee.includes(className)) {
-          results.push(...edges);
+          for (let i = 0; i < edges.length; i++) {
+            results.push(edges[i]);
+          }
         } else if (!className) {
-          results.push(...edges);
+          for (let i = 0; i < edges.length; i++) {
+            results.push(edges[i]);
+          }
         } else {
           // Still include even without className match (different variable names)
-          results.push(...edges);
+          for (let i = 0; i < edges.length; i++) {
+            results.push(edges[i]);
+          }
         }
       }
     }

@@ -285,7 +285,10 @@ export class MemoryIndexWithStorage {
     // If we have storage and found nothing in cache, try storage
     if (results.length === 0 && this.storageInitialized && this.storage) {
       const storageResults = this.findSymbolsSync(nameOrFqn);
-      results.push(...storageResults);
+      // FIX: Use iterative push instead of spread (safety for large result sets)
+      for (const symbol of storageResults) {
+        results.push(symbol);
+      }
       
       // Cache results
       for (const symbol of storageResults) {

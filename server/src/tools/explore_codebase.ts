@@ -1735,7 +1735,10 @@ function analyzeMethodClusters(
   const dataClassMethods: string[] = [];
   for (const [, pair] of getterSetterPairs) {
     if (pair.get || pair.set) {
-      dataClassMethods.push(...pair.methods);
+      // FIX: Use iterative push instead of spread (safety for large method lists)
+      for (const method of pair.methods) {
+        dataClassMethods.push(method);
+      }
     }
   }
   

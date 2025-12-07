@@ -97,7 +97,10 @@ export async function handleCallGraph(
         const overriddenSymbol = memoryIndex.getSymbol(overriddenFqn);
         if (overriddenSymbol) {
           const childInbound = memoryIndex.getInboundCalls(overriddenFqn);
-          polymorphicInbound.push(...childInbound);
+          // FIX: Use iterative push instead of spread to prevent stack overflow
+          for (let i = 0; i < childInbound.length; i++) {
+            polymorphicInbound.push(childInbound[i]);
+          }
         }
       }
     }

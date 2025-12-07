@@ -38,19 +38,28 @@ export class SymbolResolver {
 
     // 2. Try method signature variations (method name with/without params)
     const methodMatches = this.resolveMethodSignature(query);
-    results.push(...methodMatches);
+    // FIX: Use iterative push instead of spread (safety for large result sets)
+    for (const match of methodMatches) {
+      results.push(match);
+    }
 
     // 3. Try simple class/interface name
     const simpleNameMatches = this.resolveSimpleName(query);
-    results.push(...simpleNameMatches);
+    for (const match of simpleNameMatches) {
+      results.push(match);
+    }
 
     // 4. Try partial matching (e.g., "User" → "UserService", "UserRepository")
     const partialMatches = this.resolvePartialMatch(query);
-    results.push(...partialMatches);
+    for (const match of partialMatches) {
+      results.push(match);
+    }
 
     // 5. Try package-qualified partial matches (e.g., "service.UserService")
     const packagePartialMatches = this.resolvePackagePartial(query);
-    results.push(...packagePartialMatches);
+    for (const match of packagePartialMatches) {
+      results.push(match);
+    }
 
     // Deduplicate and sort by confidence
     const seen = new Set<string>();

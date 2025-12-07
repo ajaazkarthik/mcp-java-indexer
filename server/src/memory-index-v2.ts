@@ -251,7 +251,10 @@ export class MemoryIndexV2 {
 
       // Traverse hierarchy
       const parents = await storage.getParents(currentClass);
-      queue.push(...parents);
+      // FIX: Use iterative push instead of spread (safety for large hierarchies)
+      for (const parent of parents) {
+        queue.push(parent);
+      }
     }
 
     return undefined;
