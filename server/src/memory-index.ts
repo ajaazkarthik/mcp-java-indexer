@@ -50,6 +50,8 @@ export class MemoryIndex {
   private indexedFiles: Set<string> = new Set(); // Only files we explicitly indexed (not dependencies)
   private references: Reference[] = []; // All references
   private referencesByFile: Map<string, Reference[]> = new Map(); // file -> references (for efficient cleanup)
+  private referencesByTarget: Map<string, Reference[]> = new Map(); // toFqn -> references (O(1) lookup for findUsages)
+  private referencesBySuffix: Map<string, Reference[]> = new Map(); // .methodName or .fieldName -> references (fuzzy lookup)
   private callGraph: Map<string, CallGraphEdge[]> = new Map(); // caller FQN -> edges
   private reverseCallGraph: Map<string, CallGraphEdge[]> = new Map(); // callee FQN -> edges
   private inheritance: Map<string, string[]> = new Map(); // child -> parents
@@ -299,13 +301,31 @@ export class MemoryIndex {
     }
     this.referencesByFile.get(normalizedRef.file)!.push(normalizedRef);
 
+    // Track by target for O(1) lookup in findUsages
+    if (!this.referencesByTarget.has(normalizedRef.toFqn)) {
+      this.referencesByTarget.set(normalizedRef.toFqn, []);
+    }
+    this.referencesByTarget.get(normalizedRef.toFqn)!.push(normalizedRef);
+
+    // Track by suffix (last segment after dot) for fuzzy matching
+    // E.g., "session.close" -> suffix ".close", "com.example.Utils" -> suffix ".Utils"
+    const toFqn = normalizedRef.toFqn;
+    const lastDotIndex = toFqn.lastIndexOf('.');
+    if (lastDotIndex >= 0) {
+      const suffix = toFqn.substring(lastDotIndex).toLowerCase(); // ".close", ".utils"
+      if (!this.referencesBySuffix.has(suffix)) {
+        this.referencesBySuffix.set(suffix, []);
+      }
+      this.referencesBySuffix.get(suffix)!.push(normalizedRef);
+    }
+
     // Build call graph for method calls
     if (ref.kind === 'method_call') {
       this.addCallGraphEdge(ref.fromFqn, ref.toFqn, normalizedRef.file, ref.line, ref.column);
     }
   }
 
-  // Find all usages of a symbol - uses fuzzy matching for better results
+  // Find all usages of a symbol - optimized with referencesByTarget index
   // IMPORTANT: References are stored with variable names (e.g., "session.close") not class FQNs
   // So we need flexible matching: user queries "Session.close()" but ref has "session.close"
   findUsages(fqn: string): Reference[] {
@@ -314,10 +334,16 @@ export class MemoryIndex {
       return [];
     }
     
-    // First try exact match
-    const exactMatches = this.references.filter(ref => ref.toFqn === fqn);
-    if (exactMatches.length > 0) {
+    // First try exact match using O(1) index lookup
+    const exactMatches = this.referencesByTarget.get(fqn);
+    if (exactMatches && exactMatches.length > 0) {
       return exactMatches;
+    }
+    
+    // Legacy: scan all references (fallback for edge cases)
+    const legacyExact = this.references.filter(ref => ref.toFqn === fqn);
+    if (legacyExact.length > 0) {
+      return legacyExact;
     }
     
     // Extract method/field name for fuzzy matching
@@ -345,47 +371,48 @@ export class MemoryIndex {
       }
       const classNameLower = className?.toLowerCase() || null;
       
-      // Fuzzy match: find references where toFqn ends with .methodName( or matches className.methodName
-      // Key insight: references use variable names (lowercase) but queries use class names (PascalCase)
+      // OPTIMIZED: Use suffix index for O(1) lookup instead of O(n) scan
+      const suffixKey = '.' + methodNameLower;
+      const suffixMatches = this.referencesBySuffix.get(suffixKey);
+      if (suffixMatches && suffixMatches.length > 0) {
+        // Further filter by className if available
+        if (classNameLower) {
+          const filtered = suffixMatches.filter(ref => {
+            const toFqnLower = ref.toFqn.toLowerCase();
+            const dotIndex = toFqnLower.lastIndexOf('.');
+            if (dotIndex > 0) {
+              const scopePart = toFqnLower.substring(0, dotIndex);
+              return scopePart.includes(classNameLower) || 
+                     scopePart.endsWith(classNameLower) || 
+                     classNameLower.endsWith(scopePart);
+            }
+            return true;
+          });
+          if (filtered.length > 0) {
+            return filtered;
+          }
+        }
+        return suffixMatches;
+      }
+      
+      // Fallback: O(n) scan for edge cases not covered by suffix index
       return this.references.filter(ref => {
         const toFqn = ref.toFqn;
         const toFqnLower = toFqn.toLowerCase();
         
         // 1. Exact method name match at end (most common case)
-        // Matches: "session.close", "utils.getSessionFactory", etc.
         if (toFqn.endsWith('.' + methodName) || toFqn.endsWith('.' + methodName + '()')) {
           return true;
         }
         
         // 2. Case-insensitive className.methodName match
-        // Matches: "session.close" when querying "Session.close"
-        // This is the KEY fix for the inconsistency issue
         if (classNameLower && toFqnLower.includes(classNameLower + '.' + methodNameLower)) {
           return true;
         }
         
         // 3. Just the method name (unqualified calls within same class)
-        if (toFqn === methodName || toFqn.endsWith('.' + methodName)) {
+        if (toFqn === methodName) {
           return true;
-        }
-        
-        // 4. Variable name might be similar to class name (e.g., "hibernateUtils" vs "HibernateUtils")
-        // Check if any word boundary match exists
-        if (classNameLower) {
-          const dotIndex = toFqnLower.lastIndexOf('.');
-          if (dotIndex > 0) {
-            const scopePart = toFqnLower.substring(0, dotIndex);
-            const methodPart = toFqnLower.substring(dotIndex + 1);
-            // Match if: method matches AND scope contains the class name (case-insensitive)
-            if (methodPart === methodNameLower && scopePart.includes(classNameLower)) {
-              return true;
-            }
-            // Or if scope ends with a similar suffix (e.g., "utils" vs "HibernateUtils")
-            if (methodPart === methodNameLower && 
-                (scopePart.endsWith(classNameLower) || classNameLower.endsWith(scopePart))) {
-              return true;
-            }
-          }
         }
         
         return false;
@@ -399,25 +426,31 @@ export class MemoryIndex {
       className = classNameIndex > 0 ? beforeField.substring(classNameIndex + 1) : beforeField;
       const classNameLower = className?.toLowerCase() || null;
       
-      // Fuzzy match for fields and classes
+      // OPTIMIZED: Use suffix index for O(1) lookup
+      const suffixKey = '.' + simpleNameLower;
+      const suffixMatches = this.referencesBySuffix.get(suffixKey);
+      if (suffixMatches && suffixMatches.length > 0) {
+        // Further filter by className if available
+        if (classNameLower) {
+          const filtered = suffixMatches.filter(ref => {
+            const toFqnLower = ref.toFqn.toLowerCase();
+            return toFqnLower.includes(classNameLower + '.') || 
+                   toFqnLower.startsWith(classNameLower + '.');
+          });
+          if (filtered.length > 0) {
+            return filtered;
+          }
+        }
+        return suffixMatches;
+      }
+      
+      // Fallback: check for exact simple name matches (e.g., class references)
       return this.references.filter(ref => {
         const toFqn = ref.toFqn;
         const toFqnLower = toFqn.toLowerCase();
         
-        // Match patterns like: varName.fieldName, ClassName.fieldName
-        if (toFqn.endsWith('.' + simpleName)) {
-          return true;
-        }
-        // Case-insensitive match for className.fieldName
-        if (classNameLower && toFqnLower.includes(classNameLower + '.' + simpleNameLower)) {
-          return true;
-        }
-        // Match by simple name for class references (instantiation, inheritance)
-        if (toFqn === simpleName || toFqn.endsWith('.' + simpleName)) {
-          return true;
-        }
-        // Case-insensitive match for simple names
-        if (toFqnLower === simpleNameLower || toFqnLower.endsWith('.' + simpleNameLower)) {
+        // Match by simple name for class references
+        if (toFqn === simpleName || toFqnLower === simpleNameLower) {
           return true;
         }
         return false;
@@ -426,6 +459,12 @@ export class MemoryIndex {
     
     // Fallback: match by simple name anywhere in toFqn (case-insensitive)
     const fqnLower = fqn.toLowerCase();
+    const suffixKey = '.' + fqnLower;
+    const suffixMatches = this.referencesBySuffix.get(suffixKey);
+    if (suffixMatches && suffixMatches.length > 0) {
+      return suffixMatches;
+    }
+    
     return this.references.filter(ref => {
       const toFqnLower = ref.toFqn.toLowerCase();
       return toFqnLower.includes(fqnLower) || toFqnLower.endsWith('.' + fqnLower);
@@ -680,6 +719,34 @@ export class MemoryIndex {
     // Efficiently remove references using file index
     const fileRefs = this.referencesByFile.get(normalizedPath);
     if (fileRefs) {
+      // Remove from referencesByTarget index
+      for (const ref of fileRefs) {
+        const targetRefs = this.referencesByTarget.get(ref.toFqn);
+        if (targetRefs) {
+          const filtered = targetRefs.filter(r => normalizePath(r.file) !== normalizedPath);
+          if (filtered.length === 0) {
+            this.referencesByTarget.delete(ref.toFqn);
+          } else {
+            this.referencesByTarget.set(ref.toFqn, filtered);
+          }
+        }
+        
+        // Remove from referencesBySuffix index
+        const toFqn = ref.toFqn;
+        const lastDotIndex = toFqn.lastIndexOf('.');
+        if (lastDotIndex >= 0) {
+          const suffix = toFqn.substring(lastDotIndex).toLowerCase();
+          const suffixRefs = this.referencesBySuffix.get(suffix);
+          if (suffixRefs) {
+            const filtered = suffixRefs.filter(r => normalizePath(r.file) !== normalizedPath);
+            if (filtered.length === 0) {
+              this.referencesBySuffix.delete(suffix);
+            } else {
+              this.referencesBySuffix.set(suffix, filtered);
+            }
+          }
+        }
+      }
       // Remove from main references array
       this.references = this.references.filter(ref => normalizePath(ref.file) !== normalizedPath);
       this.referencesByFile.delete(normalizedPath);
@@ -800,6 +867,8 @@ export class MemoryIndex {
     this.projectRootDir = '';
     this.references = [];
     this.referencesByFile.clear();
+    this.referencesByTarget.clear();
+    this.referencesBySuffix.clear();
     this.callGraph.clear();
     this.reverseCallGraph.clear();
     this.inheritance.clear();
@@ -823,6 +892,29 @@ export class MemoryIndex {
         this.referencesByFile.set(ref.file, []);
       }
       this.referencesByFile.get(ref.file)!.push(ref);
+    }
+    
+    // Rebuild referencesByTarget for O(1) findUsages lookup
+    this.referencesByTarget.clear();
+    for (const ref of this.references) {
+      if (!this.referencesByTarget.has(ref.toFqn)) {
+        this.referencesByTarget.set(ref.toFqn, []);
+      }
+      this.referencesByTarget.get(ref.toFqn)!.push(ref);
+    }
+    
+    // Rebuild referencesBySuffix for fuzzy matching
+    this.referencesBySuffix.clear();
+    for (const ref of this.references) {
+      const toFqn = ref.toFqn;
+      const lastDotIndex = toFqn.lastIndexOf('.');
+      if (lastDotIndex >= 0) {
+        const suffix = toFqn.substring(lastDotIndex).toLowerCase();
+        if (!this.referencesBySuffix.has(suffix)) {
+          this.referencesBySuffix.set(suffix, []);
+        }
+        this.referencesBySuffix.get(suffix)!.push(ref);
+      }
     }
     
     // Clean up empty call graph entries
@@ -890,6 +982,29 @@ export class MemoryIndex {
           this.referencesByFile.set(ref.file, []);
         }
         this.referencesByFile.get(ref.file)!.push(ref);
+      }
+    }
+    
+    // Rebuild referencesByTarget for O(1) findUsages lookup
+    this.referencesByTarget = new Map();
+    for (const ref of this.references) {
+      if (!this.referencesByTarget.has(ref.toFqn)) {
+        this.referencesByTarget.set(ref.toFqn, []);
+      }
+      this.referencesByTarget.get(ref.toFqn)!.push(ref);
+    }
+    
+    // Rebuild referencesBySuffix for fuzzy matching
+    this.referencesBySuffix = new Map();
+    for (const ref of this.references) {
+      const toFqn = ref.toFqn;
+      const lastDotIndex = toFqn.lastIndexOf('.');
+      if (lastDotIndex >= 0) {
+        const suffix = toFqn.substring(lastDotIndex).toLowerCase();
+        if (!this.referencesBySuffix.has(suffix)) {
+          this.referencesBySuffix.set(suffix, []);
+        }
+        this.referencesBySuffix.get(suffix)!.push(ref);
       }
     }
     

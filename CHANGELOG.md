@@ -5,6 +5,63 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.2] - 2025-01-XX
+
+### 🔴 Critical Bugfixes
+
+#### Fixed: Call Graph Property Name Mismatch (CRITICAL)
+
+**Problem**: SQLite storage returns call graph edges with properties `{caller, callee, kind, locations}`, but `convertCallGraphToArray()` was accessing `edge.callerFqn` and `edge.calleeFqn` which don't exist.
+
+**Effect**: All call graph edges were grouped under `undefined` key, making call graph queries return wrong data. On a 12K file project with 36,339 edges, all were incorrectly grouped.
+
+**Root Cause** (persistence.ts line 221):
+```typescript
+// BUG: SQLite returns edge.caller, not edge.callerFqn
+const callerFqn = edge.callerFqn;  // Always undefined!
+```
+
+**Solution**: Support both property names for compatibility:
+```typescript
+const callerFqn = edge.caller || edge.callerFqn;
+const calleeKey = edge.callee || edge.calleeFqn;
+```
+
+**Result**: Call graph now correctly populates (12,330 unique callers vs 1 before fix).
+
+### ⚡ Performance Improvements
+
+#### Added: referencesByTarget Index for O(1) findUsages
+
+**Problem**: `findUsages()` performed O(n) linear scan through all references. On a 77K reference project, each query took 46ms even for exact FQN matches.
+
+**Solution**: Added `referencesByTarget: Map<string, Reference[]>` index in MemoryIndex:
+- Populated during `addReference()` 
+- Rebuilt in `fromJSON()` when loading from storage
+- Used as primary lookup in `findUsages()` with O(n) fallback for fuzzy queries
+
+**Result**: Exact FQN lookups are now O(1) - 0ms for 13K+ usages (was 46ms).
+
+#### Added: referencesBySuffix Index for Fuzzy Matching
+
+**Problem**: Method/field queries like `processPayment(String)` required full O(n) scan.
+
+**Solution**: Added `referencesBySuffix: Map<string, Reference[]>` index with method/field names as keys.
+
+**Result**: Method name queries reduced from 69ms to 40ms average.
+
+### 📊 Test Results
+
+- All 11 test suites passing (100%)
+- 178+ individual test cases verified
+- Large project tested: 12,086 files, 60,513 symbols, 76,998 references, 72,677 call graph edges
+
+### 🔍 Analysis Finding
+
+Method call references are only 0.4% of total references (343 out of 77K). Most references are type references (instantiation, return_type, parameter_type). Method call `toFqn` values are often unresolved by JavaParser (e.g., `normalizePayload`, `ctx.record`). This is inherent to static analysis limitations.
+
+---
+
 ## [2.8.12] - 2025-12-04
 
 ### 🔧 Critical Bugfixes

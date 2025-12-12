@@ -364,11 +364,22 @@ export class Persistence {
 
   /**
    * Convert call graph edges to MemoryIndex array format
+   * 
+   * FIX: SQLite storage returns edges with 'caller' and 'callee' properties,
+   * not 'callerFqn' and 'calleeFqn'. This was causing all edges to be grouped
+   * under 'undefined' key, breaking call graph lookups.
    */
   private convertCallGraphToArray(edges: any[], direction: 'inbound' | 'outbound'): [string, any[]][] {
     const byMethod = new Map<string, any[]>();
     for (const edge of edges) {
-      const key = direction === 'outbound' ? edge.callerFqn : edge.calleeFqn;
+      // Support both property names for compatibility
+      const key = direction === 'outbound' 
+        ? (edge.caller || edge.callerFqn) 
+        : (edge.callee || edge.calleeFqn);
+      if (!key) {
+        console.error('Warning: Call graph edge missing caller/callee:', edge);
+        continue;
+      }
       const existing = byMethod.get(key);
       if (existing) {
         existing.push(edge);
