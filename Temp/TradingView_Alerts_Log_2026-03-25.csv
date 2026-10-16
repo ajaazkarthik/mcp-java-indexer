@@ -1,0 +1,519 @@
+Alert ID,Ticker,Name,Description,Time,Webhook status
+2381961922,"NSE_DLY:CIGNITITEC, 1h",WIN,"BUY 
+CIGNITITEC price: 1129.60, WinRate: 50.00%, NetProfit%: 11.21345038, sqzOff: true, rsi: 67.45%, ma_up: true, timeframe 60, prev_change_percent: 0.1698551761, BUY: true, LongTrade: true, srBuySignal: false, ADX: 22.4717331673, +DI: 36.0076629683, -DI: 13.0369355507",2026-03-25T08:00:30Z,
+2381963449,"NSE_DLY:FEDERALBNK, 2h",WIN,"BUY 
+FEDERALBNK price: 272.55, WinRate: 50.00%, NetProfit%: 26.19790332, sqzOff: true, rsi: 60.71%, ma_up: true, timeframe 120, prev_change_percent: 2.1599090565, BUY: false, LongTrade: true, srBuySignal: false, ADX: 25.5025587216, +DI: 38.8298080885, -DI: 25.3631302357",2026-03-25T08:00:05Z,
+2381961922,"NSE_DLY:CEMPRO, 1h",WIN,"BUY 
+CEMPRO price: 560.15, WinRate: 46.67%, NetProfit%: 2.327824975, sqzOff: true, rsi: 70.30%, ma_up: true, timeframe 60, prev_change_percent: 0.0090661831, BUY: true, LongTrade: true, srBuySignal: false, ADX: 24.069475751, +DI: 40.6370766257, -DI: 14.6108580716",2026-03-25T08:00:05Z,
+2381963449,"NSE_DLY:APOLLOHOSP, 2h",WIN,"BUY 
+APOLLOHOSP price: 7599.00, WinRate: 40.00%, NetProfit%: 9.66722449, sqzOff: true, rsi: 61.66%, ma_up: true, timeframe 120, prev_change_percent: 1.9246298789, BUY: false, LongTrade: true, srBuySignal: false, ADX: 20.8314707221, +DI: 40.5089032082, -DI: 19.3277708258",2026-03-25T08:00:04Z,
+2381961922,"NSE_DLY:STLTECH, 1h",WIN,"BUY 
+STLTECH price: 196.36, WinRate: 58.82%, NetProfit%: 37.846940328, sqzOff: true, rsi: 65.95%, ma_up: true, timeframe 60, prev_change_percent: 0.2298850575, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.0544651376, +DI: 40.9240628378, -DI: 17.7748719913",2026-03-25T08:00:01Z,
+2381961922,"NSE_DLY:INDIAGLYCO, 1h",WIN,"BUY 
+INDIAGLYCO price: 902.00, WinRate: 46.67%, NetProfit%: 50.668950315, sqzOff: true, rsi: 67.06%, ma_up: true, timeframe 60, prev_change_percent: 1.7382988299, BUY: false, LongTrade: true, srBuySignal: false, ADX: 26.4422251805, +DI: 42.1698045651, -DI: 12.9436342934",2026-03-25T07:01:00Z,
+2381961922,"NSE_DLY:NESCO, 1h",WIN,"BUY 
+NESCO price: 1078.40, WinRate: 41.67%, NetProfit%: 10.176983015, sqzOff: true, rsi: 64.69%, ma_up: true, timeframe 60, prev_change_percent: 0.1482030382, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.1701996623, +DI: 38.0304032438, -DI: 21.0971271472",2026-03-25T07:01:00Z,
+2381961922,"NSE_DLY:DATAMATICS, 1h",WIN,"BUY 
+DATAMATICS price: 714.70, WinRate: 42.86%, NetProfit%: 4.071012325, sqzOff: true, rsi: 61.98%, ma_up: true, timeframe 60, prev_change_percent: 1.1937363949, BUY: false, LongTrade: true, srBuySignal: false, ADX: 16.3292783177, +DI: 32.8686132548, -DI: 15.4466819443",2026-03-25T07:00:43Z,
+2381961922,"NSE_DLY:SMLMAH, 1h",WIN,"BUY 
+SMLMAH price: 4178.30, WinRate: 53.85%, NetProfit%: 249.82293939, sqzOff: true, rsi: 66.99%, ma_up: true, timeframe 60, prev_change_percent: 0.1990407674, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.967795181, +DI: 40.9688666881, -DI: 19.7641250706",2026-03-25T07:00:19Z,
+2381961922,"NSE_DLY:IMFA, 1h",WIN,"BUY 
+IMFA price: 1268.10, WinRate: 47.37%, NetProfit%: 53.422966515, sqzOff: true, rsi: 64.68%, ma_up: true, timeframe 60, prev_change_percent: 1.9741593773, BUY: false, LongTrade: true, srBuySignal: false, ADX: 22.322975475, +DI: 41.9250317645, -DI: 17.4589835678",2026-03-25T07:00:08Z,
+2381961922,"NSE_DLY:THANGAMAYL, 1h",WIN,"BUY 
+THANGAMAYL price: 3518.00, WinRate: 35.71%, NetProfit%: 21.207120535, sqzOff: true, rsi: 69.25%, ma_up: true, timeframe 60, prev_change_percent: 0.5387994143, BUY: false, LongTrade: false, srBuySignal: false, ADX: 27.9452971329, +DI: 42.117139234, -DI: 12.7047576793",2026-03-25T07:00:03Z,
+2381961922,"NSE_DLY:TIMETECHNO, 1h",WIN,"BUY 
+TIMETECHNO price: 166.46, WinRate: 38.46%, NetProfit%: 12.929509757, sqzOff: true, rsi: 61.36%, ma_up: true, timeframe 60, prev_change_percent: 0.5385674107, BUY: false, LongTrade: true, srBuySignal: false, ADX: 18.5988674083, +DI: 37.9627091284, -DI: 22.1813570754",2026-03-25T07:00:03Z,
+2381961922,"NSE_DLY:RELIANCE, 1h",WIN,"BUY 
+RELIANCE price: 1424.70, WinRate: 33.33%, NetProfit%: 10.87378313, sqzOff: false, rsi: 60.84%, ma_up: true, timeframe 60, prev_change_percent: 0.5282062117, BUY: true, LongTrade: true, srBuySignal: false, ADX: 15.7440761634, +DI: 30.7876778834, -DI: 17.334330695",2026-03-25T07:00:02Z,
+2381961922,"NSE_DLY:EICHERMOT, 1h",WIN,"BUY 
+EICHERMOT price: 7041.50, WinRate: 37.50%, NetProfit%: 4.319920975, sqzOff: true, rsi: 63.70%, ma_up: true, timeframe 60, prev_change_percent: 0.1489361702, BUY: false, LongTrade: true, srBuySignal: false, ADX: 25.8068889703, +DI: 39.6322586676, -DI: 18.6296899374",2026-03-25T07:00:02Z,
+2381961922,"NSE_DLY:ARVIND, 1h",WIN,"BUY 
+ARVIND price: 366.00, WinRate: 41.67%, NetProfit%: 31.54377955, sqzOff: true, rsi: 63.05%, ma_up: true, timeframe 60, prev_change_percent: 0.1372683596, BUY: false, LongTrade: true, srBuySignal: false, ADX: 19.7084560989, +DI: 38.0669006835, -DI: 19.2266528734",2026-03-25T07:00:00Z,
+2381961922,"NSE_DLY:ANGELONE, 1h",WIN,"BUY 
+ANGELONE price: 240.11, WinRate: 40.00%, NetProfit%: 26.254805239, sqzOff: true, rsi: 70.30%, ma_up: true, timeframe 60, prev_change_percent: 0.5391289698, BUY: false, LongTrade: true, srBuySignal: false, ADX: 29.018837428, +DI: 39.4685373677, -DI: 13.0407527807",2026-03-25T07:00:00Z,
+2381961922,"SGX_DLY:S59, 1h",WIN,"BUY 
+S59 price: 3.26, WinRate: 23.08%, NetProfit%: 24.327687453, sqzOff: true, rsi: 61.72%, ma_up: true, timeframe 60, prev_change_percent: 0, BUY: false, LongTrade: true, srBuySignal: false, ADX: 26.0612927588, +DI: 35.713481907, -DI: 12.3821373936",2026-03-25T06:10:59Z,
+2381963449,"NSE_DLY:SMLMAH, 2h",WIN,"BUY 
+SMLMAH price: 4178.30, WinRate: 66.67%, NetProfit%: 248.01632113, sqzOff: true, rsi: 61.92%, ma_up: true, timeframe 120, prev_change_percent: 0.409167357, BUY: false, LongTrade: true, srBuySignal: false, ADX: 17.4971810066, +DI: 38.7650085031, -DI: 21.4292295871",2026-03-25T06:00:54Z,
+2381963449,"NSE_DLY:GABRIEL, 2h",WIN,"BUY 
+GABRIEL price: 895.15, WinRate: 42.86%, NetProfit%: 41.871960555, sqzOff: false, rsi: 64.76%, ma_up: true, timeframe 120, prev_change_percent: 0.1920949997, BUY: false, LongTrade: false, srBuySignal: false, ADX: 15.2078622, +DI: 42.7958057235, -DI: 18.6519190925",2026-03-25T06:00:19Z,
+2381963449,"NSE_DLY:SANGHVIMOV, 2h",WIN,"BUY 
+SANGHVIMOV price: 268.10, WinRate: 62.50%, NetProfit%: 15.561181195, sqzOff: false, rsi: 68.80%, ma_up: true, timeframe 120, prev_change_percent: 0.8064516129, BUY: false, LongTrade: false, srBuySignal: false, ADX: 20.6940390433, +DI: 38.0342438919, -DI: 13.4484134316",2026-03-25T06:00:16Z,
+2381961922,"NSE_DLY:KPIGREEN, 1h",WIN,"BUY 
+KPIGREEN price: 386.15, WinRate: 50.00%, NetProfit%: 13.69571782, sqzOff: true, rsi: 64.30%, ma_up: true, timeframe 60, prev_change_percent: 1.6629272799, BUY: false, LongTrade: true, srBuySignal: false, ADX: 20.3689523387, +DI: 39.4962083292, -DI: 17.9287256499",2026-03-25T06:00:07Z,
+2381963449,"NSE_DLY:ASKAUTOLTD, 2h",WIN,"BUY 
+ASKAUTOLTD price: 432.70, WinRate: 28.57%, NetProfit%: 5.06523514, sqzOff: true, rsi: 69.95%, ma_up: true, timeframe 120, prev_change_percent: 0, BUY: false, LongTrade: false, srBuySignal: false, ADX: 25.7440964419, +DI: 36.5071132167, -DI: 14.1961650247",2026-03-25T06:00:07Z,
+2381963449,"NSE_DLY:STLTECH, 2h",WIN,"BUY 
+STLTECH price: 195.75, WinRate: 71.43%, NetProfit%: 103.538219756, sqzOff: true, rsi: 61.61%, ma_up: true, timeframe 120, prev_change_percent: 0.3826106244, BUY: false, LongTrade: true, srBuySignal: false, ADX: 14.4962980536, +DI: 38.4563222404, -DI: 23.6525591259",2026-03-25T06:00:04Z,
+2381961922,"NSE_DLY:GREENPLY, 1h",WIN,"BUY 
+GREENPLY price: 199.10, WinRate: 38.46%, NetProfit%: 3.043581436, sqzOff: true, rsi: 63.69%, ma_up: true, timeframe 60, prev_change_percent: 1.5396419437, BUY: false, LongTrade: false, srBuySignal: false, ADX: 21.4231481074, +DI: 36.5778376628, -DI: 18.2965262279",2026-03-25T06:00:04Z,
+2381963449,"NSE_DLY:PRICOLLTD, 2h",WIN,"BUY 
+PRICOLLTD price: 555.25, WinRate: 33.33%, NetProfit%: 1.41994676, sqzOff: true, rsi: 63.75%, ma_up: true, timeframe 120, prev_change_percent: 0.0376612372, BUY: false, LongTrade: false, srBuySignal: false, ADX: 25.6763602713, +DI: 38.4322029947, -DI: 21.2358765722",2026-03-25T06:00:04Z,
+2381963449,"NSE_DLY:GOKEX, 2h",WIN,"BUY 
+GOKEX price: 620.60, WinRate: 50.00%, NetProfit%: 1.634683895, sqzOff: true, rsi: 64.25%, ma_up: true, timeframe 120, prev_change_percent: 0.4522613065, BUY: false, LongTrade: false, srBuySignal: false, ADX: 22.5587546842, +DI: 40.6547431311, -DI: 18.7139097958",2026-03-25T06:00:03Z,
+2381963449,"NSE_DLY:CUMMINSIND, 2h",WIN,"BUY 
+CUMMINSIND price: 4742.90, WinRate: 53.85%, NetProfit%: 17.53714717, sqzOff: true, rsi: 60.15%, ma_up: true, timeframe 120, prev_change_percent: 0.1082251082, BUY: false, LongTrade: false, srBuySignal: false, ADX: 14.0297814342, +DI: 36.7460420329, -DI: 20.6078132444",2026-03-25T06:00:03Z,
+2381963449,"NSE_DLY:POCL, 2h",WIN,"BUY 
+POCL price: 1125.70, WinRate: 36.36%, NetProfit%: 20.561598105, sqzOff: true, rsi: 65.41%, ma_up: true, timeframe 120, prev_change_percent: 0.2073124764, BUY: false, LongTrade: false, srBuySignal: false, ADX: 17.0168030071, +DI: 40.3864179883, -DI: 20.0367203205",2026-03-25T06:00:02Z,
+2381963449,"NSE_DLY:AFFLE, 2h",WIN,"BUY 
+AFFLE price: 1373.40, WinRate: 37.50%, NetProfit%: 3.94492492, sqzOff: true, rsi: 66.28%, ma_up: true, timeframe 120, prev_change_percent: 0.34416826, BUY: false, LongTrade: false, srBuySignal: false, ADX: 21.6251636557, +DI: 39.5678448588, -DI: 16.5571360945",2026-03-25T06:00:02Z,
+2381961922,"NSE_DLY:AXISBANK, 1h",WIN,"BUY 
+AXISBANK price: 1227.00, WinRate: 41.18%, NetProfit%: 9.01767951, sqzOff: true, rsi: 63.00%, ma_up: true, timeframe 60, prev_change_percent: 1.5483762973, BUY: false, LongTrade: false, srBuySignal: false, ADX: 24.322265452, +DI: 35.3781322995, -DI: 17.717181918",2026-03-25T06:00:01Z,
+2381963449,"NSE_DLY:OBEROIRLTY, 2h",WIN,"BUY 
+OBEROIRLTY price: 1503.30, WinRate: 42.86%, NetProfit%: 2.06388344, sqzOff: true, rsi: 64.94%, ma_up: true, timeframe 120, prev_change_percent: 0.1799681595, BUY: false, LongTrade: false, srBuySignal: false, ADX: 14.8855544759, +DI: 37.9374238172, -DI: 18.8900410796",2026-03-25T06:00:00Z,
+2381963449,"NSE_DLY:ASIANPAINT, 2h",WIN,"BUY 
+ASIANPAINT price: 2276.00, WinRate: 57.14%, NetProfit%: 9.74733189, sqzOff: true, rsi: 64.24%, ma_up: true, timeframe 120, prev_change_percent: 0.0225306417, BUY: false, LongTrade: false, srBuySignal: false, ADX: 20.4499505192, +DI: 41.4690500798, -DI: 21.5037544973",2026-03-25T06:00:00Z,
+2381963449,"SGX_DLY:F9D, 2h",WIN,"BUY 
+F9D price: 1.86, WinRate: 20.00%, NetProfit%: 5.997628221, sqzOff: true, rsi: 60.63%, ma_up: true, timeframe 120, prev_change_percent: 2.2471910112, BUY: false, LongTrade: false, srBuySignal: false, ADX: 21.1854451871, +DI: 42.5661855768, -DI: 21.3221203686",2026-03-25T05:10:00Z,
+2381963449,"SGX_DLY:U06, 2h",WIN,"BUY 
+U06 price: 3.53, WinRate: 45.45%, NetProfit%: 23.312756243, sqzOff: true, rsi: 65.69%, ma_up: true, timeframe 120, prev_change_percent: 2.0771513353, BUY: true, LongTrade: false, srBuySignal: false, ADX: 20.0372440362, +DI: 44.9797584011, -DI: 13.9787570414",2026-03-25T05:10:00Z,
+2381961922,"NSE_DLY:AVALON, 1h",WIN,"BUY 
+AVALON price: 987.00, WinRate: 41.18%, NetProfit%: 3.754514995, sqzOff: true, rsi: 69.86%, ma_up: true, timeframe 60, prev_change_percent: 0.6369426752, BUY: true, LongTrade: true, srBuySignal: false, ADX: 27.8827902489, +DI: 41.5496948266, -DI: 13.2249889041",2026-03-25T05:00:11Z,
+2381961922,"NSE_DLY:POCL, 1h",WIN,"BUY 
+POCL price: 1128.50, WinRate: 69.23%, NetProfit%: 72.473062555, sqzOff: true, rsi: 68.39%, ma_up: true, timeframe 60, prev_change_percent: 0.2073124764, BUY: true, LongTrade: true, srBuySignal: false, ADX: 23.8173218508, +DI: 48.5670122497, -DI: 15.9000200532",2026-03-25T05:00:10Z,
+2381961922,"NSE_DLY:LAURUSLABS, 1h",WIN,"BUY 
+LAURUSLABS price: 1013.60, WinRate: 50.00%, NetProfit%: 32.27929946, sqzOff: true, rsi: 68.26%, ma_up: true, timeframe 60, prev_change_percent: 0.0503778338, BUY: false, LongTrade: false, srBuySignal: false, ADX: 23.0339072214, +DI: 42.8442613471, -DI: 14.5809500659",2026-03-25T05:00:06Z,
+2381961922,"NSE_DLY:MARICO, 1h",WIN,"BUY 
+MARICO price: 751.25, WinRate: 53.33%, NetProfit%: 3.842596785, sqzOff: true, rsi: 61.24%, ma_up: true, timeframe 60, prev_change_percent: 0.5821036957, BUY: false, LongTrade: false, srBuySignal: false, ADX: 23.4950173708, +DI: 34.4846275493, -DI: 18.8871941702",2026-03-25T05:00:06Z,
+2381961922,"NSE_DLY:MTARTECH, 1h",WIN,"BUY 
+MTARTECH price: 3700.00, WinRate: 36.84%, NetProfit%: 43.09437359, sqzOff: true, rsi: 73.57%, ma_up: true, timeframe 60, prev_change_percent: 0.2233341814, BUY: false, LongTrade: false, srBuySignal: false, ADX: 22.3808260609, +DI: 41.7525287298, -DI: 14.8271549942",2026-03-25T05:00:05Z,
+2381961922,"NSE_DLY:APOLLOHOSP, 1h",WIN,"BUY 
+APOLLOHOSP price: 7541.00, WinRate: 30.00%, NetProfit%: 4.859523755, sqzOff: true, rsi: 65.08%, ma_up: true, timeframe 60, prev_change_percent: 0.2563756578, BUY: false, LongTrade: false, srBuySignal: false, ADX: 24.9303646474, +DI: 40.3597343888, -DI: 19.2394913697",2026-03-25T05:00:05Z,
+2381961922,"NSE_DLY:FORCEMOT, 1h",WIN,"BUY 
+FORCEMOT price: 21960.00, WinRate: 52.63%, NetProfit%: 60.92000839, sqzOff: true, rsi: 65.52%, ma_up: true, timeframe 60, prev_change_percent: 0.3266448903, BUY: true, LongTrade: true, srBuySignal: false, ADX: 17.4461103728, +DI: 40.9775909342, -DI: 18.5464934028",2026-03-25T05:00:04Z,
+2381961922,"NSE_DLY:CDSL, 1h",WIN,"BUY 
+CDSL price: 1224.80, WinRate: 41.67%, NetProfit%: 17.899417425, sqzOff: true, rsi: 67.58%, ma_up: true, timeframe 60, prev_change_percent: 0.3719043192, BUY: false, LongTrade: false, srBuySignal: false, ADX: 21.1401175549, +DI: 41.4192787112, -DI: 17.310738916",2026-03-25T05:00:04Z,
+2381961922,"NSE_DLY:CUMMINSIND, 1h",WIN,"BUY 
+CUMMINSIND price: 4752.60, WinRate: 38.10%, NetProfit%: 8.08750371, sqzOff: true, rsi: 67.28%, ma_up: true, timeframe 60, prev_change_percent: 0.1082251082, BUY: true, LongTrade: false, srBuySignal: false, ADX: 13.238170643, +DI: 40.0131528997, -DI: 21.9118607048",2026-03-25T05:00:03Z,
+2381961922,"NSE_DLY:YATHARTH, 1h",WIN,"BUY 
+YATHARTH price: 666.60, WinRate: 50.00%, NetProfit%: 31.793144925, sqzOff: true, rsi: 66.02%, ma_up: true, timeframe 60, prev_change_percent: 0.5017755134, BUY: false, LongTrade: false, srBuySignal: false, ADX: 28.2457725345, +DI: 37.8911849992, -DI: 14.7284139992",2026-03-25T05:00:01Z,
+2381961922,"NSE_DLY:ASIANPAINT, 1h",WIN,"BUY 
+ASIANPAINT price: 2249.00, WinRate: 35.71%, NetProfit%: 11.5450174, sqzOff: true, rsi: 66.34%, ma_up: true, timeframe 60, prev_change_percent: 0.0225306417, BUY: false, LongTrade: false, srBuySignal: false, ADX: 28.7540372188, +DI: 44.3784702339, -DI: 17.8678150966",2026-03-25T05:00:00Z,
+2381961922,"NSE_DLY:FIVESTAR, 1h",WIN,"BUY 
+FIVESTAR price: 383.95, WinRate: 27.27%, NetProfit%: 3.756571795, sqzOff: true, rsi: 69.81%, ma_up: true, timeframe 60, prev_change_percent: 0.0549752611, BUY: true, LongTrade: true, srBuySignal: false, ADX: 27.7149859567, +DI: 44.2142459375, -DI: 11.0080007198",2026-03-25T05:00:00Z,
+2381961922,"NSE_DLY:GABRIEL, 1h",WIN,"BUY 
+GABRIEL price: 907.75, WinRate: 33.33%, NetProfit%: 43.1492986, sqzOff: true, rsi: 72.24%, ma_up: true, timeframe 60, prev_change_percent: 0.1920949997, BUY: true, LongTrade: false, srBuySignal: false, ADX: 18.0164804753, +DI: 46.8458275575, -DI: 14.912076776",2026-03-25T05:00:00Z,
+2381961922,"SGX_DLY:U06, 1h",WIN,"BUY 
+U06 price: 3.54, WinRate: 35.29%, NetProfit%: 9.219595855, sqzOff: true, rsi: 70.50%, ma_up: true, timeframe 60, prev_change_percent: 2.0771513353, BUY: true, LongTrade: true, srBuySignal: false, ADX: 23.3541378408, +DI: 49.9634551746, -DI: 12.7168513842",2026-03-25T04:11:00Z,
+2381961922,"SGX_DLY:BN4, 1h",WIN,"BUY 
+BN4 price: 12.41, WinRate: 52.17%, NetProfit%: 27.908374917, sqzOff: true, rsi: 60.68%, ma_up: true, timeframe 60, prev_change_percent: 1.3854930725, BUY: false, LongTrade: true, srBuySignal: false, ADX: 25.2440400721, +DI: 37.0386825948, -DI: 19.9798324093",2026-03-25T03:11:00Z,
+2381963449,"SGX_DLY:F03, 2h",WIN,"BUY 
+F03 price: 3.28, WinRate: 50.00%, NetProfit%: 4.147983084, sqzOff: true, rsi: 66.39%, ma_up: true, timeframe 120, prev_change_percent: 0.3154574132, BUY: false, LongTrade: true, srBuySignal: false, ADX: 18.789188166, +DI: 43.8131907742, -DI: 20.1421586104",2026-03-25T03:11:00Z,
+2381961922,"SGX_DLY:AWI, 1h",WIN,"BUY 
+AWI price: 1.80, WinRate: 25.00%, NetProfit%: 7.820546317, sqzOff: true, rsi: 60.27%, ma_up: true, timeframe 60, prev_change_percent: 0, BUY: false, LongTrade: true, srBuySignal: false, ADX: 17.1522810811, +DI: 38.6870236383, -DI: 26.2665028595",2026-03-25T03:11:00Z,
+2381961922,"ASX_DLY:MIN, 1h",WIN,"BUY 
+MIN price: 56.25, WinRate: 54.55%, NetProfit%: 39.947459017, sqzOff: true, rsi: 70.28%, ma_up: true, timeframe 60, prev_change_percent: 0.9110787172, BUY: false, LongTrade: false, srBuySignal: false, ADX: 25.8035544967, +DI: 38.7458975279, -DI: 17.889689266",2026-03-25T02:20:00Z,
+2381961922,"ASX_DLY:SNL, 1h",WIN,"BUY 
+SNL price: 32.73, WinRate: 72.73%, NetProfit%: 5.046216912, sqzOff: false, rsi: 61.38%, ma_up: true, timeframe 60, prev_change_percent: 1.1076923077, BUY: true, LongTrade: false, srBuySignal: false, ADX: 12.5039096252, +DI: 36.1000790706, -DI: 29.9648415721",2026-03-25T01:20:17Z,
+2381961922,"ASX_DLY:JHX, 1h",WIN,"BUY 
+JHX price: 28.58, WinRate: 57.14%, NetProfit%: 26.234565045, sqzOff: true, rsi: 62.75%, ma_up: true, timeframe 60, prev_change_percent: 1.3883944464, BUY: false, LongTrade: false, srBuySignal: false, ADX: 24.3521569791, +DI: 41.1285334644, -DI: 22.0635337447",2026-03-25T01:20:05Z,
+2381961922,"ASX_DLY:LYC, 1h",WIN,"BUY 
+LYC price: 20.41, WinRate: 42.86%, NetProfit%: 52.991021045, sqzOff: true, rsi: 62.19%, ma_up: true, timeframe 60, prev_change_percent: 0.8559919436, BUY: false, LongTrade: true, srBuySignal: false, ADX: 17.1624961514, +DI: 36.2859534312, -DI: 19.3906729337",2026-03-25T01:20:00Z,
+2381961922,"ASX_DLY:AMP, 1h",WIN,"BUY 
+AMP price: 1.285, WinRate: 41.67%, NetProfit%: 3.2115041445, sqzOff: false, rsi: 67.23%, ma_up: true, timeframe 60, prev_change_percent: 1.0425020048, BUY: false, LongTrade: false, srBuySignal: false, ADX: 18.8707964298, +DI: 35.4466028297, -DI: 18.9471994255",2026-03-25T00:20:12Z,
+2381961922,"ASX_DLY:WHC, 1h",WIN,"BUY 
+WHC price: 9.56, WinRate: 42.86%, NetProfit%: 12.486336493, sqzOff: false, rsi: 61.36%, ma_up: true, timeframe 60, prev_change_percent: 0.7991475759, BUY: true, LongTrade: true, srBuySignal: false, ADX: 18.063042176, +DI: 37.3077060511, -DI: 21.9160345117",2026-03-24T23:20:00Z,
+2381963449,"BATS:DE, 2h",WIN,"BUY 
+DE price: 582.85, WinRate: 28.57%, NetProfit%: 19.538684696, sqzOff: true, rsi: 60.37%, ma_up: true, timeframe 120, prev_change_percent: 0.4126452459, BUY: false, LongTrade: true, srBuySignal: false, ADX: 34.6023138163, +DI: 30.3682122318, -DI: 21.2566725622",2026-03-24T19:30:05Z,
+2381961922,"BATS:TT, 1h",WIN,"BUY 
+TT price: 432.01, WinRate: 30.77%, NetProfit%: 20.407044244, sqzOff: true, rsi: 61.38%, ma_up: true, timeframe 60, prev_change_percent: 0.719644411, BUY: true, LongTrade: false, srBuySignal: false, ADX: 22.2262770593, +DI: 32.2936490568, -DI: 27.6184345265",2026-03-24T15:30:21Z,
+2381961922,"BATS:BK, 1h",WIN,"BUY 
+BK price: 118.25, WinRate: 35.29%, NetProfit%: 10.503988139, sqzOff: true, rsi: 66.39%, ma_up: true, timeframe 60, prev_change_percent: 0.2062032821, BUY: true, LongTrade: false, srBuySignal: false, ADX: 15.5855402896, +DI: 33.5206593627, -DI: 24.5889143276",2026-03-24T15:30:05Z,
+2381963449,"BATS:CAT, 2h",WIN,"BUY 
+CAT price: 716.62, WinRate: 58.33%, NetProfit%: 48.554475619, sqzOff: true, rsi: 61.69%, ma_up: true, timeframe 120, prev_change_percent: 0.0113979598, BUY: false, LongTrade: true, srBuySignal: false, ADX: 22.4266506548, +DI: 34.0315439344, -DI: 20.7176252432",2026-03-24T15:30:02Z,
+2381963449,"BATS:ADI, 2h",WIN,"BUY 
+ADI price: 323.67, WinRate: 60.00%, NetProfit%: 35.401252304, sqzOff: false, rsi: 64.13%, ma_up: true, timeframe 120, prev_change_percent: 0.680834818, BUY: false, LongTrade: true, srBuySignal: false, ADX: 18.172506813, +DI: 37.6823485795, -DI: 18.7065847684",2026-03-24T15:30:02Z,
+2381961922,"BATS:CAT, 1h",WIN,"BUY 
+CAT price: 716.62, WinRate: 54.55%, NetProfit%: 18.935105796, sqzOff: true, rsi: 65.67%, ma_up: true, timeframe 60, prev_change_percent: 1.1140235911, BUY: true, LongTrade: true, srBuySignal: false, ADX: 22.6172702674, +DI: 37.6413152333, -DI: 19.3316594184",2026-03-24T15:30:02Z,
+2381961922,"BATS:XOM, 1h",WIN,"BUY 
+XOM price: 165.76, WinRate: 52.38%, NetProfit%: 14.218630778, sqzOff: false, rsi: 72.27%, ma_up: true, timeframe 60, prev_change_percent: 0.4612603628, BUY: false, LongTrade: true, srBuySignal: false, ADX: 24.6090011879, +DI: 30.4531843035, -DI: 22.1032735275",2026-03-24T14:30:00Z,
+2381963449,"NSE_DLY:PERSISTENT, 2h",WIN,"BUY 
+PERSISTENT price: 4919.30, WinRate: 44.44%, NetProfit%: 4.269949925, sqzOff: true, rsi: 66.66%, ma_up: true, timeframe 120, prev_change_percent: 1.0578308294, BUY: false, LongTrade: true, srBuySignal: false, ADX: 19.227382335, +DI: 31.3245269936, -DI: 14.2392771976",2026-03-24T10:16:00Z,
+2381961922,"NSE_DLY:GOKEX, 1h",WIN,"BUY 
+GOKEX price: 604.70, WinRate: 33.33%, NetProfit%: 14.40395354, sqzOff: true, rsi: 66.55%, ma_up: true, timeframe 60, prev_change_percent: 1.5957898311, BUY: false, LongTrade: false, srBuySignal: false, ADX: 22.9083248088, +DI: 41.239996227, -DI: 18.067971178",2026-03-24T09:00:03Z,
+2381961922,"NSE_DLY:ICIL, 1h",WIN,"BUY 
+ICIL price: 247.20, WinRate: 43.75%, NetProfit%: 21.674930575, sqzOff: true, rsi: 66.89%, ma_up: true, timeframe 60, prev_change_percent: 0.5117270789, BUY: false, LongTrade: false, srBuySignal: false, ADX: 20.7156270504, +DI: 37.1582526801, -DI: 16.3859327292",2026-03-24T09:00:01Z,
+2381961922,"NSE_DLY:KRBL, 1h",WIN,"BUY 
+KRBL price: 299.95, WinRate: 50.00%, NetProfit%: 9.67558784, sqzOff: false, rsi: 66.96%, ma_up: true, timeframe 60, prev_change_percent: 1.6059402521, BUY: false, LongTrade: false, srBuySignal: false, ADX: 20.5173719909, +DI: 40.0260558917, -DI: 15.6741854547",2026-03-24T08:01:00Z,
+2381961922,"NSE_DLY:LT, 1h",WIN,"BUY 
+LT price: 3504.00, WinRate: 33.33%, NetProfit%: 1.98831427, sqzOff: true, rsi: 60.90%, ma_up: true, timeframe 60, prev_change_percent: 0.3511852502, BUY: false, LongTrade: false, srBuySignal: false, ADX: 26.1789985753, +DI: 38.1007784055, -DI: 24.6927798875",2026-03-24T08:00:01Z,
+2381961922,"NSE_DLY:TDPOWERSYS, 1h",WIN,"BUY 
+TDPOWERSYS price: 859.25, WinRate: 50.00%, NetProfit%: 44.22202601, sqzOff: true, rsi: 61.93%, ma_up: true, timeframe 60, prev_change_percent: 0.8050569503, BUY: false, LongTrade: true, srBuySignal: false, ADX: 20.3878319137, +DI: 36.7744877124, -DI: 20.0874650963",2026-03-24T08:00:00Z,
+2381961922,"SGX_DLY:U10, 1h",WIN,"BUY 
+U10 price: 3.26, WinRate: 37.50%, NetProfit%: 9.296061106, sqzOff: true, rsi: 69.40%, ma_up: true, timeframe 60, prev_change_percent: 0.3134796238, BUY: true, LongTrade: true, srBuySignal: false, ADX: 22.1033149965, +DI: 37.7190523938, -DI: 14.6281603963",2026-03-24T07:10:34Z,
+2381961922,"NSE_DLY:ZYDUSWELL, 1h",WIN,"BUY 
+ZYDUSWELL price: 430.70, WinRate: 43.75%, NetProfit%: 7.06434741, sqzOff: true, rsi: 63.15%, ma_up: true, timeframe 60, prev_change_percent: 1.2866762867, BUY: false, LongTrade: true, srBuySignal: false, ADX: 24.8266527995, +DI: 35.8283540239, -DI: 16.3741021479",2026-03-24T06:00:04Z,
+2381963449,"ASX_DLY:SMR, 2h",WIN,"BUY 
+SMR price: 2.80, WinRate: 62.50%, NetProfit%: 6.55206216, sqzOff: true, rsi: 60.22%, ma_up: true, timeframe 120, prev_change_percent: 0.5524861878, BUY: false, LongTrade: false, srBuySignal: false, ADX: 15.5397754344, +DI: 34.9928743362, -DI: 20.7670033207",2026-03-24T00:20:33Z,
+2381961922,"ASX_DLY:MND, 1h",WIN,"BUY 
+MND price: 28.85, WinRate: 52.94%, NetProfit%: 17.055651629, sqzOff: true, rsi: 67.68%, ma_up: true, timeframe 60, prev_change_percent: 0.3702332469, BUY: true, LongTrade: true, srBuySignal: false, ADX: 14.3564658407, +DI: 40.1075565835, -DI: 19.2092802831",2026-03-23T23:20:50Z,
+2381961922,"ASX_DLY:DOW, 1h",WIN,"BUY 
+DOW price: 7.74, WinRate: 41.67%, NetProfit%: 10.566913794, sqzOff: false, rsi: 65.46%, ma_up: true, timeframe 60, prev_change_percent: 0.2657807309, BUY: true, LongTrade: true, srBuySignal: false, ADX: 14.1204553287, +DI: 43.6516982586, -DI: 18.4613136252",2026-03-23T23:20:04Z,
+2381961922,"ASX_DLY:GDG, 1h",WIN,"BUY 
+GDG price: 4.02, WinRate: 25.00%, NetProfit%: 12.726286493, sqzOff: true, rsi: 63.53%, ma_up: true, timeframe 60, prev_change_percent: 0.9032258065, BUY: true, LongTrade: false, srBuySignal: false, ADX: 13.8428623197, +DI: 38.1158942393, -DI: 21.3080876307",2026-03-23T23:20:00Z,
+2381961922,"ASX_DLY:BEN, 1h",WIN,"BUY 
+BEN price: 10.20, WinRate: 42.86%, NetProfit%: 4.421703223, sqzOff: false, rsi: 65.54%, ma_up: true, timeframe 60, prev_change_percent: 0.2982107356, BUY: false, LongTrade: true, srBuySignal: false, ADX: 19.5640876209, +DI: 32.169104521, -DI: 18.7997610681",2026-03-23T23:20:00Z,
+2381961922,"BATS:MAR, 1h",WIN,"BUY 
+MAR price: 330.16, WinRate: 30.00%, NetProfit%: 7.07326906, sqzOff: true, rsi: 61.36%, ma_up: true, timeframe 60, prev_change_percent: 0.0790634028, BUY: false, LongTrade: true, srBuySignal: false, ADX: 22.1147246475, +DI: 35.5047319345, -DI: 21.2415727397",2026-03-23T18:30:01Z,
+2381963449,"BATS:PH, 2h",WIN,"BUY 
+PH price: 928.64, WinRate: 40.00%, NetProfit%: 8.997179661, sqzOff: false, rsi: 60.61%, ma_up: true, timeframe 120, prev_change_percent: 0.9741285895, BUY: false, LongTrade: false, srBuySignal: false, ADX: 24.6101033057, +DI: 35.2739013907, -DI: 24.6095714564",2026-03-23T15:30:14Z,
+2381963449,"BATS:KLAC, 2h",WIN,"BUY 
+KLAC price: 1566.06, WinRate: 41.67%, NetProfit%: 33.394831835, sqzOff: false, rsi: 68.61%, ma_up: true, timeframe 120, prev_change_percent: 2.272649765, BUY: false, LongTrade: false, srBuySignal: false, ADX: 15.5118254104, +DI: 34.8221293363, -DI: 25.3020619989",2026-03-23T15:30:08Z,
+2381963449,"BATS:C, 2h",WIN,"BUY 
+C price: 112.98, WinRate: 30.00%, NetProfit%: 12.214147629, sqzOff: false, rsi: 70.17%, ma_up: true, timeframe 120, prev_change_percent: 0.0273822563, BUY: false, LongTrade: false, srBuySignal: false, ADX: 23.2255095435, +DI: 37.9677821262, -DI: 14.46172256",2026-03-23T15:30:00Z,
+2381963449,"BATS:HLT, 2h",WIN,"BUY 
+HLT price: 304.46, WinRate: 30.77%, NetProfit%: 1.359521137, sqzOff: true, rsi: 60.30%, ma_up: true, timeframe 120, prev_change_percent: 0.406685428, BUY: false, LongTrade: true, srBuySignal: false, ADX: 15.4969536428, +DI: 37.3350229474, -DI: 23.2842151034",2026-03-23T15:30:00Z,
+2381963449,"BATS:ETN, 2h",WIN,"BUY 
+ETN price: 369.60, WinRate: 40.00%, NetProfit%: 10.047735968, sqzOff: false, rsi: 61.88%, ma_up: true, timeframe 120, prev_change_percent: 0.5466482572, BUY: false, LongTrade: false, srBuySignal: false, ADX: 15.3041656224, +DI: 36.9457585944, -DI: 19.8460985279",2026-03-23T15:30:00Z,
+2381961922,"BATS:KKR, 1h",WIN,"BUY 
+KKR price: 92.32, WinRate: 46.15%, NetProfit%: 20.580075446, sqzOff: false, rsi: 68.47%, ma_up: true, timeframe 60, prev_change_percent: 0.3121168209, BUY: true, LongTrade: true, srBuySignal: false, ADX: 23.9170879211, +DI: 33.1079087518, -DI: 16.992374265",2026-03-23T14:30:02Z,
+2381961922,"BATS:AMAT, 1h",WIN,"BUY 
+AMAT price: 373.23, WinRate: 50.00%, NetProfit%: 35.218374855, sqzOff: false, rsi: 71.87%, ma_up: true, timeframe 60, prev_change_percent: 2.1761509866, BUY: false, LongTrade: true, srBuySignal: false, ADX: 26.9531588476, +DI: 35.035543708, -DI: 20.610309172",2026-03-23T14:30:01Z,
+2381961922,"BATS:WFC, 1h",WIN,"BUY 
+WFC price: 79.05, WinRate: 44.44%, NetProfit%: 10.809472306, sqzOff: true, rsi: 72.87%, ma_up: true, timeframe 60, prev_change_percent: 0.6542298225, BUY: false, LongTrade: true, srBuySignal: false, ADX: 23.7802315091, +DI: 41.0756897164, -DI: 12.0103995834",2026-03-23T14:30:00Z,
+2381961922,"BATS:C, 1h",WIN,"BUY 
+C price: 112.31, WinRate: 44.44%, NetProfit%: 7.268315844, sqzOff: false, rsi: 69.70%, ma_up: true, timeframe 60, prev_change_percent: 0.0273822563, BUY: false, LongTrade: true, srBuySignal: false, ADX: 25.2401521979, +DI: 36.1826296999, -DI: 13.5655045221",2026-03-23T14:30:00Z,
+2381961922,"BATS:PLTR, 1h",WIN,"BUY 
+PLTR price: 159.28, WinRate: 50.00%, NetProfit%: 8.353858768, sqzOff: false, rsi: 64.97%, ma_up: true, timeframe 60, prev_change_percent: 0.2660458929, BUY: true, LongTrade: true, srBuySignal: false, ADX: 19.2413044141, +DI: 38.3945749134, -DI: 21.3877111078",2026-03-23T14:30:00Z,
+2325001918,"NSE_DLY:WAAREEENER, 1h",Sell,"Bearish SELL breakout detected
+WAAREEENER sqzOff: true price (3022.20), timeframe 60 prev_change_percent: 0.5220646178",2026-03-23T08:00:00Z,
+2381963449,"ASX_DLY:TNE, 2h",WIN,"BUY 
+TNE price: 27.58, WinRate: 33.33%, NetProfit%: 28.055734026, sqzOff: true, rsi: 67.42%, ma_up: true, timeframe 120, prev_change_percent: 0.0376506024, BUY: false, LongTrade: true, srBuySignal: false, ADX: 19.45791537, +DI: 38.0419896668, -DI: 21.4151522754",2026-03-23T02:20:03Z,
+2381961922,"ASX_DLY:APE, 1h",WIN,"BUY 
+APE price: 21.11, WinRate: 72.73%, NetProfit%: 87.652592267, sqzOff: true, rsi: 63.39%, ma_up: true, timeframe 60, prev_change_percent: 0.072815534, BUY: false, LongTrade: false, srBuySignal: false, ADX: 14.0450852313, +DI: 37.3469910359, -DI: 19.4566402001",2026-03-23T02:20:02Z,
+2381961922,"NSE_DLY:IXIGO, 1h",WIN,"BUY 
+IXIGO price: 174.61, WinRate: 38.89%, NetProfit%: 1.93232899, sqzOff: true, rsi: 70.17%, ma_up: true, timeframe 60, prev_change_percent: 1.0033444816, BUY: true, LongTrade: false, srBuySignal: false, ADX: 26.3480098827, +DI: 38.1834716717, -DI: 14.8695435986",2026-03-20T10:00:01Z,
+2381963449,"NSE_DLY:SHRIPISTON, 2h",WIN,"BUY 
+SHRIPISTON price: 3133.00, WinRate: 25.00%, NetProfit%: 2.913637895, sqzOff: false, rsi: 64.04%, ma_up: true, timeframe 120, prev_change_percent: 0.8932182823, BUY: true, LongTrade: true, srBuySignal: false, ADX: 15.4278924204, +DI: 36.4121176475, -DI: 18.6388622895",2026-03-20T10:00:00Z,
+2381961922,"NSE_DLY:SHRIPISTON, 1h",WIN,"BUY 
+SHRIPISTON price: 3133.00, WinRate: 52.63%, NetProfit%: 9.297392525, sqzOff: true, rsi: 66.90%, ma_up: true, timeframe 60, prev_change_percent: 0.3469033772, BUY: true, LongTrade: true, srBuySignal: false, ADX: 15.3651787265, +DI: 41.4158458255, -DI: 18.0302006762",2026-03-20T10:00:00Z,
+2381963449,"NSE_DLY:IXIGO, 2h",WIN,"BUY 
+IXIGO price: 174.61, WinRate: 50.00%, NetProfit%: 22.101819049, sqzOff: true, rsi: 67.18%, ma_up: true, timeframe 120, prev_change_percent: 0.4695951971, BUY: true, LongTrade: true, srBuySignal: false, ADX: 25.6058944222, +DI: 35.0996986382, -DI: 14.5394819453",2026-03-20T10:00:00Z,
+2381961922,"NSE_DLY:CELLO, 1h",WIN,"BUY 
+CELLO price: 421.45, WinRate: 36.36%, NetProfit%: 4.74211294, sqzOff: true, rsi: 66.05%, ma_up: true, timeframe 60, prev_change_percent: 1.6057857318, BUY: true, LongTrade: true, srBuySignal: false, ADX: 18.3404039749, +DI: 37.8175876005, -DI: 13.9135498553",2026-03-20T09:00:02Z,
+2381963449,"NSE_DLY:AVALON, 2h",WIN,"BUY 
+AVALON price: 969.10, WinRate: 40.00%, NetProfit%: 2.90636956, sqzOff: true, rsi: 65.39%, ma_up: true, timeframe 120, prev_change_percent: 0.4188594136, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.1043318043, +DI: 37.8569707793, -DI: 20.0218605177",2026-03-20T06:00:16Z,
+2381963449,"NSE_DLY:STARCEMENT, 2h",WIN,"BUY 
+STARCEMENT price: 215.35, WinRate: 40.00%, NetProfit%: 12.351869874, sqzOff: true, rsi: 71.69%, ma_up: true, timeframe 120, prev_change_percent: 0.0618988668, BUY: false, LongTrade: false, srBuySignal: false, ADX: 23.1886159497, +DI: 41.6998497118, -DI: 12.4536514472",2026-03-20T06:00:02Z,
+2381963449,"NSE_DLY:JAICORPLTD, 2h",WIN,"BUY 
+JAICORPLTD price: 105.77, WinRate: 33.33%, NetProfit%: 10.072896177, sqzOff: true, rsi: 63.93%, ma_up: true, timeframe 120, prev_change_percent: 0.8736286063, BUY: true, LongTrade: true, srBuySignal: false, ADX: 18.1965637376, +DI: 49.2105330296, -DI: 19.7100356438",2026-03-20T06:00:02Z,
+2381963449,"NSE_DLY:TDPOWERSYS, 2h",WIN,"BUY 
+TDPOWERSYS price: 865.70, WinRate: 41.67%, NetProfit%: 47.39537156, sqzOff: true, rsi: 67.35%, ma_up: true, timeframe 120, prev_change_percent: 0.707688617, BUY: false, LongTrade: true, srBuySignal: false, ADX: 19.1316323592, +DI: 33.7431871208, -DI: 22.1308047246",2026-03-20T06:00:02Z,
+2381963449,"NSE_DLY:CARTRADE, 2h",WIN,"BUY 
+CARTRADE price: 1759.10, WinRate: 60.00%, NetProfit%: 37.24890037, sqzOff: true, rsi: 60.37%, ma_up: true, timeframe 120, prev_change_percent: 0.0182726276, BUY: false, LongTrade: false, srBuySignal: false, ADX: 18.357507642, +DI: 37.3055312537, -DI: 21.0514526787",2026-03-20T06:00:02Z,
+2381961922,"NSE_DLY:RELIANCE, 1h",WIN,"BUY 
+RELIANCE price: 1428.90, WinRate: 35.29%, NetProfit%: 13.37880785, sqzOff: false, rsi: 66.73%, ma_up: true, timeframe 60, prev_change_percent: 2.1767241379, BUY: false, LongTrade: false, srBuySignal: false, ADX: 17.5542689836, +DI: 32.0429730732, -DI: 26.4628590698",2026-03-20T06:00:01Z,
+2381961922,"ASX_DLY:BEN, 1h",WIN,"BUY 
+BEN price: 10.12, WinRate: 46.15%, NetProfit%: 5.354629144, sqzOff: false, rsi: 60.98%, ma_up: true, timeframe 60, prev_change_percent: 0.049652433, BUY: false, LongTrade: true, srBuySignal: false, ADX: 26.520654403, +DI: 30.6150305415, -DI: 16.106003015",2026-03-20T05:21:00Z,
+2381961922,"NSE_DLY:INOXGREEN, 1h",WIN,"BUY 
+INOXGREEN price: 150.67, WinRate: 50.00%, NetProfit%: 60.271479757, sqzOff: true, rsi: 66.48%, ma_up: true, timeframe 60, prev_change_percent: 0.12826908, BUY: false, LongTrade: false, srBuySignal: false, ADX: 19.823768916, +DI: 41.212236191, -DI: 19.6856786146",2026-03-20T05:00:01Z,
+2381961922,"HKEX_DLY:7234, 1h",WIN,"BUY 
+7234 price: 9.250, WinRate: 38.10%, NetProfit%: 54.363354643, sqzOff: true, rsi: 65.96%, ma_up: true, timeframe 60, prev_change_percent: 1.5969162996, BUY: false, LongTrade: true, srBuySignal: false, ADX: 18.9329361617, +DI: 39.9903388142, -DI: 28.4126769336",2026-03-20T04:46:00Z,
+2381963449,"HKEX_DLY:7234, 2h",WIN,"BUY 
+7234 price: 9.225, WinRate: 50.00%, NetProfit%: 39.687788706, sqzOff: false, rsi: 63.30%, ma_up: true, timeframe 120, prev_change_percent: 0.0575705239, BUY: false, LongTrade: true, srBuySignal: false, ADX: 14.1515931259, +DI: 42.0443586097, -DI: 29.5403325102",2026-03-20T03:45:14Z,
+2381961922,"ASX_DLY:TNE, 1h",WIN,"BUY 
+TNE price: 26.51, WinRate: 25.00%, NetProfit%: 38.883075334, sqzOff: false, rsi: 62.26%, ma_up: true, timeframe 60, prev_change_percent: 0.3300330033, BUY: false, LongTrade: true, srBuySignal: false, ADX: 19.2856309308, +DI: 32.7145958128, -DI: 18.1703203196",2026-03-19T23:20:01Z,
+2381961922,"NSE_DLY:EUREKAFORB, 1h",WIN,"BUY 
+EUREKAFORB price: 468.90, WinRate: 41.67%, NetProfit%: 12.257409905, sqzOff: true, rsi: 74.82%, ma_up: true, timeframe 60, prev_change_percent: 1.283027074, BUY: false, LongTrade: true, srBuySignal: false, ADX: 20.7747257259, +DI: 30.3334162708, -DI: 14.3943039946",2026-03-19T08:00:09Z,
+2381963449,"SGX_DLY:BBW, 2h",WIN,"BUY 
+BBW price: 11.68, WinRate: 66.67%, NetProfit%: 35.409757368, sqzOff: true, rsi: 64.39%, ma_up: true, timeframe 120, prev_change_percent: 0.6451612903, BUY: true, LongTrade: false, srBuySignal: false, ADX: 17.4230007829, +DI: 52.9470814858, -DI: 32.0963285956",2026-03-19T03:11:00Z,
+2381961922,"SGX_DLY:BBW, 1h",WIN,"BUY 
+BBW price: 11.68, WinRate: 33.33%, NetProfit%: 32.319717075, sqzOff: true, rsi: 65.85%, ma_up: true, timeframe 60, prev_change_percent: 0.6451612903, BUY: true, LongTrade: false, srBuySignal: false, ADX: 17.5345139607, +DI: 53.4056505204, -DI: 32.4443252102",2026-03-19T02:11:00Z,
+2381961922,"ASX_DLY:ALD, 1h",WIN,"BUY 
+ALD price: 33.17, WinRate: 31.25%, NetProfit%: 1.239623408, sqzOff: true, rsi: 77.96%, ma_up: true, timeframe 60, prev_change_percent: 0.0953288847, BUY: true, LongTrade: true, srBuySignal: false, ADX: 25.2156921747, +DI: 49.6400005963, -DI: 12.4146726122",2026-03-19T00:20:06Z,
+2381963449,"ASX_DLY:SGM, 2h",WIN,"BUY 
+SGM price: 21.43, WinRate: 50.00%, NetProfit%: 12.213073097, sqzOff: true, rsi: 76.26%, ma_up: true, timeframe 120, prev_change_percent: 1.2248897599, BUY: false, LongTrade: false, srBuySignal: false, ADX: 32.3485017795, +DI: 59.2628297143, -DI: 12.8685857678",2026-03-19T00:20:02Z,
+2381961922,"ASX_DLY:WDS, 1h",WIN,"BUY 
+WDS price: 32.86, WinRate: 53.33%, NetProfit%: 42.714803303, sqzOff: true, rsi: 73.53%, ma_up: true, timeframe 60, prev_change_percent: 2.3129685755, BUY: true, LongTrade: true, srBuySignal: false, ADX: 14.7426135471, +DI: 42.0677087694, -DI: 18.2656003091",2026-03-19T00:20:01Z,
+2381961922,"ASX_DLY:WOW, 1h",WIN,"BUY 
+WOW price: 36.25, WinRate: 50.00%, NetProfit%: 0.789875244, sqzOff: false, rsi: 62.95%, ma_up: true, timeframe 60, prev_change_percent: 0.2083044022, BUY: false, LongTrade: true, srBuySignal: false, ADX: 22.8305155198, +DI: 34.9669373873, -DI: 13.6179777619",2026-03-18T23:20:00Z,
+2381961922,"ASX_DLY:SGM, 1h",WIN,"BUY 
+SGM price: 21.93, WinRate: 37.50%, NetProfit%: 5.7795211, sqzOff: true, rsi: 71.79%, ma_up: true, timeframe 60, prev_change_percent: 1.2248897599, BUY: false, LongTrade: false, srBuySignal: false, ADX: 12.0077851325, +DI: 46.1850259814, -DI: 30.240132529",2026-03-18T23:20:00Z,
+2381961922,"BATS:AMD, 1h",WIN,"BUY 
+AMD price: 201.29, WinRate: 53.33%, NetProfit%: 75.509533062, sqzOff: false, rsi: 62.46%, ma_up: true, timeframe 60, prev_change_percent: 0.0050067591, BUY: false, LongTrade: true, srBuySignal: false, ADX: 20.6827269712, +DI: 32.3879720256, -DI: 11.976622529",2026-03-18T18:30:01Z,
+2381963449,"BATS:AMAT, 2h",WIN,"BUY 
+AMAT price: 355.82, WinRate: 63.64%, NetProfit%: 55.340982076, sqzOff: true, rsi: 62.52%, ma_up: true, timeframe 120, prev_change_percent: 0.2946451448, BUY: false, LongTrade: true, srBuySignal: false, ADX: 18.9456844095, +DI: 35.6903447696, -DI: 20.5004135371",2026-03-18T15:30:01Z,
+2381963449,"BATS:LRCX, 2h",WIN,"BUY 
+LRCX price: 230.51, WinRate: 41.67%, NetProfit%: 33.052186469, sqzOff: true, rsi: 69.61%, ma_up: true, timeframe 120, prev_change_percent: 0.6445303818, BUY: false, LongTrade: false, srBuySignal: false, ADX: 23.5809262825, +DI: 39.8375945779, -DI: 16.9792402957",2026-03-18T15:30:00Z,
+2381961922,"BATS:GEV, 1h",WIN,"BUY 
+GEV price: 858.48, WinRate: 38.89%, NetProfit%: 15.059218508, sqzOff: true, rsi: 67.72%, ma_up: true, timeframe 60, prev_change_percent: 0.7904571995, BUY: true, LongTrade: true, srBuySignal: false, ADX: 21.0681172385, +DI: 42.1787621237, -DI: 12.7736505905",2026-03-18T14:30:12Z,
+2381961922,"BATS:APO, 1h",WIN,"BUY 
+APO price: 110.58, WinRate: 42.86%, NetProfit%: 0.946779026, sqzOff: true, rsi: 70.12%, ma_up: true, timeframe 60, prev_change_percent: 0.0917262888, BUY: true, LongTrade: true, srBuySignal: false, ADX: 28.1390107968, +DI: 40.4879715811, -DI: 11.513477408",2026-03-18T14:30:03Z,
+2381961922,"BATS:CEG, 1h",WIN,"BUY 
+CEG price: 317.10, WinRate: 31.25%, NetProfit%: 19.803868652, sqzOff: true, rsi: 68.79%, ma_up: true, timeframe 60, prev_change_percent: 0.1914030819, BUY: false, LongTrade: false, srBuySignal: false, ADX: 23.4668315598, +DI: 36.6414605226, -DI: 13.6263814759",2026-03-18T14:30:01Z,
+2381963449,"NSE_DLY:NBCC, 2h",WIN,"BUY 
+NBCC price: 88.28, WinRate: 40.00%, NetProfit%: 14.251661287, sqzOff: true, rsi: 64.02%, ma_up: true, timeframe 120, prev_change_percent: 1.7578125, BUY: false, LongTrade: true, srBuySignal: false, ADX: 23.4006042275, +DI: 40.8798354902, -DI: 21.9331197293",2026-03-18T10:15:03Z,
+2381963449,"NSE_DLY:DODLA, 2h",WIN,"BUY 
+DODLA price: 1170.00, WinRate: 37.50%, NetProfit%: 2.14074314, sqzOff: true, rsi: 78.96%, ma_up: true, timeframe 120, prev_change_percent: 0.7893759287, BUY: false, LongTrade: false, srBuySignal: false, ADX: 32.7460006575, +DI: 53.9676291565, -DI: 12.0193786846",2026-03-18T10:15:01Z,
+2381963449,"NSE_DLY:SMLMAH, 2h",WIN,"BUY 
+SMLMAH price: 4144.80, WinRate: 75.00%, NetProfit%: 272.19301861, sqzOff: true, rsi: 62.89%, ma_up: true, timeframe 120, prev_change_percent: 0, BUY: false, LongTrade: true, srBuySignal: false, ADX: 27.777767032, +DI: 34.6998746933, -DI: 17.4005921033",2026-03-18T10:01:00Z,
+2381963449,"NSE_DLY:DCBBANK, 2h",WIN,"BUY 
+DCBBANK price: 179.75, WinRate: 36.36%, NetProfit%: 20.878304167, sqzOff: false, rsi: 66.09%, ma_up: true, timeframe 120, prev_change_percent: 1.9842647229, BUY: true, LongTrade: true, srBuySignal: false, ADX: 26.9541560088, +DI: 30.8536920758, -DI: 19.7419986594",2026-03-18T10:00:09Z,
+2381961922,"NSE_DLY:DCBBANK, 1h",WIN,"BUY 
+DCBBANK price: 179.75, WinRate: 36.84%, NetProfit%: 0.464028416, sqzOff: true, rsi: 71.86%, ma_up: true, timeframe 60, prev_change_percent: 0.6126269215, BUY: true, LongTrade: true, srBuySignal: false, ADX: 23.8651888077, +DI: 39.1762799634, -DI: 12.5229193647",2026-03-18T10:00:09Z,
+2381963449,"NSE_DLY:RATEGAIN, 2h",WIN,"BUY 
+RATEGAIN price: 510.30, WinRate: 25.00%, NetProfit%: 16.320412055, sqzOff: true, rsi: 60.07%, ma_up: true, timeframe 120, prev_change_percent: 1.0850266325, BUY: false, LongTrade: true, srBuySignal: false, ADX: 22.3876185347, +DI: 31.5480315219, -DI: 24.2502277003",2026-03-18T10:00:05Z,
+2381963449,"NSE_DLY:SANSERA, 2h",WIN,"BUY 
+SANSERA price: 2198.40, WinRate: 55.56%, NetProfit%: 47.257187465, sqzOff: true, rsi: 65.33%, ma_up: true, timeframe 120, prev_change_percent: 0.0368799557, BUY: false, LongTrade: true, srBuySignal: false, ADX: 24.9950933156, +DI: 42.1013450268, -DI: 19.125960387",2026-03-18T10:00:03Z,
+2381961922,"NSE_DLY:NBCC, 1h",WIN,"BUY 
+NBCC price: 88.57, WinRate: 50.00%, NetProfit%: 34.893788897, sqzOff: true, rsi: 73.47%, ma_up: true, timeframe 60, prev_change_percent: 1.1144301471, BUY: true, LongTrade: true, srBuySignal: false, ADX: 23.5110300218, +DI: 44.0559963126, -DI: 14.9292245974",2026-03-18T10:00:01Z,
+2381961922,"NSE_DLY:PNBHOUSING, 1h",WIN,"BUY 
+PNBHOUSING price: 808.05, WinRate: 61.54%, NetProfit%: 23.4138387, sqzOff: true, rsi: 70.68%, ma_up: true, timeframe 60, prev_change_percent: 0.231452521, BUY: true, LongTrade: true, srBuySignal: false, ADX: 27.1124712037, +DI: 42.8094767215, -DI: 12.6891621705",2026-03-18T10:00:00Z,
+2381963449,"NSE_DLY:AUBANK, 2h",WIN,"BUY 
+AUBANK price: 930.30, WinRate: 44.44%, NetProfit%: 37.250355855, sqzOff: true, rsi: 62.28%, ma_up: true, timeframe 120, prev_change_percent: 1.128581603, BUY: false, LongTrade: false, srBuySignal: false, ADX: 30.7061186966, +DI: 33.0697553599, -DI: 22.740780461",2026-03-18T10:00:00Z,
+2381963449,"SGX_DLY:U10, 2h",WIN,"BUY 
+U10 price: 3.22, WinRate: 50.00%, NetProfit%: 1.637503564, sqzOff: true, rsi: 73.46%, ma_up: true, timeframe 120, prev_change_percent: 0.6289308176, BUY: false, LongTrade: false, srBuySignal: false, ADX: 17.6252518407, +DI: 36.6515392956, -DI: 12.9888702968",2026-03-18T09:11:00Z,
+2381961922,"SGX_DLY:J36, 1h",WIN,"BUY 
+J36 price: 77.29, WinRate: 56.00%, NetProfit%: 16.513739964, sqzOff: false, rsi: 61.42%, ma_up: true, timeframe 60, prev_change_percent: 0.7278398752, BUY: true, LongTrade: false, srBuySignal: false, ADX: 33.4222799193, +DI: 50.8612743637, -DI: 8.4063041916",2026-03-18T09:11:00Z,
+2381963449,"SGX_DLY:S59, 2h",WIN,"BUY 
+S59 price: 3.29, WinRate: 37.50%, NetProfit%: 33.273093359, sqzOff: true, rsi: 66.01%, ma_up: true, timeframe 120, prev_change_percent: 0.3058103976, BUY: false, LongTrade: false, srBuySignal: false, ADX: 27.1769107929, +DI: 38.9313586886, -DI: 12.9216511378",2026-03-18T09:11:00Z,
+2381961922,"BSE_DLY:HNGSNGBEES, 1h",WIN,"BUY 
+HNGSNGBEES price: 513.24, WinRate: 63.64%, NetProfit%: 24.354468182, sqzOff: false, rsi: 65.01%, ma_up: true, timeframe 60, prev_change_percent: 0.0823949464, BUY: false, LongTrade: false, srBuySignal: false, ADX: 18.0038029175, +DI: 32.8480287186, -DI: 14.7258809288",2026-03-18T09:01:00Z,
+2381961922,"NSE_DLY:THOMASCOOK, 1h",WIN,"BUY 
+THOMASCOOK price: 96.30, WinRate: 50.00%, NetProfit%: 3.817802624, sqzOff: true, rsi: 73.85%, ma_up: true, timeframe 60, prev_change_percent: 0.8381689233, BUY: true, LongTrade: true, srBuySignal: false, ADX: 28.0391676734, +DI: 43.9441855951, -DI: 9.8724188108",2026-03-18T09:00:07Z,
+2381961922,"NSE_DLY:TDPOWERSYS, 1h",WIN,"BUY 
+TDPOWERSYS price: 844.90, WinRate: 52.94%, NetProfit%: 49.63443093, sqzOff: true, rsi: 69.82%, ma_up: true, timeframe 60, prev_change_percent: 0.2978317846, BUY: false, LongTrade: true, srBuySignal: false, ADX: 22.9084573011, +DI: 30.5011615706, -DI: 16.1019595316",2026-03-18T09:00:01Z,
+2381961922,"NSE_DLY:PARADEEP, 1h",WIN,"BUY 
+PARADEEP price: 115.48, WinRate: 50.00%, NetProfit%: 48.853912895, sqzOff: true, rsi: 66.60%, ma_up: true, timeframe 60, prev_change_percent: 0.4772004242, BUY: true, LongTrade: true, srBuySignal: false, ADX: 30.0838305685, +DI: 36.3311766276, -DI: 12.5202804672",2026-03-18T09:00:00Z,
+2381961922,"SGX_DLY:AWI, 1h",WIN,"BUY 
+AWI price: 1.80, WinRate: 27.27%, NetProfit%: 12.973917129, sqzOff: true, rsi: 60.32%, ma_up: true, timeframe 60, prev_change_percent: 0.5555555556, BUY: false, LongTrade: true, srBuySignal: false, ADX: 15.4747665119, +DI: 37.129958548, -DI: 29.8263777005",2026-03-18T08:11:00Z,
+2381961922,"NSE_DLY:RATEGAIN, 1h",WIN,"BUY 
+RATEGAIN price: 512.40, WinRate: 40.00%, NetProfit%: 4.825296455, sqzOff: true, rsi: 66.36%, ma_up: true, timeframe 60, prev_change_percent: 0.1775498126, BUY: true, LongTrade: true, srBuySignal: false, ADX: 25.9944448704, +DI: 32.404803011, -DI: 17.2172263659",2026-03-18T08:00:09Z,
+2381961922,"NSE_DLY:SANGHVIMOV, 1h",WIN,"BUY 
+SANGHVIMOV price: 249.95, WinRate: 53.85%, NetProfit%: 38.01044385, sqzOff: true, rsi: 71.11%, ma_up: true, timeframe 60, prev_change_percent: 0.4185851821, BUY: false, LongTrade: false, srBuySignal: false, ADX: 20.8133010455, +DI: 41.0590246947, -DI: 14.6965378231",2026-03-18T08:00:03Z,
+2381963449,"NSE_DLY:SYRMA, 2h",WIN,"BUY 
+SYRMA price: 785.20, WinRate: 40.00%, NetProfit%: 47.91716059, sqzOff: true, rsi: 64.65%, ma_up: true, timeframe 120, prev_change_percent: 0.4625407166, BUY: false, LongTrade: true, srBuySignal: false, ADX: 19.2341924778, +DI: 31.5175610392, -DI: 21.8276317768",2026-03-18T08:00:03Z,
+2381961922,"NSE_DLY:CUMMINSIND, 1h",WIN,"BUY 
+CUMMINSIND price: 4744.50, WinRate: 42.86%, NetProfit%: 18.566110355, sqzOff: false, rsi: 62.88%, ma_up: true, timeframe 60, prev_change_percent: 1.0742040342, BUY: false, LongTrade: false, srBuySignal: false, ADX: 12.9645131156, +DI: 35.2815783631, -DI: 19.0673362313",2026-03-18T08:00:04Z,
+2381961922,"NSE_DLY:HDFCAMC, 1h",WIN,"BUY 
+HDFCAMC price: 2485.00, WinRate: 56.25%, NetProfit%: 26.709543865, sqzOff: true, rsi: 68.00%, ma_up: true, timeframe 60, prev_change_percent: 0.0204248366, BUY: false, LongTrade: false, srBuySignal: false, ADX: 30.9902508832, +DI: 35.6752847736, -DI: 16.2709965555",2026-03-18T08:00:01Z,
+2381961922,"SGX_DLY:BQF, 1h",WIN,"BUY 
+BQF price: 1.99, WinRate: 50.00%, NetProfit%: 44.89617277, sqzOff: true, rsi: 71.93%, ma_up: true, timeframe 60, prev_change_percent: 0.5555555556, BUY: false, LongTrade: true, srBuySignal: false, ADX: 13.6771109005, +DI: 59.7476278257, -DI: 17.1279006445",2026-03-18T07:11:00Z,
+2381963449,"SGX_DLY:BQF, 2h",WIN,"BUY 
+BQF price: 1.99, WinRate: 75.00%, NetProfit%: 64.268068279, sqzOff: true, rsi: 67.51%, ma_up: true, timeframe 120, prev_change_percent: 0.5555555556, BUY: false, LongTrade: true, srBuySignal: false, ADX: 24.3138146282, +DI: 49.3666482884, -DI: 22.6064356097",2026-03-18T07:11:00Z,
+2381961922,"NSE_DLY:HNGSNGBEES, 1h",WIN,"BUY 
+HNGSNGBEES price: 509.35, WinRate: 50.00%, NetProfit%: 18.740174109, sqzOff: false, rsi: 60.89%, ma_up: true, timeframe 60, prev_change_percent: 0.6912991657, BUY: false, LongTrade: true, srBuySignal: false, ADX: 31.5769339295, +DI: 54.5396278745, -DI: 10.2854470086",2026-03-18T07:00:19Z,
+2381961922,"NSE_DLY:INDIAGLYCO, 1h",WIN,"BUY 
+INDIAGLYCO price: 886.55, WinRate: 50.00%, NetProfit%: 59.772369315, sqzOff: false, rsi: 64.59%, ma_up: true, timeframe 60, prev_change_percent: 0.4165240215, BUY: true, LongTrade: true, srBuySignal: false, ADX: 13.1292812041, +DI: 35.6049762957, -DI: 15.7742692772",2026-03-18T07:00:15Z,
+2381961922,"NSE_DLY:STLTECH, 1h",WIN,"BUY 
+STLTECH price: 193.77, WinRate: 62.50%, NetProfit%: 50.51702664, sqzOff: true, rsi: 61.37%, ma_up: true, timeframe 60, prev_change_percent: 0.2945043387, BUY: false, LongTrade: true, srBuySignal: false, ADX: 18.2488343266, +DI: 37.8333813712, -DI: 17.5311471309",2026-03-18T07:00:11Z,
+2381961922,"NSE_DLY:DYNAMATECH, 1h",WIN,"BUY 
+DYNAMATECH price: 10113.00, WinRate: 44.44%, NetProfit%: 3.82456069, sqzOff: true, rsi: 70.54%, ma_up: true, timeframe 60, prev_change_percent: 0.0507047967, BUY: false, LongTrade: false, srBuySignal: false, ADX: 29.2744120393, +DI: 43.3030048286, -DI: 12.4166740939",2026-03-18T07:00:07Z,
+2381961922,"NSE_DLY:UJJIVANSFB, 1h",WIN,"BUY 
+UJJIVANSFB price: 54.70, WinRate: 62.50%, NetProfit%: 50.454919661, sqzOff: true, rsi: 72.61%, ma_up: true, timeframe 60, prev_change_percent: 1.9637462236, BUY: false, LongTrade: false, srBuySignal: false, ADX: 27.5675127181, +DI: 36.6375364917, -DI: 12.8269376619",2026-03-18T07:00:06Z,
+2381961922,"NSE_DLY:JIOFIN, 1h",WIN,"BUY 
+JIOFIN price: 245.40, WinRate: 31.58%, NetProfit%: 4.215271006, sqzOff: true, rsi: 70.67%, ma_up: true, timeframe 60, prev_change_percent: 0.3699136868, BUY: true, LongTrade: true, srBuySignal: false, ADX: 24.2416057036, +DI: 44.0438938007, -DI: 13.3948120002",2026-03-18T07:00:04Z,
+2381961922,"NSE_DLY:PRESTIGE, 1h",WIN,"BUY 
+PRESTIGE price: 1301.00, WinRate: 54.55%, NetProfit%: 45.08195831, sqzOff: true, rsi: 64.23%, ma_up: true, timeframe 60, prev_change_percent: 1.7545239969, BUY: false, LongTrade: true, srBuySignal: false, ADX: 24.0198297288, +DI: 30.074312975, -DI: 15.9835846977",2026-03-18T07:00:04Z,
+2381961922,"NSE_DLY:BHARATFORG, 1h",WIN,"BUY 
+BHARATFORG price: 1802.40, WinRate: 42.11%, NetProfit%: 10.94915472, sqzOff: true, rsi: 65.94%, ma_up: true, timeframe 60, prev_change_percent: 0.089340555, BUY: false, LongTrade: false, srBuySignal: false, ADX: 31.6809739864, +DI: 38.2084436795, -DI: 13.5537194896",2026-03-18T07:00:00Z,
+2381961922,"HKEX_DLY:7262, 1h",WIN,"BUY 
+7262 price: 134.65, WinRate: 64.29%, NetProfit%: 41.60516674, sqzOff: true, rsi: 68.58%, ma_up: true, timeframe 60, prev_change_percent: 0.4494382022, BUY: false, LongTrade: false, srBuySignal: false, ADX: 19.6471358673, +DI: 54.7050626202, -DI: 24.4469764516",2026-03-18T06:46:00Z,
+2381961922,"NSE_DLY:PTC, 1h",WIN,"BUY 
+PTC price: 163.99, WinRate: 53.85%, NetProfit%: 13.771516097, sqzOff: true, rsi: 70.74%, ma_up: true, timeframe 60, prev_change_percent: 1.9231977877, BUY: true, LongTrade: true, srBuySignal: false, ADX: 23.819585302, +DI: 41.6906640539, -DI: 12.8933162761",2026-03-18T06:00:10Z,
+2381963449,"NSE_DLY:ARVIND, 2h",WIN,"BUY 
+ARVIND price: 371.80, WinRate: 50.00%, NetProfit%: 13.53736225, sqzOff: true, rsi: 73.24%, ma_up: true, timeframe 120, prev_change_percent: 1.6520756848, BUY: false, LongTrade: false, srBuySignal: false, ADX: 14.3260779946, +DI: 38.9034656799, -DI: 18.2794530836",2026-03-18T06:00:05Z,
+2381961922,"NSE_DLY:DIXON, 1h",WIN,"BUY 
+DIXON price: 10670.00, WinRate: 30.77%, NetProfit%: 4.935213645, sqzOff: false, rsi: 64.95%, ma_up: true, timeframe 60, prev_change_percent: 1.7978620019, BUY: false, LongTrade: false, srBuySignal: false, ADX: 17.4743775404, +DI: 40.6908179437, -DI: 19.2283284851",2026-03-18T06:00:00Z,
+2381961922,"NSE_DLY:BANCOINDIA, 1h",WIN,"BUY 
+BANCOINDIA price: 581.35, WinRate: 57.14%, NetProfit%: 97.05133906, sqzOff: true, rsi: 64.42%, ma_up: true, timeframe 60, prev_change_percent: 0.3556249458, BUY: true, LongTrade: false, srBuySignal: false, ADX: 27.1974014295, +DI: 35.7275652072, -DI: 12.0778558939",2026-03-18T05:00:37Z,
+2381961922,"NSE_DLY:IMFA, 1h",WIN,"BUY 
+IMFA price: 1253.20, WinRate: 50.00%, NetProfit%: 61.037494535, sqzOff: true, rsi: 61.58%, ma_up: true, timeframe 60, prev_change_percent: 0.5902999362, BUY: true, LongTrade: true, srBuySignal: false, ADX: 27.887438994, +DI: 40.7135731616, -DI: 12.3453619474",2026-03-18T05:00:31Z,
+2381961922,"NSE_DLY:EPL, 1h",WIN,"BUY 
+EPL price: 196.50, WinRate: 61.54%, NetProfit%: 7.516903433, sqzOff: true, rsi: 64.98%, ma_up: true, timeframe 60, prev_change_percent: 0.1547491996, BUY: false, LongTrade: false, srBuySignal: false, ADX: 33.7705169117, +DI: 39.0545546773, -DI: 18.2481724014",2026-03-18T05:00:12Z,
+2381961922,"NSE_DLY:PGIL, 1h",WIN,"BUY 
+PGIL price: 1554.80, WinRate: 53.85%, NetProfit%: 47.529807495, sqzOff: true, rsi: 69.85%, ma_up: true, timeframe 60, prev_change_percent: 0.278551532, BUY: true, LongTrade: true, srBuySignal: false, ADX: 17.4931785654, +DI: 48.5598976214, -DI: 15.7693896673",2026-03-18T05:00:09Z,
+2381961922,"NSE_DLY:PRUDENT, 1h",WIN,"BUY 
+PRUDENT price: 2347.00, WinRate: 47.06%, NetProfit%: 14.08867662, sqzOff: true, rsi: 71.87%, ma_up: true, timeframe 60, prev_change_percent: 0.1450868323, BUY: true, LongTrade: true, srBuySignal: false, ADX: 19.8127801508, +DI: 35.7626368665, -DI: 16.7782517411",2026-03-18T05:00:09Z,
+2381961922,"NSE_DLY:EDELWEISS, 1h",WIN,"BUY 
+EDELWEISS price: 110.46, WinRate: 40.00%, NetProfit%: 8.202106061, sqzOff: false, rsi: 60.18%, ma_up: true, timeframe 60, prev_change_percent: 0.3770808425, BUY: false, LongTrade: true, srBuySignal: false, ADX: 22.1458344929, +DI: 34.9601900347, -DI: 13.0750753992",2026-03-18T05:00:06Z,
+2381961922,"NSE_DLY:CDSL, 1h",WIN,"BUY 
+CDSL price: 1218.60, WinRate: 50.00%, NetProfit%: 28.17336578, sqzOff: true, rsi: 63.08%, ma_up: true, timeframe 60, prev_change_percent: 0.6103168631, BUY: false, LongTrade: false, srBuySignal: false, ADX: 22.4792428661, +DI: 38.2108317215, -DI: 17.1924507399",2026-03-18T05:00:05Z,
+2381961922,"NSE_DLY:PAYTM, 1h",WIN,"BUY 
+PAYTM price: 1043.90, WinRate: 50.00%, NetProfit%: 42.43706049, sqzOff: true, rsi: 67.95%, ma_up: true, timeframe 60, prev_change_percent: 0.4003515282, BUY: false, LongTrade: false, srBuySignal: false, ADX: 30.787571439, +DI: 40.6877483964, -DI: 11.3993352184",2026-03-18T05:00:05Z,
+2381961922,"NSE_DLY:KTKBANK, 1h",WIN,"BUY 
+KTKBANK price: 234.73, WinRate: 38.46%, NetProfit%: 7.430262385, sqzOff: true, rsi: 69.62%, ma_up: true, timeframe 60, prev_change_percent: 0.3307607497, BUY: true, LongTrade: true, srBuySignal: false, ADX: 17.2224420894, +DI: 42.7760348989, -DI: 15.8622333835",2026-03-18T05:00:05Z,
+2381961922,"NSE_DLY:SUBROS, 1h",WIN,"BUY 
+SUBROS price: 697.60, WinRate: 33.33%, NetProfit%: 22.44002772, sqzOff: false, rsi: 64.29%, ma_up: true, timeframe 60, prev_change_percent: 0.7698571323, BUY: false, LongTrade: true, srBuySignal: false, ADX: 16.57811589, +DI: 34.6865644067, -DI: 15.5487024669",2026-03-18T05:00:04Z,
+2381961922,"NSE_DLY:SANSERA, 1h",WIN,"BUY 
+SANSERA price: 2159.00, WinRate: 76.92%, NetProfit%: 67.512348105, sqzOff: true, rsi: 66.06%, ma_up: true, timeframe 60, prev_change_percent: 0.0336328256, BUY: false, LongTrade: false, srBuySignal: false, ADX: 26.7734340002, +DI: 42.7230429128, -DI: 15.1103539012",2026-03-18T05:00:01Z,
+2381961922,"NSE_DLY:NAZARA, 1h",WIN,"BUY 
+NAZARA price: 251.50, WinRate: 41.18%, NetProfit%: 11.73098727, sqzOff: true, rsi: 64.69%, ma_up: true, timeframe 60, prev_change_percent: 0.3767266639, BUY: false, LongTrade: false, srBuySignal: false, ADX: 14.8556151773, +DI: 42.4871193156, -DI: 16.2133086144",2026-03-18T05:00:01Z,
+2381961922,"NSE_DLY:CSBBANK, 1h",WIN,"BUY 
+CSBBANK price: 368.90, WinRate: 58.33%, NetProfit%: 19.57720069, sqzOff: true, rsi: 66.33%, ma_up: true, timeframe 60, prev_change_percent: 0.9917823746, BUY: false, LongTrade: false, srBuySignal: false, ADX: 20.5515691174, +DI: 34.7182765291, -DI: 15.1171224073",2026-03-18T05:00:01Z,
+2381961922,"NSE_DLY:DELHIVERY, 1h",WIN,"BUY 
+DELHIVERY price: 417.35, WinRate: 43.75%, NetProfit%: 32.59797025, sqzOff: false, rsi: 63.62%, ma_up: true, timeframe 60, prev_change_percent: 0.3481720965, BUY: false, LongTrade: false, srBuySignal: false, ADX: 25.3416243325, +DI: 36.1256391184, -DI: 18.9088130067",2026-03-18T05:00:01Z,
+2381961922,"NSE_DLY:ANGELONE, 1h",WIN,"BUY 
+ANGELONE price: 227.68, WinRate: 42.86%, NetProfit%: 29.995716604, sqzOff: false, rsi: 68.14%, ma_up: true, timeframe 60, prev_change_percent: 0.0092089511, BUY: true, LongTrade: true, srBuySignal: false, ADX: 22.2506856715, +DI: 40.8902493139, -DI: 11.041588372",2026-03-18T05:00:01Z,
+2381961922,"NSE_DLY:TECHM, 1h",WIN,"BUY 
+TECHM price: 1384.20, WinRate: 50.00%, NetProfit%: 11.67041073, sqzOff: true, rsi: 69.81%, ma_up: true, timeframe 60, prev_change_percent: 0.1860119048, BUY: true, LongTrade: true, srBuySignal: false, ADX: 13.2261717135, +DI: 36.3210038773, -DI: 15.6110035071",2026-03-18T05:00:00Z,
+2381961922,"NSE_DLY:ASTERDM, 1h",WIN,"BUY 
+ASTERDM price: 679.85, WinRate: 47.06%, NetProfit%: 18.627855885, sqzOff: true, rsi: 60.07%, ma_up: true, timeframe 60, prev_change_percent: 0.5680968755, BUY: false, LongTrade: true, srBuySignal: false, ADX: 19.2299798412, +DI: 34.5201735661, -DI: 19.5156707905",2026-03-18T05:00:00Z,
+2381961922,"SGX_DLY:U06, 1h",WIN,"BUY 
+U06 price: 3.47, WinRate: 37.50%, NetProfit%: 15.371634501, sqzOff: true, rsi: 64.85%, ma_up: true, timeframe 60, prev_change_percent: 0.2915451895, BUY: true, LongTrade: true, srBuySignal: false, ADX: 15.9033964902, +DI: 30.4705545536, -DI: 15.3074218424",2026-03-18T04:11:00Z,
+2381963449,"SGX_DLY:F03, 2h",WIN,"BUY 
+F03 price: 3.15, WinRate: 53.85%, NetProfit%: 11.361004822, sqzOff: false, rsi: 60.71%, ma_up: true, timeframe 120, prev_change_percent: 0.6451612903, BUY: false, LongTrade: true, srBuySignal: false, ADX: 12.5674850477, +DI: 32.4642967715, -DI: 22.6828216866",2026-03-18T03:11:00Z,
+2381961922,"SGX_DLY:S59, 1h",WIN,"BUY 
+S59 price: 3.27, WinRate: 25.00%, NetProfit%: 30.095794863, sqzOff: true, rsi: 66.72%, ma_up: true, timeframe 60, prev_change_percent: 1.2422360248, BUY: true, LongTrade: true, srBuySignal: false, ADX: 24.5428058333, +DI: 42.4201392282, -DI: 16.1788803695",2026-03-18T03:10:03Z,
+2381961922,"SGX_DLY:U10, 1h",WIN,"BUY 
+U10 price: 3.15, WinRate: 40.00%, NetProfit%: 14.56057591, sqzOff: true, rsi: 71.51%, ma_up: true, timeframe 60, prev_change_percent: 0.651465798, BUY: false, LongTrade: false, srBuySignal: false, ADX: 23.8720413082, +DI: 40.379388444, -DI: 17.0131352864",2026-03-18T02:11:00Z,
+2381961922,"SGX_DLY:BN4, 1h",WIN,"BUY 
+BN4 price: 12.58, WinRate: 54.55%, NetProfit%: 33.676645053, sqzOff: true, rsi: 81.43%, ma_up: true, timeframe 60, prev_change_percent: 0.32599837, BUY: true, LongTrade: true, srBuySignal: false, ADX: 21.7452028973, +DI: 51.6009201544, -DI: 12.4240963361",2026-03-18T02:10:42Z,
+2381961922,"BATS:GOOGL, 1h",WIN,"BUY 
+GOOGL price: 310.89, WinRate: 50.00%, NetProfit%: 42.865677694, sqzOff: true, rsi: 65.83%, ma_up: true, timeframe 60, prev_change_percent: 0.4073846552, BUY: true, LongTrade: true, srBuySignal: false, ADX: 25.814629348, +DI: 33.0481316332, -DI: 11.3344728479",2026-03-17T20:00:01Z,
+2381961922,"BATS:ADSK, 1h",WIN,"BUY 
+ADSK price: 255.45, WinRate: 25.00%, NetProfit%: 11.200470118, sqzOff: false, rsi: 60.18%, ma_up: true, timeframe 60, prev_change_percent: 0.1842992706, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.5869826113, +DI: 34.6349484715, -DI: 11.0386370287",2026-03-17T17:30:09Z,
+2381963449,"BATS:UBER, 2h",WIN,"BUY 
+UBER price: 78.34, WinRate: 66.67%, NetProfit%: 6.761150105, sqzOff: true, rsi: 69.40%, ma_up: true, timeframe 120, prev_change_percent: 0.4267235631, BUY: true, LongTrade: true, srBuySignal: false, ADX: 23.1342740451, +DI: 47.9956090995, -DI: 12.4338292002",2026-03-17T15:30:03Z,
+2381961922,"BATS:HLT, 1h",WIN,"BUY 
+HLT price: 303.33, WinRate: 33.33%, NetProfit%: 8.745435749, sqzOff: false, rsi: 64.47%, ma_up: true, timeframe 60, prev_change_percent: 0.0809989875, BUY: false, LongTrade: false, srBuySignal: false, ADX: 15.3073069172, +DI: 38.8043607629, -DI: 16.8753084273",2026-03-17T14:31:00Z,
+2381961922,"BATS:ABNB, 1h",WIN,"BUY 
+ABNB price: 131.98, WinRate: 46.15%, NetProfit%: 16.12627255, sqzOff: false, rsi: 65.26%, ma_up: true, timeframe 60, prev_change_percent: 0.0077942323, BUY: false, LongTrade: false, srBuySignal: false, ADX: 18.7718755784, +DI: 43.3766698429, -DI: 19.2942675798",2026-03-17T14:30:56Z,
+2381961922,"BATS:BKNG, 1h",WIN,"BUY 
+BKNG price: 4454.01, WinRate: 66.67%, NetProfit%: 5.883720256, sqzOff: true, rsi: 70.19%, ma_up: true, timeframe 60, prev_change_percent: 0.0195580805, BUY: false, LongTrade: true, srBuySignal: false, ADX: 18.5097895879, +DI: 45.0312640863, -DI: 16.3003760953",2026-03-17T14:30:15Z,
+2381961922,"BATS:KLAC, 1h",WIN,"BUY 
+KLAC price: 1471.70, WinRate: 57.14%, NetProfit%: 44.715194371, sqzOff: false, rsi: 62.24%, ma_up: true, timeframe 60, prev_change_percent: 0.4586394388, BUY: false, LongTrade: false, srBuySignal: false, ADX: 13.9616573243, +DI: 36.0834149034, -DI: 20.5868479872",2026-03-17T14:30:05Z,
+2381961922,"BATS:LRCX, 1h",WIN,"BUY 
+LRCX price: 223.33, WinRate: 50.00%, NetProfit%: 31.618918741, sqzOff: true, rsi: 66.09%, ma_up: true, timeframe 60, prev_change_percent: 0.4118050789, BUY: true, LongTrade: true, srBuySignal: false, ADX: 19.5761865832, +DI: 40.8380178906, -DI: 17.4457642703",2026-03-17T14:30:05Z,
+2381961922,"BATS:INTU, 1h",WIN,"BUY 
+INTU price: 463.30, WinRate: 33.33%, NetProfit%: 2.427919818, sqzOff: true, rsi: 66.88%, ma_up: true, timeframe 60, prev_change_percent: 0.453021252, BUY: false, LongTrade: true, srBuySignal: false, ADX: 27.8038192538, +DI: 41.8463400473, -DI: 13.2410364409",2026-03-17T14:30:02Z,
+2381961922,"BATS:PLTR, 1h",WIN,"BUY 
+PLTR price: 155.02, WinRate: 53.33%, NetProfit%: 11.763985931, sqzOff: false, rsi: 61.25%, ma_up: true, timeframe 60, prev_change_percent: 0.3881151952, BUY: false, LongTrade: true, srBuySignal: false, ADX: 16.0512875143, +DI: 30.9747698381, -DI: 15.8169224361",2026-03-17T14:30:01Z,
+2381963449,"SGX_DLY:BN4, 2h",WIN,"BUY 
+BN4 price: 12.31, WinRate: 66.67%, NetProfit%: 35.550175976, sqzOff: true, rsi: 60.25%, ma_up: true, timeframe 120, prev_change_percent: 0.0814332248, BUY: false, LongTrade: true, srBuySignal: false, ADX: 14.8085458043, +DI: 32.0866100206, -DI: 23.2730770733",2026-03-17T09:26:00Z,
+2381961922,"NSE_DLY:SYRMA, 1h",WIN,"BUY 
+SYRMA price: 765.50, WinRate: 50.00%, NetProfit%: 63.41702077, sqzOff: true, rsi: 65.07%, ma_up: true, timeframe 60, prev_change_percent: 1.2915746503, BUY: false, LongTrade: false, srBuySignal: false, ADX: 25.6718975213, +DI: 34.4884488541, -DI: 13.0410557443",2026-03-17T09:00:04Z,
+2381961922,"NSE_DLY:SHAILY, 1h",WIN,"BUY 
+SHAILY price: 2153.60, WinRate: 58.33%, NetProfit%: 9.65987122, sqzOff: true, rsi: 80.51%, ma_up: true, timeframe 60, prev_change_percent: 1.2909383163, BUY: true, LongTrade: true, srBuySignal: false, ADX: 23.818843091, +DI: 49.6966883127, -DI: 10.1757421889",2026-03-17T09:00:00Z,
+2381961922,"NSE_DLY:MTARTECH, 1h",WIN,"BUY 
+MTARTECH price: 3629.30, WinRate: 38.89%, NetProfit%: 47.30488724, sqzOff: true, rsi: 66.18%, ma_up: true, timeframe 60, prev_change_percent: 1.3546039743, BUY: false, LongTrade: false, srBuySignal: false, ADX: 27.1437212253, +DI: 34.5893189157, -DI: 15.4142062904",2026-03-17T07:00:09Z,
+2381961922,"NSE_DLY:TI, 1h",WIN,"BUY 
+TI price: 457.30, WinRate: 27.78%, NetProfit%: 32.417748725, sqzOff: false, rsi: 61.87%, ma_up: true, timeframe 60, prev_change_percent: 1.7990495587, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.0107691184, +DI: 30.9333768285, -DI: 19.0685432353",2026-03-17T06:00:08Z,
+2381963449,"NSE_DLY:MCX, 2h",WIN,"BUY 
+MCX price: 2633.70, WinRate: 63.64%, NetProfit%: 45.10628053, sqzOff: false, rsi: 67.33%, ma_up: true, timeframe 120, prev_change_percent: 0.3688299459, BUY: false, LongTrade: true, srBuySignal: false, ADX: 23.549145289, +DI: 30.2059016099, -DI: 22.112871235",2026-03-17T06:00:00Z,
+2381961922,"NSE_DLY:TECHNOE, 1h",WIN,"BUY 
+TECHNOE price: 1131.20, WinRate: 46.15%, NetProfit%: 20.985900095, sqzOff: false, rsi: 62.31%, ma_up: true, timeframe 60, prev_change_percent: 1.1558021267, BUY: false, LongTrade: true, srBuySignal: false, ADX: 15.603741809, +DI: 35.3961123122, -DI: 15.477999823",2026-03-17T05:00:01Z,
+2381963449,"SGX_DLY:E28, 2h",WIN,"BUY 
+E28 price: 2.07, WinRate: 45.45%, NetProfit%: 3.703846523, sqzOff: false, rsi: 63.47%, ma_up: true, timeframe 120, prev_change_percent: 0, BUY: false, LongTrade: true, srBuySignal: false, ADX: 16.9546304894, +DI: 32.8811770481, -DI: 19.3737084841",2026-03-17T03:10:19Z,
+2381963449,"BATS:WELL, 2h",WIN,"BUY 
+WELL price: 210.25, WinRate: 45.45%, NetProfit%: 11.022194973, sqzOff: false, rsi: 62.32%, ma_up: true, timeframe 120, prev_change_percent: 0.0865301413, BUY: false, LongTrade: true, srBuySignal: false, ADX: 14.386844285, +DI: 31.0475748326, -DI: 21.5718880781",2026-03-16T15:30:40Z,
+2381963449,"BATS:AEP, 2h",WIN,"BUY 
+AEP price: 134.33, WinRate: 30.00%, NetProfit%: 14.204971061, sqzOff: false, rsi: 61.06%, ma_up: true, timeframe 120, prev_change_percent: 0.1420242189, BUY: true, LongTrade: true, srBuySignal: false, ADX: 18.6984348071, +DI: 32.9341718333, -DI: 19.7870859222",2026-03-16T15:30:08Z,
+2381963449,"BATS:APH, 2h",WIN,"BUY 
+APH price: 138.70, WinRate: 63.64%, NetProfit%: 41.616955274, sqzOff: true, rsi: 60.75%, ma_up: true, timeframe 120, prev_change_percent: 0.5404593905, BUY: false, LongTrade: false, srBuySignal: false, ADX: 19.9938798648, +DI: 38.5935570847, -DI: 21.8874634175",2026-03-16T15:30:03Z,
+2381963449,"BATS:MU, 2h",WIN,"BUY 
+MU price: 448.08, WinRate: 50.00%, NetProfit%: 118.198857, sqzOff: true, rsi: 71.11%, ma_up: true, timeframe 120, prev_change_percent: 0.6638161158, BUY: true, LongTrade: true, srBuySignal: false, ADX: 20.6375681234, +DI: 43.5737275219, -DI: 19.3563579975",2026-03-16T15:30:00Z,
+2381963449,"NSE_DLY:ZYDUSWELL, 2h",WIN,"BUY 
+ZYDUSWELL price: 429.00, WinRate: 42.86%, NetProfit%: 15.835981585, sqzOff: true, rsi: 62.26%, ma_up: true, timeframe 120, prev_change_percent: 1.6761123839, BUY: false, LongTrade: true, srBuySignal: false, ADX: 38.7290963656, +DI: 31.5903497529, -DI: 3.9899093679",2026-03-16T10:15:00Z,
+2381963449,"BATS:CVX, 2h",WIN,"BUY 
+CVX price: 197.17, WinRate: 36.36%, NetProfit%: 4.576608676, sqzOff: true, rsi: 74.67%, ma_up: true, timeframe 120, prev_change_percent: 0.4977992035, BUY: false, LongTrade: true, srBuySignal: false, ADX: 26.6544149819, +DI: 41.5432262447, -DI: 10.9644988044",2026-03-12T15:30:00Z,
+2381963449,"SGX_DLY:H78, 2h",WIN,"BUY 
+H78 price: 8.49, WinRate: 35.29%, NetProfit%: 0.891163644, sqzOff: true, rsi: 61.10%, ma_up: true, timeframe 120, prev_change_percent: 0, BUY: false, LongTrade: false, srBuySignal: false, ADX: 16.8664987708, +DI: 35.6049178279, -DI: 27.0386240223",2026-03-12T09:26:00Z,
+2381963449,"NSE_DLY:ACMESOLAR, 2h",WIN,"BUY 
+ACMESOLAR price: 240.70, WinRate: 44.44%, NetProfit%: 5.313066328, sqzOff: true, rsi: 69.62%, ma_up: true, timeframe 120, prev_change_percent: 0.0173905482, BUY: true, LongTrade: true, srBuySignal: false, ADX: 26.9889316014, +DI: 37.4567645646, -DI: 16.2789413784",2026-03-12T06:00:02Z,
+2381963449,"NSE_DLY:AARTIIND, 2h",WIN,"BUY 
+AARTIIND price: 451.15, WinRate: 42.86%, NetProfit%: 16.46031016, sqzOff: true, rsi: 68.53%, ma_up: true, timeframe 120, prev_change_percent: 0.4062209842, BUY: false, LongTrade: true, srBuySignal: false, ADX: 30.729376541, +DI: 34.8883415289, -DI: 20.3451253154",2026-03-12T06:00:01Z,
+2381963449,"ASX_DLY:WDS, 2h",WIN,"BUY 
+WDS price: 31.05, WinRate: 83.33%, NetProfit%: 56.023518802, sqzOff: false, rsi: 60.43%, ma_up: true, timeframe 120, prev_change_percent: 0.032247662, BUY: false, LongTrade: true, srBuySignal: false, ADX: 24.3737665941, +DI: 32.8745150307, -DI: 22.4627350302",2026-03-12T05:21:00Z,
+2381963449,"ASX_DLY:AAI, 2h",WIN,"BUY 
+AAI price: 90.20, WinRate: 36.36%, NetProfit%: 40.355784964, sqzOff: true, rsi: 62.64%, ma_up: true, timeframe 120, prev_change_percent: 0.3533568905, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.9789402273, +DI: 42.7094611437, -DI: 19.9257331279",2026-03-12T04:20:02Z,
+2381963449,"BATS:ORCL, 2h",WIN,"BUY 
+ORCL price: 164.50, WinRate: 71.43%, NetProfit%: 42.417631574, sqzOff: false, rsi: 69.99%, ma_up: true, timeframe 120, prev_change_percent: 0.4860510021, BUY: true, LongTrade: true, srBuySignal: false, ADX: 17.287841798, +DI: 45.7675319768, -DI: 13.5320853333",2026-03-11T15:30:01Z,
+2381963449,"NSE_DLY:SUPREMEIND, 2h",WIN,"BUY 
+SUPREMEIND price: 4027.00, WinRate: 44.44%, NetProfit%: 3.60800585, sqzOff: true, rsi: 60.80%, ma_up: true, timeframe 120, prev_change_percent: 0.3603333083, BUY: false, LongTrade: true, srBuySignal: false, ADX: 22.0379786994, +DI: 31.4351176574, -DI: 25.9137361507",2026-03-11T10:00:00Z,
+2381963449,"NSE_DLY:ASTRAL, 2h",WIN,"BUY 
+ASTRAL price: 1710.00, WinRate: 42.86%, NetProfit%: 17.53481948, sqzOff: true, rsi: 62.89%, ma_up: true, timeframe 120, prev_change_percent: 1.6816816817, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.4184761545, +DI: 36.9380696324, -DI: 24.2657668133",2026-03-11T08:00:04Z,
+2381963449,"NSE_DLY:SYMPHONY, 2h",WIN,"BUY 
+SYMPHONY price: 834.70, WinRate: 50.00%, NetProfit%: 2.98881894, sqzOff: true, rsi: 74.39%, ma_up: true, timeframe 120, prev_change_percent: 0.3029920465, BUY: false, LongTrade: false, srBuySignal: false, ADX: 28.5673491093, +DI: 44.5333318469, -DI: 18.1431796815",2026-03-11T06:00:03Z,
+2381963449,"NSE_DLY:PRINCEPIPE, 2h",WIN,"BUY 
+PRINCEPIPE price: 264.00, WinRate: 28.57%, NetProfit%: 21.525363902, sqzOff: true, rsi: 70.49%, ma_up: true, timeframe 120, prev_change_percent: 0.8064516129, BUY: false, LongTrade: false, srBuySignal: false, ADX: 32.9408932274, +DI: 50.1601064129, -DI: 11.4109596874",2026-03-11T06:00:02Z,
+2381963449,"HKEX_DLY:7234, 2h",WIN,"BUY 
+7234 price: 9.140, WinRate: 55.56%, NetProfit%: 45.9457128925, sqzOff: true, rsi: 66.85%, ma_up: true, timeframe 120, prev_change_percent: 0.2272727273, BUY: true, LongTrade: true, srBuySignal: false, ADX: 24.7712495971, +DI: 41.5565772595, -DI: 35.3181971774",2026-03-11T03:45:07Z,
+2381963449,"ASX_DLY:LYC, 2h",WIN,"BUY 
+LYC price: 20.15, WinRate: 72.73%, NetProfit%: 70.456478244, sqzOff: true, rsi: 66.51%, ma_up: true, timeframe 120, prev_change_percent: 0.3102961918, BUY: true, LongTrade: true, srBuySignal: false, ADX: 20.587932648, +DI: 48.4667282263, -DI: 23.8700004167",2026-03-11T00:20:08Z,
+2381963449,"NSE_DLY:HPL, 2h",WIN,"BUY 
+HPL price: 331.00, WinRate: 33.33%, NetProfit%: 3.98337624, sqzOff: false, rsi: 60.53%, ma_up: true, timeframe 120, prev_change_percent: 1.5898251192, BUY: false, LongTrade: true, srBuySignal: false, ADX: 24.8601792256, +DI: 39.3367007208, -DI: 23.1755002199",2026-03-10T10:15:01Z,
+2381963449,"SGX_DLY:J36, 2h",WIN,"BUY 
+J36 price: 78.40, WinRate: 60.00%, NetProfit%: 23.829370134, sqzOff: true, rsi: 61.49%, ma_up: true, timeframe 120, prev_change_percent: 0.9780597409, BUY: false, LongTrade: false, srBuySignal: false, ADX: 31.5180795514, +DI: 37.1653349993, -DI: 28.667216835",2026-03-10T09:26:00Z,
+2381963449,"NSE_DLY:TI, 2h",WIN,"BUY 
+TI price: 451.80, WinRate: 42.86%, NetProfit%: 76.17536289, sqzOff: true, rsi: 61.39%, ma_up: true, timeframe 120, prev_change_percent: 2.2331653688, BUY: false, LongTrade: true, srBuySignal: false, ADX: 22.6217452881, +DI: 33.5344434775, -DI: 26.6471993521",2026-03-10T08:00:03Z,
+2381963449,"NSE_DLY:BSE, 2h",WIN,"BUY 
+BSE price: 2859.00, WinRate: 41.67%, NetProfit%: 4.39666241, sqzOff: true, rsi: 66.64%, ma_up: true, timeframe 120, prev_change_percent: 0.2990883211, BUY: true, LongTrade: true, srBuySignal: false, ADX: 18.1954959646, +DI: 36.0036827079, -DI: 26.6367084814",2026-03-10T06:00:01Z,
+2381963449,"ASX_DLY:PME, 2h",WIN,"BUY 
+PME price: 136.51, WinRate: 40.00%, NetProfit%: 14.788011542, sqzOff: true, rsi: 70.43%, ma_up: true, timeframe 120, prev_change_percent: 0.0227049118, BUY: false, LongTrade: false, srBuySignal: false, ADX: 22.125910418, +DI: 40.8260401822, -DI: 20.2856523489",2026-03-10T00:20:00Z,
+2381963449,"HKEX_DLY:3455, 2h",WIN,"BUY 
+3455 price: 4779, WinRate: 36.36%, NetProfit%: 5.9462413, sqzOff: true, rsi: 60.29%, ma_up: true, timeframe 120, prev_change_percent: 0.0209380235, BUY: false, LongTrade: true, srBuySignal: false, ADX: 17.5460039065, +DI: 45.2989275971, -DI: 31.7360561695",2026-03-06T08:31:00Z,
+2381963449,"NSE_DLY:CPSEETF, 2h",WIN,"BUY 
+CPSEETF price: 104.05, WinRate: 42.86%, NetProfit%: 9.378727028, sqzOff: false, rsi: 60.22%, ma_up: true, timeframe 120, prev_change_percent: 0.1356852103, BUY: false, LongTrade: true, srBuySignal: false, ADX: 29.0280313862, +DI: 33.7501619287, -DI: 13.920198365",2026-03-06T06:00:26Z,
+2381963449,"NSE_DLY:MIDHANI, 2h",WIN,"BUY 
+MIDHANI price: 357.75, WinRate: 22.22%, NetProfit%: 9.08003354, sqzOff: false, rsi: 63.13%, ma_up: true, timeframe 120, prev_change_percent: 0.3053657118, BUY: false, LongTrade: true, srBuySignal: false, ADX: 18.5426616129, +DI: 37.7422831352, -DI: 12.430474657",2026-03-06T06:00:14Z,
+2381963449,"NSE_DLY:ASTERDM, 2h",WIN,"BUY 
+ASTERDM price: 679.00, WinRate: 46.15%, NetProfit%: 11.402431035, sqzOff: false, rsi: 72.35%, ma_up: true, timeframe 120, prev_change_percent: 0.0152671756, BUY: false, LongTrade: true, srBuySignal: false, ADX: 22.6375043965, +DI: 33.9845620974, -DI: 20.3166714306",2026-03-06T06:00:08Z,
+2381963449,"ASX_DLY:XRO, 2h",WIN,"BUY 
+XRO price: 88.06, WinRate: 50.00%, NetProfit%: 7.471424138, sqzOff: true, rsi: 73.40%, ma_up: true, timeframe 120, prev_change_percent: 1.4072648545, BUY: false, LongTrade: false, srBuySignal: false, ADX: 22.8196391214, +DI: 47.2025875029, -DI: 16.1816154991",2026-03-06T00:20:01Z,
+2381963449,"BATS:APP, 2h",WIN,"BUY 
+APP price: 507.82, WinRate: 50.00%, NetProfit%: 104.71353532, sqzOff: true, rsi: 78.49%, ma_up: true, timeframe 120, prev_change_percent: 0.3018638574, BUY: false, LongTrade: false, srBuySignal: false, ADX: 24.4554341417, +DI: 43.03638946, -DI: 14.8073244513",2026-03-05T20:30:00Z,
+2381963449,"BATS:BKNG, 2h",WIN,"BUY 
+BKNG price: 4558.14, WinRate: 66.67%, NetProfit%: 15.923274212, sqzOff: true, rsi: 72.82%, ma_up: true, timeframe 120, prev_change_percent: 0.6024279388, BUY: false, LongTrade: false, srBuySignal: false, ADX: 18.1499237079, +DI: 48.9928272135, -DI: 18.7575176061",2026-03-05T16:30:03Z,
+2381963449,"BATS:AVGO, 2h",WIN,"BUY 
+AVGO price: 332.24, WinRate: 44.44%, NetProfit%: 31.789970613, sqzOff: false, rsi: 62.31%, ma_up: true, timeframe 120, prev_change_percent: 0.75112669, BUY: false, LongTrade: true, srBuySignal: false, ADX: 28.3986772788, +DI: 34.7123669715, -DI: 26.3665546302",2026-03-05T16:30:00Z,
+2381963449,"NSE_DLY:HINDALCO, 2h",WIN,"BUY 
+HINDALCO price: 981.95, WinRate: 60.00%, NetProfit%: 26.305330795, sqzOff: false, rsi: 71.99%, ma_up: true, timeframe 120, prev_change_percent: 0.1683044682, BUY: true, LongTrade: true, srBuySignal: false, ADX: 22.6690334362, +DI: 41.4546212354, -DI: 22.9762547749",2026-03-05T06:00:00Z,
+2381963449,"BATS:MSFT, 2h",WIN,"BUY 
+MSFT price: 410.06, WinRate: 37.50%, NetProfit%: 3.472296954, sqzOff: false, rsi: 68.20%, ma_up: true, timeframe 120, prev_change_percent: 0.4257847312, BUY: false, LongTrade: false, srBuySignal: false, ADX: 15.6065568142, +DI: 30.0586601686, -DI: 22.7593659335",2026-03-04T18:30:01Z,
+2381963449,"BATS:PANW, 2h",WIN,"BUY 
+PANW price: 159.00, WinRate: 57.14%, NetProfit%: 7.070681641, sqzOff: true, rsi: 69.66%, ma_up: true, timeframe 120, prev_change_percent: 0.0959815715, BUY: false, LongTrade: false, srBuySignal: false, ADX: 23.3806289633, +DI: 37.0924925881, -DI: 14.6336652066",2026-03-04T16:30:07Z,
+2381963449,"BATS:GWW, 2h",WIN,"BUY 
+GWW price: 1154.95, WinRate: 60.00%, NetProfit%: 9.70172603, sqzOff: true, rsi: 62.70%, ma_up: true, timeframe 120, prev_change_percent: 0.1817654962, BUY: false, LongTrade: true, srBuySignal: false, ADX: 33.2213858518, +DI: 37.5661167342, -DI: 9.4894331155",2026-03-03T20:30:11Z,
+2381963449,"BATS:HCA, 2h",WIN,"BUY 
+HCA price: 541.36, WinRate: 60.00%, NetProfit%: 19.332504245, sqzOff: false, rsi: 62.79%, ma_up: true, timeframe 120, prev_change_percent: 1.0455648119, BUY: false, LongTrade: true, srBuySignal: false, ADX: 16.5555449763, +DI: 32.2978953402, -DI: 22.5803675523",2026-03-03T20:30:00Z,
+2381963449,"SGX_DLY:U10, 2h",WIN,"BUY 
+U10 price: 3.27, WinRate: 50.00%, NetProfit%: 4.122723415, sqzOff: true, rsi: 64.33%, ma_up: true, timeframe 120, prev_change_percent: 0.3115264798, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.9673585565, +DI: 35.7552390505, -DI: 28.6876872283",2026-03-03T03:10:04Z,
+2381963449,"ASX_DLY:SMR, 2h",WIN,"BUY 
+SMR price: 2.88, WinRate: 71.43%, NetProfit%: 17.24045382, sqzOff: true, rsi: 66.86%, ma_up: true, timeframe 120, prev_change_percent: 0.176366843, BUY: true, LongTrade: true, srBuySignal: false, ADX: 23.3447688883, +DI: 42.6396362257, -DI: 17.7220240039",2026-03-03T00:20:54Z,
+2381963449,"BATS:AZO, 2h",WIN,"BUY 
+AZO price: 3839.65, WinRate: 44.44%, NetProfit%: 7.177376967, sqzOff: true, rsi: 63.25%, ma_up: true, timeframe 120, prev_change_percent: 0.176340105, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.8295926242, +DI: 33.5006238577, -DI: 21.7123520352",2026-03-02T16:31:00Z,
+2381963449,"BATS:NOC, 2h",WIN,"BUY 
+NOC price: 755.13, WinRate: 42.86%, NetProfit%: 9.741667261, sqzOff: true, rsi: 74.34%, ma_up: true, timeframe 120, prev_change_percent: 0.0427715997, BUY: true, LongTrade: true, srBuySignal: false, ADX: 26.0320188402, +DI: 45.7456441177, -DI: 19.9222907659",2026-03-02T16:30:06Z,
+2381963449,"BATS:LMT, 2h",WIN,"BUY 
+LMT price: 671.69, WinRate: 33.33%, NetProfit%: 25.81795505, sqzOff: true, rsi: 66.40%, ma_up: true, timeframe 120, prev_change_percent: 0.0531874478, BUY: true, LongTrade: true, srBuySignal: false, ADX: 24.4857077795, +DI: 41.4461488179, -DI: 19.5414689639",2026-03-02T16:30:04Z,
+2381963449,"BATS:XOM, 2h",WIN,"BUY 
+XOM price: 154.46, WinRate: 42.86%, NetProfit%: 2.895401222, sqzOff: false, rsi: 65.40%, ma_up: true, timeframe 120, prev_change_percent: 0.5863574174, BUY: true, LongTrade: true, srBuySignal: false, ADX: 18.1307186821, +DI: 40.8742158809, -DI: 17.0482975052",2026-03-02T16:30:03Z,
+2381963449,"BATS:RTX, 2h",WIN,"BUY 
+RTX price: 210.65, WinRate: 70.00%, NetProfit%: 16.129538419, sqzOff: true, rsi: 75.47%, ma_up: true, timeframe 120, prev_change_percent: 0.3915931397, BUY: true, LongTrade: true, srBuySignal: false, ADX: 31.9244145166, +DI: 45.1651309078, -DI: 16.859165317",2026-03-02T16:30:00Z,
+2381963449,"BATS:PLTR, 2h",WIN,"BUY 
+PLTR price: 144.58, WinRate: 70.00%, NetProfit%: 15.088464304, sqzOff: true, rsi: 70.90%, ma_up: true, timeframe 120, prev_change_percent: 1.4041829872, BUY: false, LongTrade: false, srBuySignal: false, ADX: 21.872397758, +DI: 45.2668852043, -DI: 13.0926681786",2026-03-02T16:30:00Z,
+2381963449,"ASX_DLY:GDG, 2h",WIN,"BUY 
+GDG price: 4.69, WinRate: 40.00%, NetProfit%: 3.369424206, sqzOff: true, rsi: 60.92%, ma_up: true, timeframe 120, prev_change_percent: 0.2145922747, BUY: false, LongTrade: true, srBuySignal: false, ADX: 31.1477862673, +DI: 35.9255439393, -DI: 20.8047716323",2026-03-02T00:20:08Z,
+2381963449,"NSE_DLY:GRWRHITECH, 2h",WIN,"BUY 
+GRWRHITECH price: 4222.50, WinRate: 50.00%, NetProfit%: 3.40377628, sqzOff: true, rsi: 62.32%, ma_up: true, timeframe 120, prev_change_percent: 0.0450503853, BUY: false, LongTrade: true, srBuySignal: false, ADX: 25.2525203525, +DI: 32.3221159285, -DI: 17.3505393624",2026-02-27T10:00:02Z,
+2381963449,"NSE_DLY:AVALON, 2h",WIN,"BUY 
+AVALON price: 1041.00, WinRate: 44.44%, NetProfit%: 12.89077399, sqzOff: true, rsi: 62.17%, ma_up: true, timeframe 120, prev_change_percent: 0.2782795489, BUY: false, LongTrade: true, srBuySignal: false, ADX: 19.2926220759, +DI: 31.7681201552, -DI: 17.7782969084",2026-02-27T06:00:19Z,
+2381963449,"NSE_DLY:BALUFORGE, 2h",WIN,"BUY 
+BALUFORGE price: 497.30, WinRate: 42.86%, NetProfit%: 7.15088438, sqzOff: true, rsi: 62.25%, ma_up: true, timeframe 120, prev_change_percent: 0, BUY: false, LongTrade: true, srBuySignal: false, ADX: 25.2074871439, +DI: 43.8064876265, -DI: 22.182413212",2026-02-27T06:00:12Z,
+2381963449,"NSE_DLY:VOLTAS, 2h",WIN,"BUY 
+VOLTAS price: 1568.00, WinRate: 40.00%, NetProfit%: 0.144008, sqzOff: false, rsi: 63.69%, ma_up: true, timeframe 120, prev_change_percent: 0.0323122657, BUY: false, LongTrade: true, srBuySignal: false, ADX: 27.4496913574, +DI: 32.4534809125, -DI: 12.4851567644",2026-02-27T06:00:03Z,
+2381963449,"NSE_DLY:BHEL, 2h",WIN,"BUY 
+BHEL price: 267.00, WinRate: 41.67%, NetProfit%: 0.878428185, sqzOff: false, rsi: 64.14%, ma_up: true, timeframe 120, prev_change_percent: 0.0566572238, BUY: false, LongTrade: false, srBuySignal: false, ADX: 21.47849332, +DI: 31.5473292663, -DI: 12.6737668621",2026-02-27T06:00:03Z,
+2381963449,"ASX_DLY:TNE, 2h",WIN,"BUY 
+TNE price: 25.75, WinRate: 40.00%, NetProfit%: 30.078073152, sqzOff: true, rsi: 73.55%, ma_up: true, timeframe 120, prev_change_percent: 1.4417300761, BUY: true, LongTrade: true, srBuySignal: false, ADX: 31.559457511, +DI: 47.3633352153, -DI: 14.7415531247",2026-02-27T02:20:01Z,
+2381963449,"ASX_DLY:CDA, 2h",WIN,"BUY 
+CDA price: 36.29, WinRate: 71.43%, NetProfit%: 111.115707292, sqzOff: false, rsi: 63.53%, ma_up: true, timeframe 120, prev_change_percent: 0.3053858967, BUY: true, LongTrade: true, srBuySignal: false, ADX: 21.937346378, +DI: 38.0281519107, -DI: 13.3215655127",2026-02-27T00:20:01Z,
+2381963449,"ASX_DLY:ARB, 2h",WIN,"BUY 
+ARB price: 25.61, WinRate: 33.33%, NetProfit%: 0.221792458, sqzOff: true, rsi: 61.83%, ma_up: true, timeframe 120, prev_change_percent: 0.4012841091, BUY: true, LongTrade: true, srBuySignal: false, ADX: 20.1991565194, +DI: 37.2408425357, -DI: 25.2753876636",2026-02-27T00:20:00Z,
+2381963449,"BATS:SPGI, 2h",WIN,"BUY 
+SPGI price: 435.88, WinRate: 55.56%, NetProfit%: 4.60586615, sqzOff: true, rsi: 68.46%, ma_up: true, timeframe 120, prev_change_percent: 0.3526507582, BUY: false, LongTrade: false, srBuySignal: false, ADX: 19.7741434543, +DI: 41.8947981451, -DI: 17.0422557229",2026-02-26T16:30:10Z,
+2381963449,"BATS:GS, 2h",WIN,"BUY 
+GS price: 935.92, WinRate: 38.46%, NetProfit%: 9.541130095, sqzOff: true, rsi: 63.37%, ma_up: true, timeframe 120, prev_change_percent: 0.1772451964, BUY: false, LongTrade: false, srBuySignal: false, ADX: 17.9756675474, +DI: 32.7442846349, -DI: 21.1303556564",2026-02-26T16:30:04Z,
+2381963449,"BATS:ABNB, 2h",WIN,"BUY 
+ABNB price: 136.66, WinRate: 50.00%, NetProfit%: 8.299764254, sqzOff: true, rsi: 76.13%, ma_up: true, timeframe 120, prev_change_percent: 0.1517105363, BUY: false, LongTrade: false, srBuySignal: false, ADX: 27.5245838331, +DI: 51.6726212669, -DI: 15.5444229333",2026-02-26T16:30:02Z,
+2381963449,"NSE_DLY:BEL, 2h",WIN,"BUY 
+BEL price: 448.75, WinRate: 50.00%, NetProfit%: 36.059144995, sqzOff: false, rsi: 63.44%, ma_up: true, timeframe 120, prev_change_percent: 0.5642067253, BUY: false, LongTrade: true, srBuySignal: false, ADX: 15.7006713363, +DI: 35.3654322134, -DI: 16.4601814055",2026-02-26T10:00:00Z,
+2381963449,"NSE_DLY:SHILPAMED, 2h",WIN,"BUY 
+SHILPAMED price: 339.50, WinRate: 25.00%, NetProfit%: 3.30135711, sqzOff: false, rsi: 66.80%, ma_up: true, timeframe 120, prev_change_percent: 0.3979185797, BUY: false, LongTrade: true, srBuySignal: false, ADX: 16.6539096507, +DI: 34.0218724522, -DI: 17.0713760147",2026-02-26T06:00:46Z,
+2381963449,"NSE_DLY:PREMEXPLN, 2h",WIN,"BUY 
+PREMEXPLN price: 521.55, WinRate: 50.00%, NetProfit%: 4.557534145, sqzOff: true, rsi: 77.94%, ma_up: true, timeframe 120, prev_change_percent: 1.1776155718, BUY: true, LongTrade: true, srBuySignal: false, ADX: 30.8683604987, +DI: 46.3864762577, -DI: 11.5150979953",2026-02-26T06:00:10Z,
+2381963449,"NSE_DLY:MOTHERSON, 2h",WIN,"BUY 
+MOTHERSON price: 134.13, WinRate: 30.77%, NetProfit%: 1.175334617, sqzOff: true, rsi: 63.77%, ma_up: true, timeframe 120, prev_change_percent: 0.1577642551, BUY: false, LongTrade: true, srBuySignal: false, ADX: 21.0986880754, +DI: 34.3716276192, -DI: 14.0597734768",2026-02-26T06:00:03Z,
+2325001918,"NSE_DLY:WAAREEENER, 1h",Sell,"Bearish SELL breakout detected
+WAAREEENER sqzOff: true price (2692.90), timeframe 60 prev_change_percent: 0.765686632",2026-02-25T05:00:00Z,
