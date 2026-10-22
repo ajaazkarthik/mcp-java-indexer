@@ -439,7 +439,10 @@ ${freshnessInfo}
       }
       
       await persistence.save(memoryIndex);
-      console.error(`✅ Index persisted successfully`);
+      // Release newly indexed symbols, references, and graph edges after commit.
+      // Continue with only file metadata and persisted statistics in RAM.
+      await persistence.load(memoryIndex);
+      console.error(`✅ Index persisted successfully (query data kept in SQLite)`);
     }
 
     profiler.mark('persistence_saved');

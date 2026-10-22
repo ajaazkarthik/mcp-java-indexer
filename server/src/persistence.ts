@@ -285,67 +285,28 @@ export class Persistence {
    */
   private async loadFromStorage(memoryIndex: MemoryIndex): Promise<boolean> {
     if (!this.storage) return false;
-    
-    try {
-      // Check if storage has data
-      const stats = await this.storage.getStats();
-      if (stats.symbols === 0) {
-        return false; // Empty storage
-      }
-      
-      // Load all data from storage
-      const symbols = await this.storage.getAllSymbols();
-      const references = await this.storage.getAllReferences();
-      const callGraph = await this.storage.getAllCallGraphEdges();
-      const files = await this.storage.getAllFiles();
-      
-      // Convert to MemoryIndex format - symbols and files need to be [key, value] pairs for Map constructor
-      const data: any = {
-        projectRootDir: '',
-        symbols: symbols.map(s => [s.fqn, s]),  // Convert to [fqn, stub] pairs for Map
-        files: files.map(f => [f.path, f]),     // Convert to [path, info] pairs for Map
-        indexedFiles: files.map((f: FileInfo) => f.path),
-        references: references,
-        referencesByFile: this.groupReferencesByFile(references),
-        callGraph: this.convertCallGraphToArray(callGraph, 'outbound'),
-        reverseCallGraph: this.convertCallGraphToArray(callGraph, 'inbound'),
-        inheritance: [],
-        reverseInheritance: []
-      };
-      
-      // Load inheritance from symbols
-      // FIX: Use iterative push instead of spread operator to prevent stack overflow
-      for (const symbol of symbols) {
-        if (symbol.kind === 'class' || symbol.kind === 'interface') {
-          const parents: string[] = [];
-          if ((symbol as any).extendsClass) parents.push((symbol as any).extendsClass);
-          if ((symbol as any).implementsInterfaces) {
-            const interfaces = (symbol as any).implementsInterfaces;
-            for (let i = 0; i < interfaces.length; i++) {
-              parents.push(interfaces[i]);
-            }
-          }
-          if (parents.length > 0) {
-            data.inheritance.push([symbol.fqn, parents]);
-            // Build reverse inheritance
-            for (const parent of parents) {
-              const existing = data.reverseInheritance.find((r: any) => r[0] === parent);
-              if (existing) {
-                existing[1].push(symbol.fqn);
-              } else {
-                data.reverseInheritance.push([parent, [symbol.fqn]]);
-              }
-            }
-          }
-        }
-      }
-      
-      memoryIndex.fromJSON(data);
-      return true;
-    } catch (error) {
-      console.error('Failed to load from storage:', error);
-      return false;
-    }
+    const stats = await this.storage.getStats();
+    if (stats.symbols === 0) return false;
+
+    // Only file metadata is needed for staleness checks and incremental writes.
+    // Never load all symbols/refs/edges into the Node heap at startup.
+    const files = await this.storage.getAllFiles();
+    const metadata = await this.getMetadata() as
+      ({projectRootDir?:string}|null);
+    memoryIndex.fromJSON({
+      projectRootDir: metadata?.projectRootDir || '',
+      symbols: [], references: [], callGraph: [], reverseCallGraph: [],
+      inheritance: [], reverseInheritance: [],
+      files: files.map(file=>[file.path,file]),
+      indexedFiles: files.map(file=>file.path)
+    });
+    memoryIndex.setPersistedStats({
+      symbols:stats.symbols,files:stats.indexedFiles,
+      indexedFiles:stats.indexedFiles,allFiles:stats.allFiles,
+      references:stats.references,callGraphEdges:stats.callGraphEdges,
+      inheritanceRelations:stats.inheritanceRelations
+    });
+    return true;
   }
 
   /**

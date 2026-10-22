@@ -59,6 +59,11 @@ export class MemoryIndex {
 
   private indexDir: string = '';
   private projectRootDir: string = ''; // The project root that was indexed
+  private persistedStats: ReturnType<MemoryIndex['getStats']> | null = null;
+
+  setPersistedStats(stats: ReturnType<MemoryIndex['getStats']>): void {
+    this.persistedStats = stats;
+  }
 
   constructor() {}
 
@@ -812,6 +817,7 @@ export class MemoryIndex {
 
   // Get statistics
   getStats() {
+    if (this.persistedStats) return {...this.persistedStats};
     return {
       symbols: this.symbols.size,
       files: this.indexedFiles.size,
@@ -861,6 +867,7 @@ export class MemoryIndex {
 
   // Clear all data
   clear(): void {
+    this.persistedStats = null;
     this.symbols.clear();
     this.files.clear();
     this.indexedFiles.clear();
