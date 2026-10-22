@@ -25,6 +25,9 @@ export class SqliteStorage implements IIndexStorage {
 
     // Open database
     this.db = new Database(this.dbPath);
+    // Stable, deterministic extraction for SQLite's expression index on reference names.
+    this.db.function('ref_simple_name', { deterministic: true }, (fqn: string) =>
+      fqn.slice(fqn.lastIndexOf('.') + 1));
     
     // Enable WAL mode for better concurrency
     this.db.pragma('journal_mode = WAL');
@@ -69,6 +72,10 @@ export class SqliteStorage implements IIndexStorage {
         kind TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_refs_to ON refs(to_fqn);
+      CREATE INDEX IF NOT EXISTS idx_refs_to_name
+        ON refs(ref_simple_name(to_fqn) COLLATE NOCASE, to_fqn);
+      CREATE INDEX IF NOT EXISTS idx_refs_to_covering
+        ON refs(to_fqn, id, from_fqn, file, line, col, kind);
       CREATE INDEX IF NOT EXISTS idx_refs_from ON refs(from_fqn);
       CREATE INDEX IF NOT EXISTS idx_refs_file ON refs(file);
 
@@ -311,30 +318,33 @@ export class SqliteStorage implements IIndexStorage {
     if (!this.db) throw new Error('Database not initialized');
 
     const simpleName = fqn.split('.').pop() || fqn;
-
-    const stmt = this.db.prepare(`
-      SELECT from_fqn, to_fqn, file, line, col, kind
-      FROM refs
-      WHERE to_fqn = ? OR to_fqn = ? OR to_fqn LIKE ?
-    `);
-
-    const rows = stmt.all(fqn, simpleName, `%.${simpleName}`) as Array<{
-      from_fqn: string;
-      to_fqn: string;
-      file: string;
-      line: number;
-      col: number;
-      kind: string;
-    }>;
-
-    return rows.map(row => ({
-      fromFqn: row.from_fqn,
-      toFqn: row.to_fqn,
-      file: row.file,
-      line: row.line,
-      column: row.col,
-      kind: row.kind as any
-    }));
+    type UsageRow = {
+      id: number; from_fqn: string; to_fqn: string;
+      file: string; line: number; col: number; kind: string;
+    };
+    const select = 'SELECT id, from_fqn, to_fqn, file, line, col, kind FROM refs';
+    // Split exact and simple-name lookups so both clauses have a predictable
+    // indexed plan (including a cold cache). Deduplicate overlapping rows by id.
+    const exact = this.db.prepare(select + ' WHERE to_fqn = ?')
+      .all(fqn) as UsageRow[];
+    const byName = this.db.prepare(
+      select + ' WHERE ref_simple_name(to_fqn) = ? COLLATE NOCASE'
+    ).all(simpleName) as UsageRow[];
+    const seen = new Set<number>();
+    const results: Reference[] = [];
+    for (const row of [...exact, ...byName]) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      results.push({
+        fromFqn: row.from_fqn,
+        toFqn: row.to_fqn,
+        file: row.file,
+        line: row.line,
+        column: row.col,
+        kind: row.kind as Reference['kind']
+      });
+    }
+    return results;
   }
 
   async findReferencesFromClass(classFqn: string): Promise<Reference[]> {
