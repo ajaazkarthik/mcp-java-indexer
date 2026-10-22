@@ -59,9 +59,9 @@ export class MemoryIndex {
 
   private indexDir: string = '';
   private projectRootDir: string = ''; // The project root that was indexed
-  private persistedStats: ReturnType<MemoryIndex['getStats']> | null = null;
+  private persistedStats: {symbols:number;files:number;indexedFiles:number;allFiles:number;references:number;callGraphEdges:number;inheritanceRelations:number} | null = null;
 
-  setPersistedStats(stats: ReturnType<MemoryIndex['getStats']>): void {
+  setPersistedStats(stats: {symbols:number;files:number;indexedFiles:number;allFiles:number;references:number;callGraphEdges:number;inheritanceRelations:number}): void {
     this.persistedStats = stats;
   }
 
@@ -816,7 +816,7 @@ export class MemoryIndex {
   }
 
   // Get statistics
-  getStats() {
+  getStats(): {symbols:number;files:number;indexedFiles:number;allFiles:number;references:number;callGraphEdges:number;inheritanceRelations:number} {
     if (this.persistedStats) return {...this.persistedStats};
     return {
       symbols: this.symbols.size,

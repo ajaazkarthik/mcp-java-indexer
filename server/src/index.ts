@@ -401,7 +401,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             fsWatcher = watcher;
             persistence = newPersistence;
             queryService?.close();
-            queryService = new QueryService(args.rootDir as string);
+            queryService = new QueryService((args?.rootDir || memoryIndex.getProjectRootDir()) as string);
             readIndex = queryService;
             // Configure the validator with project info
             const rootDir = args?.rootDir as string;
