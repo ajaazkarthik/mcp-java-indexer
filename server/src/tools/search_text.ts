@@ -72,6 +72,9 @@ export async function handleSearchText(
 
     for (const fileInfo of files) {
       filesSearched++;
+      if (filesSearched % 64 === 0) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+      }
       try {
         const content = await fs.readFile(fileInfo.path, 'utf-8');
         const lines = content.split('\n');

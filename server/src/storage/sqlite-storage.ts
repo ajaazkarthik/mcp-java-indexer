@@ -252,8 +252,10 @@ export class SqliteStorage implements IIndexStorage {
     } else {
       // No limit - fetch all symbols
       const stmt = this.db.prepare(`SELECT data FROM symbols`);
-      const rows = stmt.all() as Array<{ data: string }>;
-      return rows.map(row => JSON.parse(row.data));
+      const result: SymbolStub[] = [];
+      for (const row of stmt.iterate() as IterableIterator<{data:string}>)
+        result.push(JSON.parse(row.data));
+      return result;
     }
   }
 
@@ -401,23 +403,19 @@ export class SqliteStorage implements IIndexStorage {
     }
 
     const stmt = this.db.prepare(sql);
-    const rows = stmt.all() as Array<{
-      from_fqn: string;
-      to_fqn: string;
-      file: string;
-      line: number;
-      col: number;
-      kind: string;
-    }>;
-
-    return rows.map(row => ({
+    const result: Reference[] = [];
+    for (const row of stmt.iterate() as IterableIterator<{
+      from_fqn: string; to_fqn: string; file: string;
+      line: number; col: number; kind: string;
+    }>) result.push({
       fromFqn: row.from_fqn,
       toFqn: row.to_fqn,
       file: row.file,
       line: row.line,
       column: row.col,
       kind: row.kind as any
-    }));
+    });
+    return result;
   }
 
   async getAllCallGraphEdges(options?: StorageQueryOptions): Promise<CallGraphEdge[]> {
@@ -432,17 +430,15 @@ export class SqliteStorage implements IIndexStorage {
     }
 
     const stmt = this.db.prepare(sql);
-    const rows = stmt.all() as Array<{
-      caller: string;
-      callee: string;
-      locations: string;
-    }>;
-
-    return rows.map(row => ({
+    const result: CallGraphEdge[] = [];
+    for (const row of stmt.iterate() as IterableIterator<{
+      caller: string; callee: string; locations: string;
+    }>) result.push({
       caller: row.caller,
       callee: row.callee,
       locations: JSON.parse(row.locations)
-    }));
+    });
+    return result;
   }
 
   async saveCallEdge(edge: CallGraphEdge, direction: 'forward' | 'reverse'): Promise<void> {

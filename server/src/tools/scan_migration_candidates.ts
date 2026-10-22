@@ -1261,8 +1261,12 @@ export async function handleScanMigrationCandidates(
     const allSymbols = memoryIndex.getAllSymbols();
     const packageClasses: SymbolStub[] = [];
     const sourcePackagePrefix = input.sourcePackage + '.';
-    
+    let scannedSymbols = 0;
+
     for (const [fqn, stub] of allSymbols) {
+      if (++scannedSymbols % 512 === 0) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+      }
       // Only include top-level classes/interfaces/enums/records (not methods/fields)
       if (stub.kind !== 'class' && stub.kind !== 'interface' && stub.kind !== 'enum' && stub.kind !== 'record') {
         continue;

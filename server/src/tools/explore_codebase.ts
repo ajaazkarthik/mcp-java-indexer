@@ -234,8 +234,12 @@ export async function handleExploreCodebase(
     const constructorsByClass = new Map<string, SymbolStub[]>();
     const innerClassesByClass = new Map<string, number>();
 
-    // Single pass to categorize all symbols
+    // Single pass to categorize all symbols, cooperatively yielding to MCP.
+    let symbolRows = 0;
     for (const [fqn, stub] of allSymbols) {
+      if (++symbolRows % 512 === 0) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+      }
       if (stub.kind === 'class' || stub.kind === 'interface' || stub.kind === 'enum' || stub.kind === 'record') {
         // Filter by package if specified
         if (filterPackages && filterPackages.length > 0) {
