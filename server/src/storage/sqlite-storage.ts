@@ -54,6 +54,7 @@ export class SqliteStorage implements IIndexStorage {
         data TEXT NOT NULL  -- JSON-encoded SymbolStub
       );
       CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+      CREATE INDEX IF NOT EXISTS idx_symbols_name_kind ON symbols(name, kind);
       CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file);
       CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
 
@@ -191,6 +192,17 @@ export class SqliteStorage implements IIndexStorage {
     // Try exact FQN match first
     const exact = await this.getSymbol(nameOrFqn);
     if (exact) return [exact];
+
+    // Exact simple-name path: use the (name, kind) b-tree before any LIKE scan.
+    // Bound results so a common name never creates an unbounded allocation.
+    if (!nameOrFqn.includes('.')) {
+      const exactNames = this.db.prepare(
+        'SELECT data FROM symbols WHERE name = ? LIMIT 50'
+      ).all(nameOrFqn) as Array<{ data: string }>;
+      if (exactNames.length > 0) {
+        return exactNames.map(row => JSON.parse(row.data) as SymbolStub);
+      }
+    }
 
     // Partial match
     const limit = options?.limit || 100;
