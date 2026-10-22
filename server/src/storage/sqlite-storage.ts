@@ -672,27 +672,23 @@ export class SqliteStorage implements IIndexStorage {
   async deleteFile(filePath: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 
-    const transaction = this.db.transaction((path: string) => {
-      // Delete file record
-      this.db!.prepare('DELETE FROM files WHERE path = ?').run(path);
-
-      // Delete symbols
-      this.db!.prepare('DELETE FROM symbols WHERE file = ?').run(path);
-
-      // Delete references
-      this.db!.prepare('DELETE FROM refs WHERE file = ?').run(path);
-
-      // Delete call edges (harder - need to find symbols in file first)
-      const symbolFqns = this.db!.prepare('SELECT fqn FROM symbols WHERE file = ?').all(path) as Array<{ fqn: string }>;
-      
-      for (const { fqn } of symbolFqns) {
-        this.db!.prepare('DELETE FROM call_edges_forward WHERE caller = ? OR callee = ?').run(fqn, fqn);
-        this.db!.prepare('DELETE FROM call_edges_reverse WHERE caller = ? OR callee = ?').run(fqn, fqn);
-        this.db!.prepare('DELETE FROM inheritance WHERE child = ? OR parent = ?').run(fqn, fqn);
+    this.db.transaction((file: string) => {
+      // Read ownership BEFORE deleting symbols. Only remove edges emitted by
+      // callers in this file; inbound edges from other files must remain.
+      const fqns = this.db!.prepare('SELECT fqn FROM symbols WHERE file = ?')
+        .all(file) as Array<{ fqn: string }>;
+      const delForward = this.db!.prepare('DELETE FROM call_edges_forward WHERE caller = ?');
+      const delReverse = this.db!.prepare('DELETE FROM call_edges_reverse WHERE caller = ?');
+      const delInheritance = this.db!.prepare('DELETE FROM inheritance WHERE child = ?');
+      for (const { fqn } of fqns) {
+        delForward.run(fqn);
+        delReverse.run(fqn);
+        delInheritance.run(fqn);
       }
-    });
-
-    transaction(filePath);
+      this.db!.prepare('DELETE FROM files WHERE path = ?').run(file);
+      this.db!.prepare('DELETE FROM symbols WHERE file = ?').run(file);
+      this.db!.prepare('DELETE FROM refs WHERE file = ?').run(file);
+    })(filePath);
   }
 
   async getStats(): Promise<IndexStats> {
