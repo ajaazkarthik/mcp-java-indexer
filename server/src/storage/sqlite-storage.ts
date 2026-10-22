@@ -37,6 +37,9 @@ export class SqliteStorage implements IIndexStorage {
 
     // Create tables
     this.createTables();
+    // Retire the old single-column index on upgraded databases. The new
+    // compound index has the same left-prefix capability and reduces writes.
+    this.db.exec('DROP INDEX IF EXISTS idx_symbols_name');
     
     console.error('✅ SQLite storage initialized at', this.dbPath);
   }
@@ -56,7 +59,7 @@ export class SqliteStorage implements IIndexStorage {
         package TEXT,
         data TEXT NOT NULL  -- JSON-encoded SymbolStub
       );
-      CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+      -- (name, kind) also serves name-only queries; avoid a redundant name index.
       CREATE INDEX IF NOT EXISTS idx_symbols_name_kind ON symbols(name, kind);
       CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file);
       CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
