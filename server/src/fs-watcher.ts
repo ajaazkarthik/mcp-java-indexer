@@ -87,7 +87,8 @@ export class FileSystemWatcher {
     this.watcher
       .on('add', (path) => this.queueChange(path))
       .on('change', (path) => this.queueChange(path))
-      .on('unlink', (path) => this.queueDelete(path));
+      .on('unlink', (path) => this.queueDelete(path))
+      .on('error', (error) => console.error('[FileWatcher] Chokidar error:', error));
 
     console.error(`[FileWatcher] Started for ${this.rootDir} (30s debounce, max ${this.MAX_PENDING_CHANGES} pending)`);
   }
@@ -95,7 +96,7 @@ export class FileSystemWatcher {
   /**
    * Stop watching
    */
-  stop(): void {
+  async stop(): Promise<void> {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
@@ -105,7 +106,7 @@ export class FileSystemWatcher {
       this.persistTimer = null;
     }
     if (this.watcher) {
-      this.watcher.close();
+      await this.watcher.close();
       this.watcher = null;
       console.error('[FileWatcher] Stopped');
     }

@@ -32,8 +32,10 @@ export class SqliteStorage implements IIndexStorage {
     // Enable WAL mode for better concurrency
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL'); // Faster writes, safe enough
-    this.db.pragma('cache_size = -64000'); // 64MB cache
+    this.db.pragma('cache_size = -131072'); // 128 MiB cache
     this.db.pragma('temp_store = MEMORY');
+    this.db.pragma('mmap_size = 4294967296'); // 4 GiB mmap (virtual address space)
+    this.db.pragma('busy_timeout = 5000');
 
     // Create tables
     this.createTables();
@@ -728,6 +730,13 @@ export class SqliteStorage implements IIndexStorage {
 
   async flush(): Promise<void> {
     // better-sqlite3 is synchronous, writes are immediate - no flush needed
+  }
+
+  // Run only on the 30-minute maintenance timer; never during a one-file refresh.
+  async runMaintenance(): Promise<void> {
+    if (!this.db) return;
+    this.db.pragma('optimize');
+    this.db.pragma('wal_checkpoint(PASSIVE)');
   }
 
   async close(): Promise<void> {

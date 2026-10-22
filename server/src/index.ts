@@ -69,6 +69,9 @@ function startMaintenanceSchedule(): void {
     try {
       // Cleanup orphaned data
       memoryIndex.performMaintenanceCleanup();
+      // Database optimize and WAL checkpoint are maintenance-only operations.
+      void persistence?.runMaintenance().catch(error =>
+        console.error('SQLite maintenance failed:', error));
       
       // Log memory stats
       const stats = memoryIndex.getStats();
@@ -98,22 +101,26 @@ function startMaintenanceSchedule(): void {
   console.error('Maintenance schedule started (runs every 30 minutes)');
 }
 
-// Cleanup on shutdown
-process.on('SIGINT', async () => {
+// Close watcher, database and Java process on signals and stdio EOF.
+let shuttingDown = false;
+async function shutdown(): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.error('Shutting down gracefully...');
   if (maintenanceInterval) clearInterval(maintenanceInterval);
-  if (fsWatcher) fsWatcher.stop();
-  await indexerClient.stop();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.error('Shutting down gracefully...');
-  if (maintenanceInterval) clearInterval(maintenanceInterval);
-  if (fsWatcher) fsWatcher.stop();
-  await indexerClient.stop();
-  process.exit(0);
-});
+  try {
+    if (fsWatcher) await fsWatcher.stop();
+    if (persistence) await persistence.close();
+    await indexerClient.stop();
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+  } finally {
+    process.exit(0);
+  }
+}
+process.once('SIGINT', () => { void shutdown(); });
+process.once('SIGTERM', () => { void shutdown(); });
+process.stdin.once('end', () => { void shutdown(); });
 
 // List available tools with annotations
 server.setRequestHandler(ListToolsRequestSchema, async () => {

@@ -459,6 +459,20 @@ export class Persistence {
   }
 
   // Clear index
+  async runMaintenance(): Promise<void> {
+    await this.waitForStorage();
+    if (this.storage instanceof (await import('./storage/sqlite-storage.js')).SqliteStorage) {
+      await this.storage.runMaintenance();
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.waitForStorage();
+    await this.storage?.close();
+    this.storage = null;
+    this.storageInitialized = false;
+  }
+
   async clear(): Promise<void> {
     try {
       const files = await fs.readdir(this.indexDir);
