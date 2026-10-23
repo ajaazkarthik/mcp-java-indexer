@@ -41,6 +41,9 @@ test('schema v2 upgrades explicitly and produces only the new reference indexes'
      for(const obsolete of ['idx_symbols_name','idx_refs_to']){
        assert.ok(!idx.includes(obsolete),obsolete);
      }
+     assert.equal(check.prepare(
+       "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='call_edges_reverse'"
+     ).get().n, 0);
      assert.equal(check.pragma('integrity_check',{simple:true}),'ok');
    }finally{check.close();}
  }finally{await rm(dir,{recursive:true,force:true});}

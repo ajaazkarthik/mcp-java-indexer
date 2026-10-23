@@ -88,15 +88,6 @@ export class SqliteStorage implements IIndexStorage {
       );
       CREATE INDEX IF NOT EXISTS idx_edges_fwd_callee ON call_edges_forward(callee);
 
-      -- Call graph edges (reverse: callee -> caller)
-      CREATE TABLE IF NOT EXISTS call_edges_reverse (
-        callee TEXT NOT NULL,
-        caller TEXT NOT NULL,
-        locations TEXT NOT NULL,  -- JSON array
-        PRIMARY KEY (callee, caller)
-      );
-      CREATE INDEX IF NOT EXISTS idx_edges_rev_caller ON call_edges_reverse(caller);
-
       -- Inheritance (child -> parent)
       CREATE TABLE IF NOT EXISTS inheritance (
         child TEXT NOT NULL,
@@ -133,6 +124,8 @@ export class SqliteStorage implements IIndexStorage {
         DROP INDEX IF EXISTS idx_refs_to;
         DROP INDEX IF EXISTS idx_refs_to_name;
         DROP INDEX IF EXISTS idx_refs_to_covering;
+        DROP INDEX IF EXISTS idx_edges_rev_caller;
+        DROP TABLE IF EXISTS call_edges_reverse;
         CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);
         CREATE INDEX idx_refs_to_name ON refs(replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') COLLATE NOCASE, to_fqn);
         CREATE INDEX idx_refs_to_covering ON refs(to_fqn, id, from_fqn, file, line, col, kind);
@@ -471,46 +464,23 @@ export class SqliteStorage implements IIndexStorage {
 
   async saveCallEdge(edge: CallGraphEdge, direction: 'forward' | 'reverse'): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-
-    const table = direction === 'forward' ? 'call_edges_forward' : 'call_edges_reverse';
-    const key1 = direction === 'forward' ? 'caller' : 'callee';
-    const key2 = direction === 'forward' ? 'callee' : 'caller';
-
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO ${table} (${key1}, ${key2}, locations)
-      VALUES (?, ?, ?)
-    `);
-
-    stmt.run(
-      direction === 'forward' ? edge.caller : edge.callee,
-      direction === 'forward' ? edge.callee : edge.caller,
-      JSON.stringify(edge.locations)
-    );
+    // The legacy reverse write is a compatibility no-op; inbound reads use
+    // call_edges_forward via idx_edges_fwd_callee.
+    if (direction === 'reverse') return;
+    this.db.prepare('INSERT OR REPLACE INTO call_edges_forward(caller,callee,locations) VALUES (?,?,?)')
+      .run(edge.caller,edge.callee,JSON.stringify(edge.locations));
   }
 
   async saveCallEdges(edges: CallGraphEdge[], direction: 'forward' | 'reverse'): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-
-    const table = direction === 'forward' ? 'call_edges_forward' : 'call_edges_reverse';
-    const key1 = direction === 'forward' ? 'caller' : 'callee';
-    const key2 = direction === 'forward' ? 'callee' : 'caller';
-
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO ${table} (${key1}, ${key2}, locations)
-      VALUES (?, ?, ?)
-    `);
-
-    const saveTransaction = this.db.transaction((edgeList: CallGraphEdge[]) => {
-      for (const edge of edgeList) {
-        stmt.run(
-      direction === 'forward' ? edge.caller : edge.callee,
-      direction === 'forward' ? edge.callee : edge.caller,
-      JSON.stringify(edge.locations)
+    if (direction === 'reverse' || !edges.length) return;
+    const insert=this.db.prepare(
+      'INSERT OR REPLACE INTO call_edges_forward(caller,callee,locations) VALUES (?,?,?)'
     );
-      }
-    });
-
-    saveTransaction(edges);
+    this.db.transaction(() => {
+      for (const edge of edges)
+        insert.run(edge.caller,edge.callee,JSON.stringify(edge.locations));
+    })();
   }
 
   async getOutboundCalls(fqn: string): Promise<CallGraphEdge[]> {
@@ -587,12 +557,6 @@ export class SqliteStorage implements IIndexStorage {
          OR callee IN (SELECT fqn FROM symbols WHERE file = '${file.replace(/'/g, "''")}')
     `);
 
-    // Delete from reverse table
-    this.db.exec(`
-      DELETE FROM call_edges_reverse
-      WHERE caller IN (SELECT fqn FROM symbols WHERE file = '${file.replace(/'/g, "''")}')
-         OR callee IN (SELECT fqn FROM symbols WHERE file = '${file.replace(/'/g, "''")}')
-    `);
   }
 
   async saveInheritance(child: string, parent: string): Promise<void> {
@@ -710,11 +674,9 @@ export class SqliteStorage implements IIndexStorage {
       const fqns = this.db!.prepare('SELECT fqn FROM symbols WHERE file = ?')
         .all(file) as Array<{ fqn: string }>;
       const delForward = this.db!.prepare('DELETE FROM call_edges_forward WHERE caller = ?');
-      const delReverse = this.db!.prepare('DELETE FROM call_edges_reverse WHERE caller = ?');
       const delInheritance = this.db!.prepare('DELETE FROM inheritance WHERE child = ?');
       for (const { fqn } of fqns) {
         delForward.run(fqn);
-        delReverse.run(fqn);
         delInheritance.run(fqn);
       }
       this.db!.prepare('DELETE FROM files WHERE path = ?').run(file);
@@ -750,7 +712,6 @@ export class SqliteStorage implements IIndexStorage {
       DELETE FROM symbols;
       DELETE FROM refs;
       DELETE FROM call_edges_forward;
-      DELETE FROM call_edges_reverse;
       DELETE FROM inheritance;
       DELETE FROM files;
     `);

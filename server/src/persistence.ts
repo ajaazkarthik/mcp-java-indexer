@@ -143,7 +143,6 @@ export class Persistence {
       await this.storage.saveReferences(data.references || []);
       const forward = [...edgesByFile.values()].flat();
       await this.storage.saveCallEdges(forward, 'forward');
-      await this.storage.saveCallEdges(forward, 'reverse');
       await this.storage.saveInheritances([...inheritanceByFile.values()].flat());
       for (const file of newFiles.values()) await this.storage.saveFile(file);
       changed = newFiles.size;
@@ -247,7 +246,6 @@ export class Persistence {
       // Rebuild call edges and inheritance for this file, both directions.
       if (edges.length > 0) {
         await this.storage.saveCallEdges(edges, 'forward');
-        await this.storage.saveCallEdges(edges, 'reverse');
       }
       if (inheritances.length > 0) {
         await this.storage.saveInheritances(inheritances);
