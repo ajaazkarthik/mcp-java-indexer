@@ -81,7 +81,7 @@ export class QueryService extends MemoryIndex {
     const select = 'SELECT id, from_fqn, to_fqn, file, line, col, kind FROM refs';
     const exact = this.db.prepare(select+' WHERE to_fqn = ?').all(fqn) as RefRow[];
     const simple = fqn.split('.').pop() || fqn;
-    const fuzzy = this.db.prepare(select+' WHERE replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') = ? COLLATE NOCASE')
+    const fuzzy = this.db.prepare(select+` WHERE replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') = ? COLLATE NOCASE`)
       .all(simple) as RefRow[];
     const merged = new Map<number,Reference>();
     for (const row of [...exact,...fuzzy]) merged.set(row.id,this.mapRef(row));
