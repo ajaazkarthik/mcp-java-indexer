@@ -106,23 +106,23 @@ export class QueryService extends MemoryIndex {
       'SELECT caller, callee, locations FROM call_edges_forward WHERE caller = ?'
     ).all(fqn) as EdgeRow[];
     if (exact.length) return this.edges(exact);
+    // Exact query miss only: use the expression index, never a leading LIKE.
     const name = fqn.split('.').pop() || fqn;
     return this.edges(this.db.prepare(
-      'SELECT caller, callee, locations FROM call_edges_forward WHERE caller LIKE ? LIMIT 100'
-    ).all('%.'+name+'%') as EdgeRow[]);
+      `SELECT caller, callee, locations FROM call_edges_forward
+         WHERE replace(caller, rtrim(caller, replace(caller, '.', '')), '') = ? COLLATE NOCASE LIMIT 100`
+    ).all(name) as EdgeRow[]);
   }
   override getInboundCalls(fqn: string): CallGraphEdge[] {
     const exact = this.db.prepare(
       'SELECT caller, callee, locations FROM call_edges_forward WHERE callee = ?'
     ).all(fqn) as EdgeRow[];
-    const name = (fqn.split('.').pop() || fqn).split('(')[0];
-    const fuzzy = this.db.prepare(
-      'SELECT caller, callee, locations FROM call_edges_forward WHERE callee LIKE ? LIMIT 100'
-    ).all('%.'+name+'%') as EdgeRow[];
-    const distinct = new Map<string,CallGraphEdge>();
-    for (const edge of this.edges([...exact,...fuzzy]))
-      distinct.set(edge.caller+'->'+edge.callee,edge);
-    return [...distinct.values()];
+    if (exact.length) return this.edges(exact);
+    const name = fqn.split('.').pop() || fqn;
+    return this.edges(this.db.prepare(
+      `SELECT caller, callee, locations FROM call_edges_forward
+         WHERE replace(callee, rtrim(callee, replace(callee, '.', '')), '') = ? COLLATE NOCASE LIMIT 100`
+    ).all(name) as EdgeRow[]);
   }
   override getParents(fqn: string): string[] {
     return (this.db.prepare('SELECT parent FROM inheritance WHERE child = ?')

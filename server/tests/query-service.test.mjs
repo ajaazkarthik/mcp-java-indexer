@@ -40,3 +40,33 @@ test('metadata-only load and lazy SQLite queries keep symbols and refs off heap'
     await rm(dir,{recursive:true,force:true});
   }
 });
+
+test('inbound and outbound simple-name fallbacks select indexed expression paths', async () => {
+  const os=await import('node:os');
+  const Database=(await import('better-sqlite3')).default;
+  const {SqliteStorage}=await import('../dist/storage/sqlite-storage.js');
+  const {mkdtemp,rm}=await import('node:fs/promises');
+  const root=await mkdtemp(path.join(os.tmpdir(),'indexed-calls-'));
+  const persistDir=path.join(root,'.mcp-index');
+  const storage=new SqliteStorage(persistDir);
+  try {
+    await storage.initialize();
+    await storage.saveCallEdges([{
+      caller:'com.example.Caller.execute',callee:'com.example.Worker.save',
+      locations:[{file:'/tmp/Caller.java',line:5,column:3}]
+    }],'forward');
+    const db=new Database(path.join(persistDir,'index.db'),{readonly:true});
+    try {
+      const sql="SELECT caller FROM call_edges_forward WHERE replace(callee, rtrim(callee, replace(callee, '.', '')), '') = ? COLLATE NOCASE LIMIT 100";
+      const plan=db.prepare('EXPLAIN QUERY PLAN '+sql).all('save').map(r=>r.detail).join(' ');
+      assert.match(plan,/idx_edges_fwd_callee_name/);
+      assert.doesNotMatch(plan,/SCAN call_edges_forward/);
+    }finally{db.close();}
+    const query=new QueryService(root);
+    try{
+      assert.equal(query.getInboundCalls('another.Class.save').length,1);
+      assert.equal(query.getInboundCalls('com.example.Worker.save').length,1);
+      assert.equal(query.getOutboundCalls('other.Caller.execute').length,1);
+    }finally{query.close();}
+  }finally{await storage.close();await rm(root,{recursive:true,force:true});}
+});

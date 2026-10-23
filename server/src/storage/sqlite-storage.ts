@@ -488,66 +488,28 @@ export class SqliteStorage implements IIndexStorage {
 
   async getOutboundCalls(fqn: string): Promise<CallGraphEdge[]> {
     if (!this.db) throw new Error('Database not initialized');
-
-    const stmt = this.db.prepare(`
-      SELECT caller, callee, locations FROM call_edges_forward
-      WHERE caller = ?
-    `);
-
-    const rows = stmt.all(fqn) as Array<{ caller: string; callee: string; locations: string }>;
-
-    return rows.map(row => ({
-      caller: row.caller,
-      callee: row.callee,
-      locations: JSON.parse(row.locations)
-    }));
+    type Row={caller:string;callee:string;locations:string};
+    let rows=this.db.prepare('SELECT caller,callee,locations FROM call_edges_forward WHERE caller = ?')
+      .all(fqn) as Row[];
+    if (!rows.length) {
+      const name=fqn.split('.').pop() || fqn;
+      rows=this.db.prepare(`SELECT caller,callee,locations FROM call_edges_forward
+          WHERE replace(caller, rtrim(caller, replace(caller, '.', '')), '') = ? COLLATE NOCASE LIMIT 100`).all(name) as Row[];
+    }
+    return rows.map(row=>({caller:row.caller,callee:row.callee,locations:JSON.parse(row.locations)}));
   }
 
   async getInboundCalls(fqn: string): Promise<CallGraphEdge[]> {
     if (!this.db) throw new Error('Database not initialized');
-
-    // Exact match
-    const exactStmt = this.db.prepare(`
-      SELECT caller, callee, locations FROM call_edges_forward
-      WHERE callee = ?
-    `);
-
-    const exact = exactStmt.all(fqn) as Array<{ caller: string; callee: string; locations: string }>;
-    
-    // Fuzzy matching for unresolved references
-    const parts = fqn.split('.');
-    const methodName = parts[parts.length - 1].split('(')[0];
-    const className = parts[parts.length - 2];
-
-    const fuzzyStmt = this.db.prepare(`
-      SELECT DISTINCT caller, callee, locations FROM call_edges_forward
-      WHERE callee LIKE ? OR callee = ? OR callee LIKE ?
-      LIMIT 100
-    `);
-
-    const fuzzy = fuzzyStmt.all(`%.${methodName}%`, methodName, `%${className}%${methodName}%`) as Array<{
-      caller: string;
-      callee: string;
-      locations: string;
-    }>;
-
-    // Combine and deduplicate
-    const seen = new Set<string>();
-    const results: CallGraphEdge[] = [];
-
-    for (const row of [...exact, ...fuzzy]) {
-      const key = `${row.caller}->${row.callee}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        results.push({
-          caller: row.caller,
-          callee: row.callee,
-          locations: JSON.parse(row.locations)
-        });
-      }
+    type Row={caller:string;callee:string;locations:string};
+    let rows=this.db.prepare('SELECT caller,callee,locations FROM call_edges_forward WHERE callee = ?')
+      .all(fqn) as Row[];
+    if (!rows.length) {
+      const name=fqn.split('.').pop() || fqn;
+      rows=this.db.prepare(`SELECT caller,callee,locations FROM call_edges_forward
+          WHERE replace(callee, rtrim(callee, replace(callee, '.', '')), '') = ? COLLATE NOCASE LIMIT 100`).all(name) as Row[];
     }
-
-    return results;
+    return rows.map(row=>({caller:row.caller,callee:row.callee,locations:JSON.parse(row.locations)}));
   }
 
   async deleteCallEdgesByFile(file: string): Promise<void> {
