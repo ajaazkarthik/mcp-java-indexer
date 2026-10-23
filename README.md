@@ -45,8 +45,8 @@ mcp-java-indexer/
 │   │   ├── index.ts          # Main server entry (18 tools registered)
 │   │   ├── indexer-client.ts # Java process communication
 │   │   ├── storage.ts        # SQLite database storage
-│   │   ├── memory-index.ts   # In-memory indices (fallback)
-│   │   ├── persistence.ts    # JSON persistence (fallback)
+│   │   ├── memory-index.ts   # In-memory indexing and query interface
+│   │   ├── persistence.ts    # Incremental native SQLite persistence
 │   │   ├── fs-watcher.ts     # File watcher
 │   │   └── tools/            # MCP tool implementations
 │   │       ├── index_project.ts          # Index entire project
@@ -385,14 +385,12 @@ Indexes are stored in `.mcp-index/` directory at the project root:
 your-java-project/
 ├── .mcp-index/
 │   ├── index.db           # SQLite database (primary)
-│   └── index.json         # JSON fallback (if DB unavailable)
 ├── src/
 └── pom.xml
 ```
 
 **Storage backend**:
 - **SQLite (required)**: Native `better-sqlite3`; no WebAssembly/sql.js fallback.
-- **File-based (Fallback)**: JSON persistence with optional compression
 
 ## 🔄 Incremental Indexing
 
