@@ -1,6 +1,6 @@
 # MCP Java Indexer
 
-[![Version](https://img.shields.io/badge/version-2.7.1-blue)](https://marketplace.visualstudio.com/items?itemName=ubanishathanvenkatesan.java-indexer-mcp)
+[![Version](https://img.shields.io/badge/version-3.2.0-blue)](https://marketplace.visualstudio.com/items?itemName=ubanishathanvenkatesan.java-indexer-mcp)
 [![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-brightgreen)](https://marketplace.visualstudio.com/items?itemName=ubanishathanvenkatesan.java-indexer-mcp)
 
 A complete **LOCAL** Model Context Protocol (MCP) extension for VS Code that provides IntelliJ-style Java code intelligence. **18 powerful tools**, zero-config database storage, and AI-friendly code analysis.
@@ -367,6 +367,10 @@ workflow is required. For manual updates use `index_project` or
 For release verification, run `cd server && npm ci && npm run release:gate`.
 CI additionally runs the `BENCH_10K=1` one-file delta performance fixture.
 Treat benchmark values as test-host measurements, not production SLAs.
+
+## 3.2 performance and memory notes
+
+The **idle/query Node heap** stays small because `Persistence.load()` hydrates file metadata only and MCP query tools read symbols/references via prepared SQLite statements. However, **peak memory while `index_project` runs still scales with project size**: indexing still accumulates the full symbol/reference corpus in `MemoryIndex` before persisting. Future work should stream index batches directly to SQLite. Run `cd server && npm run release:gate` for 50,000-symbol / 200,000-reference behavioral measurements; those CI fixture numbers are not production SLAs.
 
 ## 🗂️ Index Storage
 
