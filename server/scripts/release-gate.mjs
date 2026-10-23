@@ -40,7 +40,7 @@ const checks = [
  ['8 native storage documentation', readme.includes('INDEX_VALIDATOR_DISABLED=true') &&
     !readme.includes('SQLite via WebAssembly') &&
     !readme.includes('sql.js](https://github.com/sql-js')],
- ['18 tools registered', (index.match(/\n    \w+Tool,/g) || []).length === 18 &&
+ ['18 tools registered', (index.match(/\n    \w+Tool,?/g) || []).length === 18 &&
     index.includes("case 'test_coverage':")]
 ];
 let failures=0;
