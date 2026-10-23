@@ -5,6 +5,7 @@
  */
 import Database from 'better-sqlite3';
 import path from 'node:path';
+import {simpleNameSql, simpleNameOf} from './storage/sql-expressions.js';
 import { MemoryIndex, SymbolStub, Reference, CallGraphEdge, FileInfo } from './memory-index.js';
 
 type SymbolRow = { fqn: string; data: string };
@@ -13,9 +14,9 @@ type EdgeRow = { caller: string; callee: string; locations: string };
 type FileRow = { path: string; hash: string; last_indexed: number; mtime: number | null; symbols: string };
 
 
-const SIMPLE_REF = "replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '')";
-const SIMPLE_CALLER = "replace(caller, rtrim(caller, replace(caller, '.', '')), '')";
-const SIMPLE_CALLEE = "replace(callee, rtrim(callee, replace(callee, '.', '')), '')";
+const SIMPLE_REF = simpleNameSql('to_fqn');
+const SIMPLE_CALLER = simpleNameSql('caller');
+const SIMPLE_CALLEE = simpleNameSql('callee');
 
 class DiskSymbolMap extends Map<string, SymbolStub> {
   private cachedSize: number | undefined;
@@ -159,7 +160,7 @@ export class QueryService extends MemoryIndex {
   }
   override findUsages(fqn: string): Reference[] {
     const exact=this.all<RefRow>('refsExact',fqn);
-    const simple=fqn.split('.').pop()||fqn;
+    const simple=simpleNameOf(fqn);
     const fuzzy=this.all<RefRow>('refsSimple',simple);
     this.usageLimitReached = fuzzy.length >= 5000;
     const merged=new Map<number,Reference>();
@@ -178,13 +179,13 @@ export class QueryService extends MemoryIndex {
   override getOutboundCalls(fqn: string): CallGraphEdge[] {
     const exact=this.all<EdgeRow>('outboundExact',fqn);
     if(exact.length) return this.edges(exact);
-    const name=fqn.split('.').pop()||fqn;
+    const name=simpleNameOf(fqn);
     return this.edges(this.all<EdgeRow>('outboundSimple',name));
   }
   override getInboundCalls(fqn: string): CallGraphEdge[] {
     const exact=this.all<EdgeRow>('inboundExact',fqn);
     if(exact.length) return this.edges(exact);
-    const name=fqn.split('.').pop()||fqn;
+    const name=simpleNameOf(fqn);
     return this.edges(this.all<EdgeRow>('inboundSimple',name));
   }
   override getParents(fqn: string): string[] {

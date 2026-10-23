@@ -1,3 +1,4 @@
+import {simpleNameSql} from '../dist/storage/sql-expressions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -46,7 +47,7 @@ test('release gate: 50k symbols, 200k references, indexed MCP read paths', async
    assert.ok(exactElapsed<10,'findSymbols exact >10ms');
    console.log('50k exact find symbol: '+exactElapsed.toFixed(3)+' ms');
 
-   const expr="replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '')";
+   const expr=simpleNameSql('to_fqn');
    const usagesPlan=query.explainQueryPlan(
      'SELECT id FROM refs WHERE '+expr+' = ? COLLATE NOCASE','save');
    assert.match(usagesPlan,/idx_refs_to_name/);

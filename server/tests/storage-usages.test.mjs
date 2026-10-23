@@ -1,3 +1,4 @@
+import {simpleNameSql} from '../dist/storage/sql-expressions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -22,7 +23,7 @@ test('QueryService reads indexed simple-name usages without a user-defined DB fu
   await store.saveReferences(refs);
   const query=new QueryService(root);
   try {
-   const expr="replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '')";
+   const expr=simpleNameSql('to_fqn');
    const plan=query.explainQueryPlan('SELECT id FROM refs WHERE '+expr+' = ? COLLATE NOCASE','save');
    assert.match(plan,/idx_refs_to_name/);
    assert.doesNotMatch(plan,/SCAN refs\b/);

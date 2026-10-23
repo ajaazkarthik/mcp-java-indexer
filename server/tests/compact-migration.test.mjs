@@ -24,7 +24,7 @@ test('compact_index migrate true explicitly resumes schema migration',async()=>{
   assert.match(result.content[0].text,/compaction complete/i);
   const check=new Database(dbPath);
   try{
-   assert.equal(check.prepare('SELECT version FROM schema_version').get().version,3);
+   assert.equal(check.prepare('SELECT version FROM schema_version').get().version,4);
    assert.equal(check.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name='idx_refs_to_covering'").get().n,1);
   }finally{check.close();}
  }finally{await rm(root,{recursive:true,force:true});}

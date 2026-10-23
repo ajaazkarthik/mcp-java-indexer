@@ -8,6 +8,7 @@ import * as fs from 'fs/promises';
 import { IIndexStorage, IndexStats, StorageQueryOptions } from './index-storage.js';
 import { SymbolStub, Reference, CallGraphEdge, FileInfo } from '../memory-index.js';
 import Database from 'better-sqlite3';
+import {simpleNameSql, simpleNameOf} from './sql-expressions.js';
 
 export class SqliteStorage implements IIndexStorage {
   private db: Database.Database | null = null;
@@ -118,13 +119,13 @@ export class SqliteStorage implements IIndexStorage {
     if (!this.db) throw new Error('Database not initialized');
     const current = this.db.prepare('SELECT version FROM schema_version LIMIT 1')
       .get() as {version:number}|undefined;
-    if (current?.version === 3) return 0;
+    if (current?.version === 4) return 0;
     const targets = ['idx_symbols_name_kind','idx_refs_to_name','idx_refs_to_covering',
       'idx_symbols_declaring','idx_edges_fwd_caller_name','idx_edges_fwd_callee_name'];
     const existing = new Set((this.db.prepare(
       "SELECT name FROM sqlite_master WHERE type='index'"
     ).all() as Array<{name:string}>).map(row=>row.name));
-    return targets.filter(name=>!existing.has(name)).length;
+    return targets.filter(name=>!existing.has(name)).length + (current?.version === 3 ? 3 : 0);
   }
 
   /** Upgrade existing indexes without holding an all-index DDL transaction.
@@ -134,9 +135,9 @@ export class SqliteStorage implements IIndexStorage {
     if (!this.db) throw new Error('Database not initialized');
     const stored = this.db.prepare('SELECT version FROM schema_version LIMIT 1')
       .get() as {version:number}|undefined;
-    if (stored?.version === 3) return;
+    if (stored?.version === 4) return;
     if (existing) {
-      console.error('Migrating index to schema 3: building reference indexes, may take several minutes on large databases');
+      console.error('Migrating index to schema 4: building reference indexes, may take several minutes on large databases');
     }
     // Only drop obsolete or legacy-expression indexes; preserve already rebuilt
     // indexes after an interrupted migration.
@@ -151,25 +152,32 @@ export class SqliteStorage implements IIndexStorage {
         DROP TABLE IF EXISTS call_edges_reverse;
       `);
       if (oldFunctionIndex) this.db!.exec('DROP INDEX IF EXISTS idx_refs_to_name');
+      // v4 changes extraction to ignore periods in parameter types.
+      for (const name of ['idx_refs_to_name','idx_edges_fwd_caller_name','idx_edges_fwd_callee_name']) {
+        const info = this.db!.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name=?")
+          .get(name) as {sql:string}|undefined;
+        if (info && !info.sql.includes('CASE WHEN instr('))
+          this.db!.exec('DROP INDEX IF EXISTS '+name);
+      }
     })();
 
     const statements = [
       ["idx_symbols_name_kind", "CREATE INDEX IF NOT EXISTS idx_symbols_name_kind ON symbols(name, kind)"],
-      ["idx_refs_to_name", "CREATE INDEX IF NOT EXISTS idx_refs_to_name ON refs(replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') COLLATE NOCASE, to_fqn)"],
+      ["idx_refs_to_name", `CREATE INDEX IF NOT EXISTS idx_refs_to_name ON refs(${simpleNameSql('to_fqn')} COLLATE NOCASE, to_fqn)`],
       ["idx_refs_to_covering", "CREATE INDEX IF NOT EXISTS idx_refs_to_covering ON refs(to_fqn, id, from_fqn, file, line, col, kind)"],
       ["idx_symbols_declaring", "CREATE INDEX IF NOT EXISTS idx_symbols_declaring ON symbols(json_extract(data, '$.declaringClass'))"],
-      ["idx_edges_fwd_caller_name", "CREATE INDEX IF NOT EXISTS idx_edges_fwd_caller_name ON call_edges_forward(replace(caller, rtrim(caller, replace(caller, '.', '')), '') COLLATE NOCASE)"],
-      ["idx_edges_fwd_callee_name", "CREATE INDEX IF NOT EXISTS idx_edges_fwd_callee_name ON call_edges_forward(replace(callee, rtrim(callee, replace(callee, '.', '')), '') COLLATE NOCASE)"]
+      ["idx_edges_fwd_caller_name", `CREATE INDEX IF NOT EXISTS idx_edges_fwd_caller_name ON call_edges_forward(${simpleNameSql('caller')} COLLATE NOCASE)`],
+      ["idx_edges_fwd_callee_name", `CREATE INDEX IF NOT EXISTS idx_edges_fwd_callee_name ON call_edges_forward(${simpleNameSql('callee')} COLLATE NOCASE)`]
     ] as const;
     for (const [name, sql] of statements) {
       // Deliberately before each atomic standalone DDL; interruption leaves
-      // schema_version below 3 so a subsequent open resumes safely.
+      // schema_version below 4 so a subsequent open resumes safely.
       console.error(`building index ${name}`);
       this.db.exec(sql);
     }
     this.db.transaction(() => {
       this.db!.prepare('DELETE FROM schema_version').run();
-      this.db!.prepare('INSERT INTO schema_version(version) VALUES (3)').run();
+      this.db!.prepare('INSERT INTO schema_version(version) VALUES (4)').run();
     })();
   }
 
@@ -376,7 +384,7 @@ export class SqliteStorage implements IIndexStorage {
   async findUsages(fqn: string): Promise<Reference[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    const simpleName = fqn.split('.').pop() || fqn;
+    const simpleName = simpleNameOf(fqn);
     type UsageRow = {
       id: number; from_fqn: string; to_fqn: string;
       file: string; line: number; col: number; kind: string;
@@ -387,7 +395,7 @@ export class SqliteStorage implements IIndexStorage {
     const exact = this.db.prepare(select + ' WHERE to_fqn = ?')
       .all(fqn) as UsageRow[];
     const byName = this.db.prepare(
-      select + ` WHERE replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') = ? COLLATE NOCASE LIMIT 5000`
+      select + ` WHERE ${simpleNameSql('to_fqn')} = ? COLLATE NOCASE LIMIT 5000`
     ).all(simpleName) as UsageRow[];
     this.usageLimitReached = byName.length >= 5000;
     const seen = new Set<number>();
@@ -524,9 +532,9 @@ export class SqliteStorage implements IIndexStorage {
     let rows=this.db.prepare('SELECT caller,callee,locations FROM call_edges_forward WHERE caller = ?')
       .all(fqn) as Row[];
     if (!rows.length) {
-      const name=fqn.split('.').pop() || fqn;
+      const name=simpleNameOf(fqn);
       rows=this.db.prepare(`SELECT caller,callee,locations FROM call_edges_forward
-          WHERE replace(caller, rtrim(caller, replace(caller, '.', '')), '') = ? COLLATE NOCASE LIMIT 100`).all(name) as Row[];
+          WHERE ${simpleNameSql('caller')} = ? COLLATE NOCASE LIMIT 100`).all(name) as Row[];
     }
     return rows.map(row=>({caller:row.caller,callee:row.callee,locations:JSON.parse(row.locations)}));
   }
@@ -537,9 +545,9 @@ export class SqliteStorage implements IIndexStorage {
     let rows=this.db.prepare('SELECT caller,callee,locations FROM call_edges_forward WHERE callee = ?')
       .all(fqn) as Row[];
     if (!rows.length) {
-      const name=fqn.split('.').pop() || fqn;
+      const name=simpleNameOf(fqn);
       rows=this.db.prepare(`SELECT caller,callee,locations FROM call_edges_forward
-          WHERE replace(callee, rtrim(callee, replace(callee, '.', '')), '') = ? COLLATE NOCASE LIMIT 100`).all(name) as Row[];
+          WHERE ${simpleNameSql('callee')} = ? COLLATE NOCASE LIMIT 100`).all(name) as Row[];
     }
     return rows.map(row=>({caller:row.caller,callee:row.callee,locations:JSON.parse(row.locations)}));
   }

@@ -1,3 +1,4 @@
+import {simpleNameSql} from '../dist/storage/sql-expressions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -57,7 +58,7 @@ test('inbound and outbound simple-name fallbacks select indexed expression paths
     }],'forward');
     const db=new Database(path.join(persistDir,'index.db'),{readonly:true});
     try {
-      const sql="SELECT caller FROM call_edges_forward WHERE replace(callee, rtrim(callee, replace(callee, '.', '')), '') = ? COLLATE NOCASE LIMIT 100";
+      const sql='SELECT caller FROM call_edges_forward WHERE '+simpleNameSql('callee')+' = ? COLLATE NOCASE LIMIT 100';
       const plan=db.prepare('EXPLAIN QUERY PLAN '+sql).all('save').map(r=>r.detail).join(' ');
       assert.match(plan,/idx_edges_fwd_callee_name/);
       assert.doesNotMatch(plan,/SCAN call_edges_forward/);

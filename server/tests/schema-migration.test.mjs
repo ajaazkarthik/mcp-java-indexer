@@ -32,11 +32,11 @@ test('schema v2 upgrades explicitly and produces only the new reference indexes'
    console.error=(...v)=>{logs.push(v.join(' '));};
    try{await reopened.initialize();}
    finally{console.error=original;await reopened.close();}
-   assert.ok(logs.some(l=>l.includes('Migrating index to schema 3: building reference indexes')),
+   assert.ok(logs.some(l=>l.includes('Migrating index to schema 4: building reference indexes')),
      'Expected migration log line');
    const check=new Database(dbPath);
    try {
-     assert.equal(check.prepare('SELECT version FROM schema_version').get().version,3);
+     assert.equal(check.prepare('SELECT version FROM schema_version').get().version,4);
      const idx=check.prepare("SELECT name FROM sqlite_master WHERE type='index'")
        .all().map(x=>x.name);
      for(const required of ['idx_symbols_name_kind','idx_refs_to_name','idx_refs_to_covering']){
@@ -92,7 +92,7 @@ test('interrupted schema migration retries safely after the second index log', a
    await resumed.initialize();
    const check=new Database(file);
    try {
-    assert.equal(check.prepare('SELECT version FROM schema_version').get().version,3);
+    assert.equal(check.prepare('SELECT version FROM schema_version').get().version,4);
     for(const name of ['idx_symbols_name_kind','idx_refs_to_name','idx_refs_to_covering']){
      assert.equal(check.prepare('SELECT COUNT(*) AS n FROM sqlite_master WHERE type=? AND name=?')
        .get('index',name).n,1,name);
