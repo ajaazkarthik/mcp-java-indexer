@@ -34,11 +34,13 @@ export class SqliteStorage implements IIndexStorage {
     this.db.pragma('mmap_size = 4294967296'); // 4 GiB mmap (virtual address space)
     this.db.pragma('busy_timeout = 5000');
 
-    // Create tables
+    // Schema upgrades are explicit: do not build large reference indexes in
+    // CREATE TABLE bootstrap before the migration version is checked.
+    const existing = Boolean(this.db.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbols'"
+    ).get());
     this.createTables();
-    // Retire the old single-column index on upgraded databases. The new
-    // compound index has the same left-prefix capability and reduces writes.
-    this.db.exec('DROP INDEX IF EXISTS idx_symbols_name');
+    this.migrateSchema(existing);
     
     console.error('✅ SQLite storage initialized at', this.dbPath);
   }
@@ -59,9 +61,10 @@ export class SqliteStorage implements IIndexStorage {
         data TEXT NOT NULL  -- JSON-encoded SymbolStub
       );
       -- (name, kind) also serves name-only queries; avoid a redundant name index.
-      CREATE INDEX IF NOT EXISTS idx_symbols_name_kind ON symbols(name, kind);
       CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file);
       CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
+
+      CREATE TABLE IF NOT EXISTS schema_version(version INTEGER NOT NULL);
 
       -- References table (using refs to avoid reserved word)
       CREATE TABLE IF NOT EXISTS refs (
@@ -73,11 +76,6 @@ export class SqliteStorage implements IIndexStorage {
         col INTEGER,
         kind TEXT NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS idx_refs_to ON refs(to_fqn);
-      CREATE INDEX IF NOT EXISTS idx_refs_to_name
-        ON refs(replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') COLLATE NOCASE, to_fqn);
-      CREATE INDEX IF NOT EXISTS idx_refs_to_covering
-        ON refs(to_fqn, id, from_fqn, file, line, col, kind);
       CREATE INDEX IF NOT EXISTS idx_refs_from ON refs(from_fqn);
       CREATE INDEX IF NOT EXISTS idx_refs_file ON refs(file);
 
@@ -119,6 +117,39 @@ export class SqliteStorage implements IIndexStorage {
     `);
 
     this.ensureColumnExists('files', 'mtime', 'INTEGER');
+  }
+
+  private migrateSchema(existing: boolean): void {
+    if (!this.db) throw new Error('Database not initialized');
+    const stored = this.db.prepare('SELECT version FROM schema_version LIMIT 1')
+      .get() as {version:number}|undefined;
+    if (stored?.version === 3) return;
+    if (existing) {
+      console.error('Migrating index to schema 3: building reference indexes, may take several minutes on large databases');
+    }
+    this.db.transaction(() => {
+      this.db!.exec(`
+        DROP INDEX IF EXISTS idx_symbols_name;
+        DROP INDEX IF EXISTS idx_refs_to;
+        DROP INDEX IF EXISTS idx_refs_to_name;
+        DROP INDEX IF EXISTS idx_refs_to_covering;
+        CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);
+        CREATE INDEX idx_refs_to_name ON refs(replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') COLLATE NOCASE, to_fqn);
+        CREATE INDEX idx_refs_to_covering ON refs(to_fqn, id, from_fqn, file, line, col, kind);
+        CREATE INDEX IF NOT EXISTS idx_symbols_declaring
+          ON symbols(json_extract(data, '$.declaringClass'));
+        CREATE INDEX IF NOT EXISTS idx_edges_fwd_caller_name
+          ON call_edges_forward(
+            replace(caller, rtrim(caller, replace(caller, '.', '')), '') COLLATE NOCASE
+          );
+        CREATE INDEX IF NOT EXISTS idx_edges_fwd_callee_name
+          ON call_edges_forward(
+            replace(callee, rtrim(callee, replace(callee, '.', '')), '') COLLATE NOCASE
+          );
+        DELETE FROM schema_version;
+        INSERT INTO schema_version(version) VALUES (3);
+      `);
+    })();
   }
 
   private ensureColumnExists(table: string, column: string, type: string): void {
