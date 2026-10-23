@@ -1223,12 +1223,12 @@ export async function handleScanMigrationCandidates(
   args: any,
   memoryIndex: MemoryIndex,
   signal?: AbortSignal
-): Promise<{
+): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
   if (signal?.aborted) {
     console.error('[MCP] cancelled server/src/tools/scan_migration_candidates.ts');
     return {content:[{type:'text',text:'Request cancelled'}],isError:true};
   }
- content: Array<{ type: string; text: string }>; isError?: boolean }> {
+
   const startTime = Date.now();
   
   try {

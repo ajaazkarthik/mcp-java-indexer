@@ -213,12 +213,12 @@ export async function handleExploreCodebase(
   args: any,
   memoryIndex: MemoryIndex,
   signal?: AbortSignal
-): Promise<{
+): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
   if (signal?.aborted) {
     console.error('[MCP] cancelled server/src/tools/explore_codebase.ts');
     return {content:[{type:'text',text:'Request cancelled'}],isError:true};
   }
- content: Array<{ type: string; text: string }>; isError?: boolean }> {
+
   const startTime = Date.now();
   const format = (args.format as string) || 'summary';
   const filterPackages = args.packages as string[] | undefined;
