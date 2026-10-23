@@ -9,7 +9,8 @@
     "watch": "tsc --watch",
     "start": "node run.mjs",
     "dev": "tsc && node --max-old-space-size=4096 dist/index.js",
-    "test": "npm run build && node --test tests/*.test.mjs"
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "release:gate": "npm test && node scripts/release-gate.mjs"
   },
   "keywords": [
     "mcp",

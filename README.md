@@ -14,7 +14,7 @@ A complete **LOCAL** Model Context Protocol (MCP) extension for VS Code that pro
 - **Reference Tracking**: Method calls, field accesses, object instantiations
 - **Incremental Indexing**: File watcher with hash-based change detection
 - **Fast Performance**: 10k-20k classes indexed in <40 seconds
-- **Zero-Config Database**: SQLite storage via WebAssembly - works everywhere, no setup needed!
+- **Zero-Config Database**: SQLite storage with native **better-sqlite3**, prepared statements and persistent on-disk indexes.
 - **Memory Efficient**: Uses 90-99% less memory than file-based storage on large projects
 
 ### 🧠 AI-Friendly Tools
@@ -347,8 +347,26 @@ Analyze which classes are safe to migrate:
 - **Indexing**: 10,000-20,000 Java classes in 30-40 seconds
 - **Incremental Update**: Single file reindex in <200ms
 - **Query Performance**: Call graph queries in <20ms
-- **Memory Usage**: ~100MB for 20k classes (with SQLite storage)
+- **Memory Usage**: Query symbols/references/edges directly from SQLite rather than hydrating the full index at startup (profile under your real workload).
 - **Index Size**: ~30-50MB database for 20k classes
+
+
+### Native SQLite configuration and refresh control
+
+The MCP server uses **better-sqlite3** exclusively. Install dependencies under
+`server/` with `npm ci`. On Windows, a compatible native prebuilt binary
+or Visual Studio C++ Build Tools may be required. There is no sql.js
+fallback. The database lives at `<project>/.mcp-index/index.db`.
+
+Set `INDEX_VALIDATOR_DISABLED=true` in the MCP server's environment to
+disable on-demand automatic index validation/refresh. The file watcher is a
+separate mechanism; disable it separately if a fully manual indexing
+workflow is required. For manual updates use `index_project` or
+`reindex_file`.
+
+For release verification, run `cd server && npm ci && npm run release:gate`.
+CI additionally runs the `BENCH_10K=1` one-file delta performance fixture.
+Treat benchmark values as test-host measurements, not production SLAs.
 
 ## 🗂️ Index Storage
 
@@ -363,8 +381,8 @@ your-java-project/
 └── pom.xml
 ```
 
-**Storage Modes** (automatic selection):
-- **SQLite (Default)**: Zero-config, WebAssembly-based, 90-99% less memory
+**Storage backend**:
+- **SQLite (required)**: Native `better-sqlite3`; no WebAssembly/sql.js fallback.
 - **File-based (Fallback)**: JSON persistence with optional compression
 
 ## 🔄 Incremental Indexing
@@ -503,7 +521,7 @@ java -jar target/java-indexer-1.0.0.jar
 ## 🔐 Security
 
 - **Local Only**: No network communication, all processing stays on your machine
-- **Zero-Config Database**: SQLite via WebAssembly - no external database server
+- **Zero-Config Database**: Embedded native `better-sqlite3` - no external database server
 - **File Access**: Only reads/writes in the indexed project directory
 - **Sandboxed**: Runs in isolated Node.js and Java processes
 
@@ -516,7 +534,7 @@ MIT License - Free for personal and commercial use.
 Built with:
 - [Model Context Protocol SDK](https://github.com/modelcontextprotocol/sdk)
 - [JavaParser](https://github.com/javaparser/javaparser) - Java AST parsing
-- [sql.js](https://github.com/sql-js/sql.js) - SQLite in WebAssembly
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) - native SQLite binding
 - [Chokidar](https://github.com/paulmillr/chokidar) - File watching
 - [TypeScript](https://www.typescriptlang.org/)
 

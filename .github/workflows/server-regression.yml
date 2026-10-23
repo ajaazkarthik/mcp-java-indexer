@@ -15,5 +15,8 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - run: npm ci
         working-directory: server
-      - run: npm test
+      - run: npm run release:gate
+        working-directory: server
+      - name: 10k-file incremental-save benchmark
+        run: BENCH_10K=1 node --test tests/storage-incremental.test.mjs
         working-directory: server
