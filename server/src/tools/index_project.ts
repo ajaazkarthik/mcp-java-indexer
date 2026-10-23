@@ -112,7 +112,7 @@ export async function handleIndexProject(
   args: any,
   memoryIndex: MemoryIndex,
   indexerClient: IndexerClient,
-  setWatcher: (watcher: FileSystemWatcher, persistence: Persistence) => void,
+  setWatcher: (watcher: FileSystemWatcher, persistence: Persistence, normalizedRootDir: string) => void,
   signal?: AbortSignal
 ) {
   signal?.throwIfAborted();
@@ -286,7 +286,7 @@ export async function handleIndexProject(
         // Still start file watcher
         const watcher = new FileSystemWatcher(rootDir, absoluteSourceRoots, memoryIndex, indexerClient, persistence);
         watcher.start();
-        setWatcher(watcher, persistence);
+        setWatcher(watcher, persistence, rootDir);
         
         return {
           content: [{
@@ -455,7 +455,7 @@ ${freshnessInfo}
     // Start file watcher
     const watcher = new FileSystemWatcher(rootDir, absoluteSourceRoots, memoryIndex, indexerClient, persistence);
     watcher.start();
-    setWatcher(watcher, persistence);
+    setWatcher(watcher, persistence, rootDir);
 
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
     const stats = memoryIndex.getStats();

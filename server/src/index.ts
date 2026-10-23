@@ -407,11 +407,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     switch (name) {
       case 'index_project': {
         const { result, elapsedFormatted } = await withTimer(() => 
-          handleIndexProject(args, memoryIndex, indexerClient, (watcher, newPersistence) => {
+          handleIndexProject(args, memoryIndex, indexerClient, (watcher, newPersistence, normalizedRootDir) => {
             fsWatcher = watcher;
             persistence = newPersistence;
             queryService?.close();
-            queryService = new QueryService((args?.rootDir || memoryIndex.getProjectRootDir()) as string);
+            queryService = new QueryService(normalizedRootDir);
             readIndex = queryService;
             // Configure the validator with project info
             const rootDir = args?.rootDir as string;
