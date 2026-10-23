@@ -453,7 +453,11 @@ export class SqliteStorage implements IIndexStorage {
       VALUES (?, ?, ?)
     `);
 
-    stmt.run(edge.caller, edge.callee, JSON.stringify(edge.locations));
+    stmt.run(
+      direction === 'forward' ? edge.caller : edge.callee,
+      direction === 'forward' ? edge.callee : edge.caller,
+      JSON.stringify(edge.locations)
+    );
   }
 
   async saveCallEdges(edges: CallGraphEdge[], direction: 'forward' | 'reverse'): Promise<void> {
@@ -470,7 +474,11 @@ export class SqliteStorage implements IIndexStorage {
 
     const saveTransaction = this.db.transaction((edgeList: CallGraphEdge[]) => {
       for (const edge of edgeList) {
-        stmt.run(edge.caller, edge.callee, JSON.stringify(edge.locations));
+        stmt.run(
+      direction === 'forward' ? edge.caller : edge.callee,
+      direction === 'forward' ? edge.callee : edge.caller,
+      JSON.stringify(edge.locations)
+    );
       }
     });
 
