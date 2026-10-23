@@ -72,9 +72,13 @@ test('release gate: 50k symbols, 200k references, indexed MCP read paths', async
    assert.deepEqual(observed,['inboundExact']);
    console.log('Inbound exact call: 1 prepared statement');
 
+   // Full-index iteration is prohibited on class exploration hot paths.
+   const oldAllSymbols=query.getAllSymbols;
+   query.getAllSymbols=()=>{throw new Error('Unexpected full symbol table iteration');};
    const classStarted=performance.now();
    const explored=await handleExploreClass({className:'example.Target'},query);
    const classMs=performance.now()-classStarted;
+   query.getAllSymbols=oldAllSymbols;
    assert.ok(!explored.isError);
    assert.match(explored.content[0].text,/Class Exploration/);
    assert.ok(classMs<200,'explore_class >200ms');

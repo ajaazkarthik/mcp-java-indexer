@@ -15,12 +15,16 @@ test('schema v2 upgrades explicitly and produces only the new reference indexes'
    await initial.close();
    const old=new Database(dbPath);
    try{
+     old.function('ref_simple_name',{deterministic:true}, fqn=>fqn.split('.').pop());
      old.exec(`UPDATE schema_version SET version=2;
        DROP INDEX idx_refs_to_name;
        DROP INDEX idx_refs_to_covering;
        DROP INDEX idx_symbols_name_kind;
        CREATE INDEX idx_symbols_name ON symbols(name);
-       CREATE INDEX idx_refs_to ON refs(to_fqn);`);
+       CREATE INDEX idx_refs_to ON refs(to_fqn);
+       CREATE INDEX idx_refs_to_name ON refs(ref_simple_name(to_fqn) COLLATE NOCASE,to_fqn);
+       INSERT INTO refs(from_fqn,to_fqn,file,line,col,kind)
+         VALUES ('old.Caller','old.Service.save','Old.java',2,1,'method_call');`);
    }finally{old.close();}
    const logs=[];
    const original=console.error;
@@ -45,6 +49,7 @@ test('schema v2 upgrades explicitly and produces only the new reference indexes'
        "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='call_edges_reverse'"
      ).get().n, 0);
      assert.equal(check.pragma('integrity_check',{simple:true}),'ok');
+     assert.equal(check.prepare('SELECT count(*) AS n FROM refs').get().n,1);
    }finally{check.close();}
  }finally{await rm(dir,{recursive:true,force:true});}
 });
