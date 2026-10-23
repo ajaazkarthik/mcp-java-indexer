@@ -34,8 +34,14 @@ export const findUsagesTool: Tool = {
 
 export async function handleFindUsages(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled server/src/tools/find_usages.ts');
+    return {content:[{type:'text',text:'Request cancelled'}],isError:true};
+  }
+
   // Support both 'fqn' and 'symbolFqn' for backward compatibility
   const fqn = (args.fqn || args.symbolFqn) as string;
 

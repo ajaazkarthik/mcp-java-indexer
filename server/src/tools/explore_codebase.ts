@@ -211,8 +211,14 @@ This is more efficient than calling explore_class 16000+ times.`,
 
 export async function handleExploreCodebase(
   args: any,
-  memoryIndex: MemoryIndex
-): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
+): Promise<{
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled server/src/tools/explore_codebase.ts');
+    return {content:[{type:'text',text:'Request cancelled'}],isError:true};
+  }
+ content: Array<{ type: string; text: string }>; isError?: boolean }> {
   const startTime = Date.now();
   const format = (args.format as string) || 'summary';
   const filterPackages = args.packages as string[] | undefined;
@@ -239,6 +245,10 @@ export async function handleExploreCodebase(
     for (const [fqn, stub] of allSymbols) {
       if (++symbolRows % 512 === 0) {
         await new Promise<void>(resolve => setImmediate(resolve));
+        if (signal?.aborted) {
+          console.error('[MCP] cancelled server/src/tools/explore_codebase.ts');
+          throw new Error('Request cancelled');
+        }
       }
       if (stub.kind === 'class' || stub.kind === 'interface' || stub.kind === 'enum' || stub.kind === 'record') {
         // Filter by package if specified

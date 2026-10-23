@@ -1221,8 +1221,14 @@ function estimateEffort(categories: ScanMigrationResult['categories']): string {
 
 export async function handleScanMigrationCandidates(
   args: any,
-  memoryIndex: MemoryIndex
-): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
+): Promise<{
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled server/src/tools/scan_migration_candidates.ts');
+    return {content:[{type:'text',text:'Request cancelled'}],isError:true};
+  }
+ content: Array<{ type: string; text: string }>; isError?: boolean }> {
   const startTime = Date.now();
   
   try {
@@ -1266,6 +1272,10 @@ export async function handleScanMigrationCandidates(
     for (const [fqn, stub] of allSymbols) {
       if (++scannedSymbols % 512 === 0) {
         await new Promise<void>(resolve => setImmediate(resolve));
+        if (signal?.aborted) {
+          console.error('[MCP] cancelled server/src/tools/scan_migration_candidates.ts');
+          throw new Error('Request cancelled');
+        }
       }
       // Only include top-level classes/interfaces/enums/records (not methods/fields)
       if (stub.kind !== 'class' && stub.kind !== 'interface' && stub.kind !== 'enum' && stub.kind !== 'record') {

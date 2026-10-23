@@ -29,8 +29,14 @@ export const semanticSearchTool: Tool = {
 
 export async function handleSemanticSearch(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled server/src/tools/semantic_search.ts');
+    return {content:[{type:'text',text:'Request cancelled'}],isError:true};
+  }
+
   const query = (args.query as string).toLowerCase();
   const scope = (args.scope as string) || 'all';
   const limit = (args.limit as number) || 20;
@@ -82,6 +88,10 @@ export async function handleSemanticSearch(
     for (const [fqn, symbol] of allSymbols) {
       if (++scanned % 512 === 0) {
         await new Promise<void>(resolve => setImmediate(resolve));
+        if (signal?.aborted) {
+          console.error('[MCP] cancelled server/src/tools/semantic_search.ts');
+          throw new Error('Request cancelled');
+        }
       }
       // Apply scope filter
       if (scope !== 'all') {
