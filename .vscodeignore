@@ -13,6 +13,8 @@
 !server/node_modules/**
 !server/package.json
 !server/package-lock.json
+!server/heap-limit.cjs
+!server/run.mjs
 
 # WHITELIST: Include Java indexer JAR (compiled with all dependencies)
 !java-indexer/target/java-indexer-1.0.0.jar
