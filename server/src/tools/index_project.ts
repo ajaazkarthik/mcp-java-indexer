@@ -112,8 +112,10 @@ export async function handleIndexProject(
   args: any,
   memoryIndex: MemoryIndex,
   indexerClient: IndexerClient,
-  setWatcher: (watcher: FileSystemWatcher, persistence: Persistence) => void
+  setWatcher: (watcher: FileSystemWatcher, persistence: Persistence) => void,
+  signal?: AbortSignal
 ) {
+  signal?.throwIfAborted();
   // Normalize rootDir to use forward slashes consistently (critical for Windows)
   // Use normalizeAbsolutePath to resolve to absolute path AND handle case sensitivity
   const rootDir = normalizeAbsolutePath(args.rootDir as string);
@@ -231,6 +233,7 @@ export async function handleIndexProject(
       
       let mtimeSyncCount = 0;
       for (const file of javaFiles) {
+        signal?.throwIfAborted();
         const needsReindex = await memoryIndex.needsReindex(file);
         if (needsReindex) {
           filesToIndex.push(file);
@@ -326,6 +329,7 @@ ${freshnessInfo}
     console.error(`⚡ Optimized batch size for performance and stability`);
 
     for (let i = 0; i < filesToIndex.length; i += batchSize) {
+      signal?.throwIfAborted();
       const batch = filesToIndex.slice(i, Math.min(i + batchSize, filesToIndex.length));
       batchCount++;
       const batchStartTime = Date.now();
@@ -333,6 +337,7 @@ ${freshnessInfo}
       const results = await indexerClient.indexFiles(batch, absoluteSourceRoots);
 
       for (const result of results) {
+        signal?.throwIfAborted();
         if (result.error) {
           console.error(`⚠️  Error indexing ${result.file}: ${result.error}`);
           errorCount++;

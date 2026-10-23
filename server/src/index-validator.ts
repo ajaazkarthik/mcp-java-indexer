@@ -72,7 +72,8 @@ export class IndexValidator {
    * 
    * Can be disabled via INDEX_VALIDATOR_DISABLED=true environment variable
    */
-  async checkStaleness(memoryIndex: MemoryIndex): Promise<StaleCheckResult> {
+  async checkStaleness(memoryIndex: MemoryIndex, signal?: AbortSignal): Promise<StaleCheckResult> {
+    signal?.throwIfAborted();
     const startTime = Date.now();
     const result: StaleCheckResult = {
       isStale: false,
@@ -126,6 +127,7 @@ export class IndexValidator {
 
       // Check for deleted files
       for (const indexedFile of indexedFiles) {
+        signal?.throwIfAborted();
         const normalizedPath = normalizePath(indexedFile.path);
         if (!currentFileSet.has(normalizedPath)) {
           result.deletedFiles.push(indexedFile.path);
@@ -134,6 +136,7 @@ export class IndexValidator {
 
       // Check for new and changed files using mtime
       const mtimeChecks = normalizedCurrentFiles.map(async (filePath) => {
+        signal?.throwIfAborted();
         try {
           const stats = await fs.stat(filePath);
           const currentMtime = stats.mtimeMs;
@@ -196,7 +199,8 @@ export class IndexValidator {
     staleResult: StaleCheckResult,
     memoryIndex: MemoryIndex,
     indexerClient: IndexerClient,
-    persistence: Persistence
+    persistence: Persistence,
+    signal?: AbortSignal
   ): Promise<RefreshResult> {
     const startTime = Date.now();
     const result: RefreshResult = {
@@ -253,6 +257,7 @@ export class IndexValidator {
     try {
       // Handle deleted files first
       for (const deletedPath of staleResult.deletedFiles) {
+        signal?.throwIfAborted();
         memoryIndex.removeFile(deletedPath);
         result.filesDeleted++;
       }
@@ -274,12 +279,14 @@ export class IndexValidator {
 
         // Process in batches
         for (let i = 0; i < filesToReindex.length; i += this.MAX_BATCH_SIZE) {
+          signal?.throwIfAborted();
           const batch = filesToReindex.slice(i, Math.min(i + this.MAX_BATCH_SIZE, filesToReindex.length));
           
           try {
             const results = await indexerClient.indexFiles(batch, absoluteSourceRoots);
             
             for (const indexResult of results) {
+              signal?.throwIfAborted();
               if (indexResult.error) {
                 console.error(`[IndexValidator] Error indexing ${indexResult.file}: ${indexResult.error}`);
                 continue;
@@ -353,15 +360,18 @@ export class IndexValidator {
   async ensureFresh(
     memoryIndex: MemoryIndex,
     indexerClient: IndexerClient,
-    persistence: Persistence
+    persistence: Persistence,
+    signal?: AbortSignal
   ): Promise<{ wasStale: boolean; refreshResult?: RefreshResult }> {
-    const staleResult = await this.checkStaleness(memoryIndex);
+    signal?.throwIfAborted();
+    const staleResult = await this.checkStaleness(memoryIndex, signal);
+    signal?.throwIfAborted();
     
     if (!staleResult.isStale) {
       return { wasStale: false };
     }
 
-    const refreshResult = await this.refreshIndex(staleResult, memoryIndex, indexerClient, persistence);
+    const refreshResult = await this.refreshIndex(staleResult, memoryIndex, indexerClient, persistence, signal);
     
     return { wasStale: true, refreshResult };
   }

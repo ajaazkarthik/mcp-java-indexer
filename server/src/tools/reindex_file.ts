@@ -28,8 +28,10 @@ export const reindexFileTool: Tool = {
 export async function handleReindexFile(
   args: any,
   memoryIndex: MemoryIndex,
-  indexerClient: IndexerClient
+  indexerClient: IndexerClient,
+  signal?: AbortSignal
 ) {
+  signal?.throwIfAborted();
   const filePath = args.filePath as string;
   // Only use sourceRoots if explicitly provided; empty array reduces overhead
   const sourceRoots = (args.sourceRoots as string[]) || [];
@@ -48,6 +50,7 @@ export async function handleReindexFile(
     // Reindex file - Skip full type resolution if sourceRoots not provided
     // This dramatically speeds up single file reindexing (43s -> <1s)
     const result = await indexerClient.indexFile(filePath, sourceRoots);
+    signal?.throwIfAborted();
 
     if (result.error) {
       return {
