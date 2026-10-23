@@ -201,6 +201,34 @@ export class Persistence {
     const startTime = Date.now();
     console.error(`💾 Incremental save for ${filePath}...`);
     
+    // Derive the relationships from the file payload when callers supply only
+    // symbols and references (the reindex_file tool uses this contract).
+    if (edges.length === 0) {
+      const byPair = new Map<string, typeof edges[number]>();
+      for (const ref of references) {
+        if (ref.kind !== 'method_call') continue;
+        const key = JSON.stringify([ref.fromFqn, ref.toFqn]);
+        if (!byPair.has(key)) {
+          byPair.set(key, {caller: ref.fromFqn, callee: ref.toFqn, locations: []});
+        }
+        byPair.get(key)!.locations.push({
+          file: ref.file, line: ref.line, column: ref.column
+        });
+      }
+      edges = [...byPair.values()];
+    }
+    if (inheritances.length === 0) {
+      for (const symbol of symbols) {
+        if (!['class','interface','enum','record'].includes(symbol.kind)) continue;
+        const parents = new Set<string>();
+        if (symbol.extends || symbol.extendsClass) parents.add((symbol.extends || symbol.extendsClass)!);
+        for (const iface of symbol.implements || symbol.implementsInterfaces || [])
+          parents.add(iface);
+        for (const parent of parents)
+          inheritances.push({child:symbol.fqn, parent});
+      }
+    }
+
     await this.storage.beginTransaction();
     try {
       // Delete old data for this file first

@@ -54,3 +54,41 @@ test('incremental save retains all unchanged rows on a populated index', async (
     await rm(dir,{recursive:true,force:true});
   }
 });
+
+
+test('incremental reindex preserves call graph and inheritance', async () => {
+  const dir=await mkdtemp(path.join(os.tmpdir(),'index-relations-'));
+  const memory=new MemoryIndex();
+  memory.setIndexDir(dir);
+  const persistence=new Persistence(memory.getIndexDir());
+  try {
+    const file=path.join(dir,'Child.java');
+    const symbols=[
+      {fqn:'example.Child',name:'Child',kind:'class',extendsClass:'example.Parent',
+       file,line:1,column:1,packageName:'example',modifiers:[]},
+      {fqn:'example.Child.run',name:'run',kind:'method',file,line:2,column:1,
+       declaringClass:'example.Child',packageName:'example',modifiers:[]}
+    ];
+    const refs=[{fromFqn:'example.Child.run',toFqn:'example.Service.save',file,
+      line:10,column:4,kind:'method_call'}];
+    await persistence.saveFileIncremental(file,symbols,refs,
+      {path:file,hash:'before',lastIndexed:1,mtime:1,symbols:symbols.map(s=>s.fqn)});
+    const storage=new SqliteStorage(memory.getIndexDir());
+    await storage.initialize();
+    try {
+      assert.equal((await storage.getInboundCalls('example.Service.save')).length,1);
+      assert.deepEqual(await storage.getParents('example.Child'),['example.Parent']);
+    } finally {await storage.close();}
+    await persistence.saveFileIncremental(file,symbols,refs,
+      {path:file,hash:'after',lastIndexed:2,mtime:2,symbols:symbols.map(s=>s.fqn)});
+    const second=new SqliteStorage(memory.getIndexDir());
+    await second.initialize();
+    try {
+      assert.equal((await second.getInboundCalls('example.Service.save')).length,1);
+      assert.equal((await second.getStats()).references,1);
+    } finally {await second.close();}
+  } finally {
+    await persistence.close();
+    await rm(dir,{recursive:true,force:true});
+  }
+});

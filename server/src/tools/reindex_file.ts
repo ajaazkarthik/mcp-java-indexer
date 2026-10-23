@@ -95,7 +95,11 @@ export async function handleReindexFile(
       mtime,
       symbols: symbolFqns
     };
-    await persistence.saveFileIncremental(filePath, result.symbols, result.references, fileInfo);
+    try {
+      await persistence.saveFileIncremental(filePath, result.symbols, result.references, fileInfo);
+    } finally {
+      await persistence.close();
+    }
 
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
 
