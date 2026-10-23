@@ -16,7 +16,7 @@ async function ensureNativeModules(extensionPath: string): Promise<void> {
 	
 	// Check if better-sqlite3 is installed
 	if (!fs.existsSync(betterSqlite3Path)) {
-		console.log('better-sqlite3 not installed, sql.js will be used as fallback');
+		console.error('better-sqlite3 is required but is not installed');
 		return;
 	}
 
@@ -51,7 +51,7 @@ async function ensureNativeModules(extensionPath: string): Promise<void> {
 				console.log('better-sqlite3 rebuilt successfully');
 			} catch (rebuildError: any) {
 				// Silent failure - sql.js fallback will be used
-				console.log('Could not rebuild better-sqlite3, using sql.js fallback:', rebuildError.message);
+				console.error('Could not rebuild required better-sqlite3:', rebuildError.message);
 			}
 		});
 	} catch (error: any) {
@@ -74,15 +74,17 @@ export function activate(context: vscode.ExtensionContext) {
 				const serverPath = path.join(context.extensionPath, 'server', 'dist', 'index.js');
 				console.log('MCP provider called, returning server definition:', serverPath);
 				
-				// CRITICAL: Increase heap size to 8GB to prevent OOM on large projects
-				// Also enable manual GC and expose it via --expose-gc
+				// Use the same RAM-aware cap as the npm start launcher.
+				// Compute this at provider invocation, not extension activation.
+				const { heapLimitMiB } = require('../server/heap-limit.cjs');
+				const heapMiB: number = heapLimitMiB();
 				return [{
 					id: 'java-indexer',
 					label: 'Java Indexer',
 					type: 'stdio' as const,
 					command: 'node',
 					args: [
-						'--max-old-space-size=8192',  // 8GB heap limit
+						'--max-old-space-size=' + heapMiB,
 						'--expose-gc',                 // Enable manual GC
 						serverPath
 					],

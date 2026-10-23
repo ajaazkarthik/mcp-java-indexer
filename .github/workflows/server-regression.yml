@@ -1,0 +1,26 @@
+name: Server regression
+on:
+  push:
+    branches: ['feat/sqlite-3-2-generation']
+  pull_request:
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: Install extension dependencies
+        run: npm ci
+      - name: Type-check VS Code extension heap provider
+        run: npx tsc --noEmit -p tsconfig.json
+      - run: npm ci
+        working-directory: server
+      - run: npm run release:gate
+        working-directory: server
+      - name: 10k-file incremental-save benchmark
+        run: BENCH_10K=1 node --test tests/storage-incremental.test.mjs
+        working-directory: server

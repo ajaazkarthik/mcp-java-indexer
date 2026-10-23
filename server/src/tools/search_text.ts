@@ -27,8 +27,14 @@ export const searchTextTool: Tool = {
 
 export async function handleSearchText(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled server/src/tools/search_text.ts');
+    return {content:[{type:'text',text:'Request cancelled'}],isError:true};
+  }
+
   const pattern = args.pattern as string;
   const isRegex = (args.isRegex as boolean) || false;
   const maxResults = (args.maxResults as number) || 200; // Increased default for better coverage
@@ -71,12 +77,21 @@ export async function handleSearchText(
     let totalFiles = files.length;
 
     for (const fileInfo of files) {
+      if (signal?.aborted) throw new Error('Request cancelled');
       filesSearched++;
+      if (filesSearched % 64 === 0) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+        if (signal?.aborted) {
+          console.error('[MCP] cancelled server/src/tools/search_text.ts');
+          throw new Error('Request cancelled');
+        }
+      }
       try {
         const content = await fs.readFile(fileInfo.path, 'utf-8');
         const lines = content.split('\n');
 
         for (let i = 0; i < lines.length; i++) {
+          if ((i & 255) === 0 && signal?.aborted) throw new Error('Request cancelled');
           // Create new regex for each line to avoid lastIndex issues
           const lineRegex = new RegExp(pattern, 'gi');
           if (lineRegex.test(lines[i])) {
@@ -94,6 +109,7 @@ export async function handleSearchText(
           break;
         }
       } catch (error) {
+        if (signal?.aborted) throw error;
         // Skip files that can't be read
         continue;
       }

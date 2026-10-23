@@ -23,8 +23,14 @@ export const testCoverageTool: Tool = {
 
 export async function handleTestCoverage(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled test_coverage');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   const symbolFqn = args.symbolFqn as string;
   const includeIndirect = args.includeIndirect !== false;
 

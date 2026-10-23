@@ -24,8 +24,14 @@ export const explainCodeTool: Tool = {
 
 export async function handleExplainCode(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled explain_code');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   const symbolFqn = args.symbolFqn as string;
   const verbosity = (args.verbosity as string) || 'detailed';
 

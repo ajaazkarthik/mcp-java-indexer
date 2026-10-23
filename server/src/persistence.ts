@@ -85,106 +85,93 @@ export class Persistence {
    * Each save method handles its own transactions internally
    */
   private async saveToStorage(data: any): Promise<void> {
-    if (!this.storage) return;
-    
-    const startTime = Date.now();
-    console.error(`💾 Saving to ${this.storageType} storage...`);
-    
-    try {
-      // Clear existing data first
-      await this.storage.clear();
-      
-      // data.symbols is [[fqn, stub], ...] from Map.entries()
-      // Convert to [stub, ...] for storage
-      if (data.symbols && data.symbols.length > 0) {
-        const symbolsToSave = data.symbols.map((entry: [string, any]) => entry[1]);
-        await this.storage.saveSymbols(symbolsToSave);
-      }
-      
-      // Save references in batches (handles own transaction)
-      if (data.references && data.references.length > 0) {
-        await this.storage.saveReferences(data.references);
-      }
-      
-      // Save call graph edges (handles own transaction)
-      // FIX: Use iterative push instead of spread operator to prevent stack overflow with 1.5M+ edges
-      if (data.callGraph && data.callGraph.length > 0) {
-        const forwardEdges: any[] = [];
-        for (const entry of data.callGraph) {
-          const edges = entry[1];
-          for (let i = 0; i < edges.length; i++) {
-            forwardEdges.push(edges[i]);
-          }
-        }
-        if (forwardEdges.length > 0) {
-          await this.storage.saveCallEdges(forwardEdges, 'forward');
-        }
-      }
-      // FIX: Use iterative push instead of spread operator to prevent stack overflow with 1.5M+ edges
-      if (data.reverseCallGraph && data.reverseCallGraph.length > 0) {
-        const reverseEdges: any[] = [];
-        for (const entry of data.reverseCallGraph) {
-          const edges = entry[1];
-          for (let i = 0; i < edges.length; i++) {
-            reverseEdges.push(edges[i]);
-          }
-        }
-        if (reverseEdges.length > 0) {
-          await this.storage.saveCallEdges(reverseEdges, 'reverse');
-        }
-      }
-      
-      // Save inheritance (handles own transaction)
-      if (data.inheritance && data.inheritance.length > 0) {
-        const relationships: Array<{ child: string; parent: string }> = [];
-        for (const [child, parents] of data.inheritance) {
-          for (const parent of parents) {
-            relationships.push({ child, parent });
-          }
-        }
-        if (relationships.length > 0) {
-          await this.storage.saveInheritances(relationships);
-        }
-      }
-      
-      // Save files - data.files is [[path, info], ...] from Map.entries()
-      if (data.files && data.files.length > 0) {
-        for (const entry of data.files) {
-          await this.storage.saveFile(entry[1]); // entry[1] is the FileInfo
-        }
-      }
-      
-      // Flush to disk immediately (noop for better-sqlite3 but required by interface)
-      await this.storage.flush();
-      
-      // Also save metadata JSON for compatibility
-      const metadata = {
-        version: '2.0', // Version 2.0 uses storage backend
-        timestamp: Date.now(),
-        projectRootDir: data.projectRootDir || '',
-        storageType: this.storageType,
-        stats: {
-          symbols: data.symbols?.length || 0,
-          files: data.files?.length || 0,
-          indexedFiles: data.indexedFiles?.length || 0,
-          references: data.references?.length || 0
-        }
-      };
-      
-      await fs.writeFile(
-        path.join(this.indexDir, 'metadata.json'),
-        JSON.stringify(metadata, null, 2),
-        'utf-8'
-      );
-      
-      const duration = Date.now() - startTime;
-      console.error(`✅ Index saved to ${this.storageType} storage (${duration}ms)`);
-      
-    } catch (error) {
-      console.error('❌ Storage save failed:', error);
-      // Database storage is required - rethrow the error
-      throw new Error(`Failed to save index to ${this.storageType} storage: ${error}`);
+    if (!this.storage) throw new Error('Storage not initialized');
+
+    const began = Date.now();
+    const oldFiles = new Map((await this.storage.getAllFiles()).map(f => [f.path, f]));
+    const newFiles = new Map<string, FileInfo>(data.files || []);
+    const symbolsByFile = new Map<string, SymbolStub[]>();
+    const refsByFile = new Map<string, Reference[]>();
+    const edgesByFile = new Map<string, any[]>();
+    const symbolFiles = new Map<string, string>();
+
+    for (const [, symbol] of data.symbols || []) {
+      symbolFiles.set(symbol.fqn, symbol.file);
+      if (!symbolsByFile.has(symbol.file)) symbolsByFile.set(symbol.file, []);
+      symbolsByFile.get(symbol.file)!.push(symbol);
     }
+    for (const ref of data.references || []) {
+      if (!refsByFile.has(ref.file)) refsByFile.set(ref.file, []);
+      refsByFile.get(ref.file)!.push(ref);
+    }
+    // Keep only locations belonging to each changed file; call graph entries
+    // for untouched files are not rewritten.
+    for (const [, edges] of data.callGraph || []) {
+      for (const edge of edges) {
+        const locations = new Map<string, any[]>();
+        for (const loc of edge.locations) {
+          if (!locations.has(loc.file)) locations.set(loc.file, []);
+          locations.get(loc.file)!.push(loc);
+        }
+        for (const [file, locs] of locations) {
+          if (!edgesByFile.has(file)) edgesByFile.set(file, []);
+          edgesByFile.get(file)!.push({ ...edge, locations: locs });
+        }
+      }
+    }
+    const inheritanceByFile = new Map<string, Array<{child: string; parent: string}>>();
+    for (const [child, parents] of data.inheritance || []) {
+      const file = symbolFiles.get(child);
+      if (!file) continue;
+      if (!inheritanceByFile.has(file)) inheritanceByFile.set(file, []);
+      for (const parent of parents) inheritanceByFile.get(file)!.push({child, parent});
+    }
+
+    let changed = 0;
+    let deleted = 0;
+    for (const file of oldFiles.keys()) {
+      if (!newFiles.has(file)) {
+        await this.storage.deleteFile(file);
+        deleted++;
+      }
+    }
+
+    if (oldFiles.size === 0) {
+      // First save of a freshly built index: retain batch transactions and
+      // avoid the per-file SQLite transaction overhead.
+      await this.storage.saveSymbols((data.symbols || []).map((entry: any) => entry[1]));
+      await this.storage.saveReferences(data.references || []);
+      const forward = [...edgesByFile.values()].flat();
+      await this.storage.saveCallEdges(forward, 'forward');
+      await this.storage.saveInheritances([...inheritanceByFile.values()].flat());
+      for (const file of newFiles.values()) await this.storage.saveFile(file);
+      changed = newFiles.size;
+    } else {
+      for (const [filePath, file] of newFiles) {
+        const previous = oldFiles.get(filePath);
+        if (!previous || previous.hash !== file.hash || previous.lastIndexed !== file.lastIndexed) {
+          await this.saveFileIncremental(
+            filePath, symbolsByFile.get(filePath) || [],
+            refsByFile.get(filePath) || [], file,
+            edgesByFile.get(filePath) || [],
+            inheritanceByFile.get(filePath) || []);
+          changed++;
+        } else if (previous.mtime !== file.mtime) {
+          // mtime-only updates avoid reindexing or replacing symbol rows.
+          await this.storage.saveFile(file);
+        }
+      }
+    }
+
+    await this.storage.flush();
+    const stats = await this.storage.getStats();
+    await fs.writeFile(path.join(this.indexDir, 'metadata.json'), JSON.stringify({
+      version: '3.2', timestamp: Date.now(),
+      projectRootDir: data.projectRootDir || '', storageType: this.storageType,
+      stats: { symbols: stats.symbols, files: stats.allFiles,
+        indexedFiles: stats.indexedFiles, references: stats.references }
+    }, null, 2), 'utf-8');
+    console.error(`✅ SQLite delta persisted: ${changed} changed, ${deleted} deleted (${Date.now() - began} ms)`);
   }
 
   /**
@@ -200,7 +187,9 @@ export class Persistence {
     filePath: string,
     symbols: SymbolStub[],
     references: Reference[],
-    fileInfo: FileInfo
+    fileInfo: FileInfo,
+    edges: Array<{caller: string; callee: string; locations: Array<{file: string; line: number; column: number}>}> = [],
+    inheritances: Array<{ child: string; parent: string }> = []
   ): Promise<void> {
     await this.waitForStorage();
     
@@ -211,6 +200,35 @@ export class Persistence {
     const startTime = Date.now();
     console.error(`💾 Incremental save for ${filePath}...`);
     
+    // Derive the relationships from the file payload when callers supply only
+    // symbols and references (the reindex_file tool uses this contract).
+    if (edges.length === 0) {
+      const byPair = new Map<string, typeof edges[number]>();
+      for (const ref of references) {
+        if (ref.kind !== 'method_call') continue;
+        const key = JSON.stringify([ref.fromFqn, ref.toFqn]);
+        if (!byPair.has(key)) {
+          byPair.set(key, {caller: ref.fromFqn, callee: ref.toFqn, locations: []});
+        }
+        byPair.get(key)!.locations.push({
+          file: ref.file, line: ref.line, column: ref.column
+        });
+      }
+      edges = [...byPair.values()];
+    }
+    if (inheritances.length === 0) {
+      for (const symbol of symbols) {
+        if (!['class','interface','enum','record'].includes(symbol.kind)) continue;
+        const parents = new Set<string>();
+        if (symbol.extends || symbol.extendsClass) parents.add((symbol.extends || symbol.extendsClass)!);
+        for (const iface of symbol.implements || symbol.implementsInterfaces || [])
+          parents.add(iface);
+        for (const parent of parents)
+          inheritances.push({child:symbol.fqn, parent});
+      }
+    }
+
+    await this.storage.beginTransaction();
     try {
       // Delete old data for this file first
       await this.storage.deleteFile(filePath);
@@ -225,8 +243,17 @@ export class Persistence {
         await this.storage.saveReferences(references);
       }
       
+      // Rebuild call edges and inheritance for this file, both directions.
+      if (edges.length > 0) {
+        await this.storage.saveCallEdges(edges, 'forward');
+      }
+      if (inheritances.length > 0) {
+        await this.storage.saveInheritances(inheritances);
+      }
+
       // Save file metadata
       await this.storage.saveFile(fileInfo);
+      await this.storage.commitTransaction();
       
       // Flush to ensure data is persisted
       await this.storage.flush();
@@ -235,6 +262,7 @@ export class Persistence {
       console.error(`✅ Incremental save complete: ${symbols.length} symbols, ${references.length} refs (${duration}ms)`);
       
     } catch (error) {
+      await this.storage.rollbackTransaction();
       console.error('❌ Incremental save failed:', error);
       throw new Error(`Failed incremental save for ${filePath}: ${error}`);
     }
@@ -283,67 +311,28 @@ export class Persistence {
    */
   private async loadFromStorage(memoryIndex: MemoryIndex): Promise<boolean> {
     if (!this.storage) return false;
-    
-    try {
-      // Check if storage has data
-      const stats = await this.storage.getStats();
-      if (stats.symbols === 0) {
-        return false; // Empty storage
-      }
-      
-      // Load all data from storage
-      const symbols = await this.storage.getAllSymbols();
-      const references = await this.storage.getAllReferences();
-      const callGraph = await this.storage.getAllCallGraphEdges();
-      const files = await this.storage.getAllFiles();
-      
-      // Convert to MemoryIndex format - symbols and files need to be [key, value] pairs for Map constructor
-      const data: any = {
-        projectRootDir: '',
-        symbols: symbols.map(s => [s.fqn, s]),  // Convert to [fqn, stub] pairs for Map
-        files: files.map(f => [f.path, f]),     // Convert to [path, info] pairs for Map
-        indexedFiles: files.map((f: FileInfo) => f.path),
-        references: references,
-        referencesByFile: this.groupReferencesByFile(references),
-        callGraph: this.convertCallGraphToArray(callGraph, 'outbound'),
-        reverseCallGraph: this.convertCallGraphToArray(callGraph, 'inbound'),
-        inheritance: [],
-        reverseInheritance: []
-      };
-      
-      // Load inheritance from symbols
-      // FIX: Use iterative push instead of spread operator to prevent stack overflow
-      for (const symbol of symbols) {
-        if (symbol.kind === 'class' || symbol.kind === 'interface') {
-          const parents: string[] = [];
-          if ((symbol as any).extendsClass) parents.push((symbol as any).extendsClass);
-          if ((symbol as any).implementsInterfaces) {
-            const interfaces = (symbol as any).implementsInterfaces;
-            for (let i = 0; i < interfaces.length; i++) {
-              parents.push(interfaces[i]);
-            }
-          }
-          if (parents.length > 0) {
-            data.inheritance.push([symbol.fqn, parents]);
-            // Build reverse inheritance
-            for (const parent of parents) {
-              const existing = data.reverseInheritance.find((r: any) => r[0] === parent);
-              if (existing) {
-                existing[1].push(symbol.fqn);
-              } else {
-                data.reverseInheritance.push([parent, [symbol.fqn]]);
-              }
-            }
-          }
-        }
-      }
-      
-      memoryIndex.fromJSON(data);
-      return true;
-    } catch (error) {
-      console.error('Failed to load from storage:', error);
-      return false;
-    }
+    const stats = await this.storage.getStats();
+    if (stats.symbols === 0) return false;
+
+    // Only file metadata is needed for staleness checks and incremental writes.
+    // Never load all symbols/refs/edges into the Node heap at startup.
+    const files = await this.storage.getAllFiles();
+    const metadata = await this.getMetadata() as
+      ({projectRootDir?:string}|null);
+    memoryIndex.fromJSON({
+      projectRootDir: metadata?.projectRootDir || '',
+      symbols: [], references: [], callGraph: [], reverseCallGraph: [],
+      inheritance: [], reverseInheritance: [],
+      files: files.map(file=>[file.path,file]),
+      indexedFiles: files.map(file=>file.path)
+    });
+    memoryIndex.setPersistedStats({
+      symbols:stats.symbols,files:stats.indexedFiles,
+      indexedFiles:stats.indexedFiles,allFiles:stats.allFiles,
+      references:stats.references,callGraphEdges:stats.callGraphEdges,
+      inheritanceRelations:stats.inheritanceRelations
+    });
+    return true;
   }
 
   /**
@@ -459,6 +448,20 @@ export class Persistence {
   }
 
   // Clear index
+  async runMaintenance(): Promise<void> {
+    await this.waitForStorage();
+    if (this.storage instanceof (await import('./storage/sqlite-storage.js')).SqliteStorage) {
+      await this.storage.runMaintenance();
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.waitForStorage();
+    await this.storage?.close();
+    this.storage = null;
+    this.storageInitialized = false;
+  }
+
   async clear(): Promise<void> {
     try {
       const files = await fs.readdir(this.indexDir);

@@ -29,15 +29,23 @@ export const semanticSearchTool: Tool = {
 
 export async function handleSemanticSearch(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled server/src/tools/semantic_search.ts');
+    return {content:[{type:'text',text:'Request cancelled'}],isError:true};
+  }
+
   const query = (args.query as string).toLowerCase();
   const scope = (args.scope as string) || 'all';
   const limit = (args.limit as number) || 20;
 
   try {
-    const allSymbols = Array.from(memoryIndex.getAllSymbols());
+    const allSymbols = memoryIndex.getAllSymbols();
     const results: any[] = [];
+    let totalMatches = 0;
+    let scanned = 0;
 
     // Pattern detection keywords
     const patterns = {
@@ -78,6 +86,13 @@ export async function handleSemanticSearch(
 
     // Score and filter symbols
     for (const [fqn, symbol] of allSymbols) {
+      if (++scanned % 512 === 0) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+        if (signal?.aborted) {
+          console.error('[MCP] cancelled server/src/tools/semantic_search.ts');
+          throw new Error('Request cancelled');
+        }
+      }
       // Apply scope filter
       if (scope !== 'all') {
         if (scope === 'methods' && symbol.kind !== 'method') continue;
@@ -183,11 +198,14 @@ export async function handleSemanticSearch(
       }
 
       if (score > 0) {
-        results.push({
-          symbol,
-          score,
-          reasons
-        });
+        totalMatches++;
+        results.push({ symbol, score, reasons });
+        // Keep a bounded working set instead of retaining every matching
+        // symbol on large repositories.
+        if (results.length > Math.max(limit, 1) * 2) {
+          results.sort((a,b) => b.score-a.score);
+          results.length = Math.max(limit, 1);
+        }
       }
     }
 
@@ -209,8 +227,8 @@ export async function handleSemanticSearch(
     report += `**Query**: "${args.query}"\n`;
     report += `**Scope**: ${scope}\n`;
     report += `**Found**: ${topResults.length} relevant symbols`;
-    if (results.length > limit) {
-      report += ` (showing top ${limit} of ${results.length})`;
+    if (totalMatches > limit) {
+      report += ` (showing top ${limit} of ${totalMatches})`;
     }
     report += `\n\n`;
 

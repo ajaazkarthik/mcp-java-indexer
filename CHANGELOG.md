@@ -5,6 +5,32 @@ All notable changes to the Java Indexer MCP extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-10-23
+
+### A. On-disk query paths
+- Indexed binary ranges for class-origin reference lookups instead of non-indexable `LIKE` prefixes.
+- Exact-hit-first inbound/outbound call traversal, with indexed simple-name fallbacks.
+- Indexed `getMembers` and `findClassesByName` queries replacing targeted whole-index loops.
+- Eager prepared statement caching and constant-time `DiskSymbolMap.has` with cached size.
+
+### B. Runtime launcher
+- Common RAM-aware Node old-space sizing in VS Code provider and `npm start`, with `JAVA_INDEXER_HEAP_MB` override.
+
+### C. Schema upgrades
+- Deterministic built-in-SQL reference expression, removing connection-registered function dependency.
+- Atomic `schema_version=3` migration and explicit index changes.
+- Removed unused `call_edges_reverse`, using forward-edge callee index.
+
+### D. Project roots
+- QueryService receives the normalized project root supplied by `index_project`.
+
+### E. Real release checks
+- Release gate runs 50,000-symbol / 200,000-reference `QueryService` tests for indexed plans, timings, statement counts and post-load heap.
+- Lookup tests exercise QueryService directly instead of a storage implementation that MCP tools never query.
+
+### Remaining limitation
+- Peak `index_project` memory can still scale with input size. Batch-to-SQLite streaming tracked separately.
+
 ## [2.9.2] - 2025-01-XX
 
 ### 🔴 Critical Bugfixes

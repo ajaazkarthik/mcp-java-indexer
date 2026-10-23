@@ -112,8 +112,10 @@ export async function handleIndexProject(
   args: any,
   memoryIndex: MemoryIndex,
   indexerClient: IndexerClient,
-  setWatcher: (watcher: FileSystemWatcher, persistence: Persistence) => void
+  setWatcher: (watcher: FileSystemWatcher, persistence: Persistence, normalizedRootDir: string) => void,
+  signal?: AbortSignal
 ) {
+  signal?.throwIfAborted();
   // Normalize rootDir to use forward slashes consistently (critical for Windows)
   // Use normalizeAbsolutePath to resolve to absolute path AND handle case sensitivity
   const rootDir = normalizeAbsolutePath(args.rootDir as string);
@@ -231,6 +233,7 @@ export async function handleIndexProject(
       
       let mtimeSyncCount = 0;
       for (const file of javaFiles) {
+        signal?.throwIfAborted();
         const needsReindex = await memoryIndex.needsReindex(file);
         if (needsReindex) {
           filesToIndex.push(file);
@@ -283,7 +286,7 @@ export async function handleIndexProject(
         // Still start file watcher
         const watcher = new FileSystemWatcher(rootDir, absoluteSourceRoots, memoryIndex, indexerClient, persistence);
         watcher.start();
-        setWatcher(watcher, persistence);
+        setWatcher(watcher, persistence, rootDir);
         
         return {
           content: [{
@@ -326,6 +329,7 @@ ${freshnessInfo}
     console.error(`⚡ Optimized batch size for performance and stability`);
 
     for (let i = 0; i < filesToIndex.length; i += batchSize) {
+      signal?.throwIfAborted();
       const batch = filesToIndex.slice(i, Math.min(i + batchSize, filesToIndex.length));
       batchCount++;
       const batchStartTime = Date.now();
@@ -333,6 +337,7 @@ ${freshnessInfo}
       const results = await indexerClient.indexFiles(batch, absoluteSourceRoots);
 
       for (const result of results) {
+        signal?.throwIfAborted();
         if (result.error) {
           console.error(`⚠️  Error indexing ${result.file}: ${result.error}`);
           errorCount++;
@@ -439,7 +444,10 @@ ${freshnessInfo}
       }
       
       await persistence.save(memoryIndex);
-      console.error(`✅ Index persisted successfully`);
+      // Release newly indexed symbols, references, and graph edges after commit.
+      // Continue with only file metadata and persisted statistics in RAM.
+      await persistence.load(memoryIndex);
+      console.error(`✅ Index persisted successfully (query data kept in SQLite)`);
     }
 
     profiler.mark('persistence_saved');
@@ -447,7 +455,7 @@ ${freshnessInfo}
     // Start file watcher
     const watcher = new FileSystemWatcher(rootDir, absoluteSourceRoots, memoryIndex, indexerClient, persistence);
     watcher.start();
-    setWatcher(watcher, persistence);
+    setWatcher(watcher, persistence, rootDir);
 
     const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
     const stats = memoryIndex.getStats();

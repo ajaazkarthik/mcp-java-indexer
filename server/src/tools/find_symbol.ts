@@ -30,8 +30,14 @@ export const findSymbolTool: Tool = {
 
 export async function handleFindSymbol(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled server/src/tools/find_symbol.ts');
+    return {content:[{type:'text',text:'Request cancelled'}],isError:true};
+  }
+
   const name = args.name as string;
 
   try {

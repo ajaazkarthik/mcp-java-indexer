@@ -37,8 +37,14 @@ export const callGraphTool: Tool = {
 
 export async function handleCallGraph(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled call_graph');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   const fqn = args.fqn as string;
 
   try {

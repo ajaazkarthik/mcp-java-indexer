@@ -59,6 +59,11 @@ export class MemoryIndex {
 
   private indexDir: string = '';
   private projectRootDir: string = ''; // The project root that was indexed
+  private persistedStats: {symbols:number;files:number;indexedFiles:number;allFiles:number;references:number;callGraphEdges:number;inheritanceRelations:number} | null = null;
+
+  setPersistedStats(stats: {symbols:number;files:number;indexedFiles:number;allFiles:number;references:number;callGraphEdges:number;inheritanceRelations:number}): void {
+    this.persistedStats = stats;
+  }
 
   constructor() {}
 
@@ -110,6 +115,25 @@ export class MemoryIndex {
   getSymbol(fqn: string): SymbolStub | undefined {
     return this.symbols.get(fqn);
   }
+
+  // Member lookup used by the on-disk QueryService and in-memory index alike.
+  getMembers(classFqn: string): SymbolStub[] {
+    const prefix = classFqn + '.';
+    return [...this.symbols.values()].filter(s =>
+      s.fqn.startsWith(prefix) || s.declaringClass === classFqn);
+  }
+
+  findClassesByName(name: string): SymbolStub[] {
+    const kinds = new Set(['class', 'interface', 'enum', 'record']);
+    const result: SymbolStub[] = [];
+    for (const symbol of this.symbols.values()) {
+      if (symbol.name === name && kinds.has(symbol.kind)) result.push(symbol);
+      if (result.length >= 50) break;
+    }
+    return result;
+  }
+
+  wasUsageSearchTruncated(): boolean { return false; }
 
   // Get all symbols (for semantic search and code explanation)
   getAllSymbols(): Map<string, SymbolStub> {
@@ -811,7 +835,8 @@ export class MemoryIndex {
   }
 
   // Get statistics
-  getStats() {
+  getStats(): {symbols:number;files:number;indexedFiles:number;allFiles:number;references:number;callGraphEdges:number;inheritanceRelations:number} {
+    if (this.persistedStats) return {...this.persistedStats};
     return {
       symbols: this.symbols.size,
       files: this.indexedFiles.size,
@@ -861,6 +886,7 @@ export class MemoryIndex {
 
   // Clear all data
   clear(): void {
+    this.persistedStats = null;
     this.symbols.clear();
     this.files.clear();
     this.indexedFiles.clear();

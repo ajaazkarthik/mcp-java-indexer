@@ -31,8 +31,14 @@ export const codeGenerationTool: Tool = {
 
 export async function handleCodeGeneration(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled code_generation');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   const pattern = args.pattern as string;
   const basedOn = args.basedOn as string | undefined;
   const targetName = args.targetName as string;

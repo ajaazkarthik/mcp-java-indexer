@@ -1221,8 +1221,14 @@ function estimateEffort(categories: ScanMigrationResult['categories']): string {
 
 export async function handleScanMigrationCandidates(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled server/src/tools/scan_migration_candidates.ts');
+    return {content:[{type:'text',text:'Request cancelled'}],isError:true};
+  }
+
   const startTime = Date.now();
   
   try {
@@ -1261,8 +1267,16 @@ export async function handleScanMigrationCandidates(
     const allSymbols = memoryIndex.getAllSymbols();
     const packageClasses: SymbolStub[] = [];
     const sourcePackagePrefix = input.sourcePackage + '.';
-    
+    let scannedSymbols = 0;
+
     for (const [fqn, stub] of allSymbols) {
+      if (++scannedSymbols % 512 === 0) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+        if (signal?.aborted) {
+          console.error('[MCP] cancelled server/src/tools/scan_migration_candidates.ts');
+          throw new Error('Request cancelled');
+        }
+      }
       // Only include top-level classes/interfaces/enums/records (not methods/fields)
       if (stub.kind !== 'class' && stub.kind !== 'interface' && stub.kind !== 'enum' && stub.kind !== 'record') {
         continue;
@@ -1563,13 +1577,8 @@ export async function handleScanMigrationCandidates(
       // ========================================================================
       
       // Find all methods belonging to this class
-      const classMethods: SymbolStub[] = [];
-      for (const [symbolFqn, s] of allSymbols) {
-        if ((symbolFqn.startsWith(stub.fqn + '.') || s.declaringClass === stub.fqn) && 
-            (s.kind === 'method' || s.kind === 'constructor')) {
-          classMethods.push(s);
-        }
-      }
+      const classMethods = memoryIndex.getMembers(stub.fqn)
+        .filter(s => s.kind === 'method' || s.kind === 'constructor');
       
       // Analyze outbound calls from each method (like explore_class does)
       for (const method of classMethods) {

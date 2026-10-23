@@ -23,8 +23,14 @@ export const analyzeImpactTool: Tool = {
 
 export async function handleAnalyzeImpact(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled analyze_impact');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   const symbolFqn = args.symbolFqn as string;
   const depth = (args.depth as number) || 3;
 

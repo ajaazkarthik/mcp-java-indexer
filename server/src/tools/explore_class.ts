@@ -42,8 +42,14 @@ This is more efficient than calling find_symbol + explain_code + call_graph + fi
 
 export async function handleExploreClass(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled explore_class');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   const className = args.className as string;
   const includeMethodDetails = args.includeMethodDetails === true;
   const directOnly = args.directOnly === true;
@@ -55,15 +61,8 @@ export async function handleExploreClass(
     
     // If no exact match, try to find class by simple name
     if (classSymbols.length === 0) {
-      const allSymbols = memoryIndex.getAllSymbols();
-      const simpleName = className.split('.').pop()?.toLowerCase() || className.toLowerCase();
-      
-      for (const [fqn, stub] of allSymbols) {
-        if ((stub.kind === 'class' || stub.kind === 'interface' || stub.kind === 'enum') &&
-            stub.name.toLowerCase() === simpleName) {
-          classSymbols.push(stub);
-        }
-      }
+      const simpleName = className.split('.').pop() || className;
+      classSymbols.push(...memoryIndex.findClassesByName(simpleName));
     }
     
     // If we have multiple matches, prefer exact name match over partial match
@@ -129,14 +128,13 @@ export async function handleExploreClass(
     result.push('');
 
     // Members - Methods and Fields (find by FQN prefix since declaringClass may not be set)
-    const allSymbols = memoryIndex.getAllSymbols();
+    const members = memoryIndex.getMembers(fqn);
     const methods: SymbolStub[] = [];
     const fields: SymbolStub[] = [];
     const constructors: SymbolStub[] = [];
-    
-    for (const [symbolFqn, s] of allSymbols) {
-      // Check if symbol belongs to this class (FQN starts with class FQN)
-      if (symbolFqn.startsWith(fqn + '.') || s.declaringClass === fqn) {
+
+    for (const s of members) {
+      {
         if (s.kind === 'method') methods.push(s);
         else if (s.kind === 'field') fields.push(s);
         else if (s.kind === 'constructor') constructors.push(s);

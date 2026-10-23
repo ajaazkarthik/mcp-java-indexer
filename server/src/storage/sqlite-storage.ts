@@ -8,6 +8,7 @@ import * as fs from 'fs/promises';
 import { IIndexStorage, IndexStats, StorageQueryOptions } from './index-storage.js';
 import { SymbolStub, Reference, CallGraphEdge, FileInfo } from '../memory-index.js';
 import Database from 'better-sqlite3';
+import {simpleNameSql, simpleNameOf} from './sql-expressions.js';
 
 export class SqliteStorage implements IIndexStorage {
   private db: Database.Database | null = null;
@@ -18,7 +19,7 @@ export class SqliteStorage implements IIndexStorage {
     this.dbPath = path.join(indexDir, 'index.db');
   }
 
-  async initialize(): Promise<void> {
+  async initialize(options?: { deferMigration?: boolean }): Promise<void> {
     // Ensure directory exists
     const dir = path.dirname(this.dbPath);
     await fs.mkdir(dir, { recursive: true });
@@ -29,11 +30,22 @@ export class SqliteStorage implements IIndexStorage {
     // Enable WAL mode for better concurrency
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL'); // Faster writes, safe enough
-    this.db.pragma('cache_size = -64000'); // 64MB cache
+    this.db.pragma('cache_size = -131072'); // 128 MiB cache
     this.db.pragma('temp_store = MEMORY');
+    this.db.pragma('mmap_size = 4294967296'); // 4 GiB mmap (virtual address space)
+    this.db.pragma('busy_timeout = 5000');
 
-    // Create tables
+    // Schema upgrades are explicit: do not build large reference indexes in
+    // CREATE TABLE bootstrap before the migration version is checked.
+    const existing = Boolean(this.db.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbols'"
+    ).get());
     this.createTables();
+    const estimatedIndexes = this.estimateMigrationIndexCount();
+    if (!options?.deferMigration) {
+      console.error(`Schema migration check: ${estimatedIndexes} indexes to build or verify`);
+      this.migrateSchema(existing);
+    }
     
     console.error('✅ SQLite storage initialized at', this.dbPath);
   }
@@ -53,9 +65,11 @@ export class SqliteStorage implements IIndexStorage {
         package TEXT,
         data TEXT NOT NULL  -- JSON-encoded SymbolStub
       );
-      CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+      -- (name, kind) also serves name-only queries; avoid a redundant name index.
       CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file);
       CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
+
+      CREATE TABLE IF NOT EXISTS schema_version(version INTEGER NOT NULL);
 
       -- References table (using refs to avoid reserved word)
       CREATE TABLE IF NOT EXISTS refs (
@@ -67,7 +81,6 @@ export class SqliteStorage implements IIndexStorage {
         col INTEGER,
         kind TEXT NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS idx_refs_to ON refs(to_fqn);
       CREATE INDEX IF NOT EXISTS idx_refs_from ON refs(from_fqn);
       CREATE INDEX IF NOT EXISTS idx_refs_file ON refs(file);
 
@@ -79,15 +92,6 @@ export class SqliteStorage implements IIndexStorage {
         PRIMARY KEY (caller, callee)
       );
       CREATE INDEX IF NOT EXISTS idx_edges_fwd_callee ON call_edges_forward(callee);
-
-      -- Call graph edges (reverse: callee -> caller)
-      CREATE TABLE IF NOT EXISTS call_edges_reverse (
-        callee TEXT NOT NULL,
-        caller TEXT NOT NULL,
-        locations TEXT NOT NULL,  -- JSON array
-        PRIMARY KEY (callee, caller)
-      );
-      CREATE INDEX IF NOT EXISTS idx_edges_rev_caller ON call_edges_reverse(caller);
 
       -- Inheritance (child -> parent)
       CREATE TABLE IF NOT EXISTS inheritance (
@@ -109,6 +113,72 @@ export class SqliteStorage implements IIndexStorage {
     `);
 
     this.ensureColumnExists('files', 'mtime', 'INTEGER');
+  }
+
+  estimateMigrationIndexCount(): number {
+    if (!this.db) throw new Error('Database not initialized');
+    const current = this.db.prepare('SELECT version FROM schema_version LIMIT 1')
+      .get() as {version:number}|undefined;
+    if (current?.version === 4) return 0;
+    const targets = ['idx_symbols_name_kind','idx_refs_to_name','idx_refs_to_covering',
+      'idx_symbols_declaring','idx_edges_fwd_caller_name','idx_edges_fwd_callee_name'];
+    const existing = new Set((this.db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='index'"
+    ).all() as Array<{name:string}>).map(row=>row.name));
+    return targets.filter(name=>!existing.has(name)).length + (current?.version === 3 ? 3 : 0);
+  }
+
+  /** Upgrade existing indexes without holding an all-index DDL transaction.
+   * Each CREATE is atomic on its own; if interrupted, the next open retries.
+   */
+  public migrateSchema(existing = true): void {
+    if (!this.db) throw new Error('Database not initialized');
+    const stored = this.db.prepare('SELECT version FROM schema_version LIMIT 1')
+      .get() as {version:number}|undefined;
+    if (stored?.version === 4) return;
+    if (existing) {
+      console.error('Migrating index to schema 4: building reference indexes, may take several minutes on large databases');
+    }
+    // Only drop obsolete or legacy-expression indexes; preserve already rebuilt
+    // indexes after an interrupted migration.
+    const named = this.db.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_refs_to_name'")
+      .get() as {sql:string}|undefined;
+    const oldFunctionIndex = named?.sql?.includes('ref_simple_name(') ?? false;
+    this.db.transaction(() => {
+      this.db!.exec(`
+        DROP INDEX IF EXISTS idx_symbols_name;
+        DROP INDEX IF EXISTS idx_refs_to;
+        DROP INDEX IF EXISTS idx_edges_rev_caller;
+        DROP TABLE IF EXISTS call_edges_reverse;
+      `);
+      if (oldFunctionIndex) this.db!.exec('DROP INDEX IF EXISTS idx_refs_to_name');
+      // v4 changes extraction to ignore periods in parameter types.
+      for (const name of ['idx_refs_to_name','idx_edges_fwd_caller_name','idx_edges_fwd_callee_name']) {
+        const info = this.db!.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name=?")
+          .get(name) as {sql:string}|undefined;
+        if (info && !info.sql.includes('CASE WHEN instr('))
+          this.db!.exec('DROP INDEX IF EXISTS '+name);
+      }
+    })();
+
+    const statements = [
+      ["idx_symbols_name_kind", "CREATE INDEX IF NOT EXISTS idx_symbols_name_kind ON symbols(name, kind)"],
+      ["idx_refs_to_name", `CREATE INDEX IF NOT EXISTS idx_refs_to_name ON refs(${simpleNameSql('to_fqn')} COLLATE NOCASE, to_fqn)`],
+      ["idx_refs_to_covering", "CREATE INDEX IF NOT EXISTS idx_refs_to_covering ON refs(to_fqn, id, from_fqn, file, line, col, kind)"],
+      ["idx_symbols_declaring", "CREATE INDEX IF NOT EXISTS idx_symbols_declaring ON symbols(json_extract(data, '$.declaringClass'))"],
+      ["idx_edges_fwd_caller_name", `CREATE INDEX IF NOT EXISTS idx_edges_fwd_caller_name ON call_edges_forward(${simpleNameSql('caller')} COLLATE NOCASE)`],
+      ["idx_edges_fwd_callee_name", `CREATE INDEX IF NOT EXISTS idx_edges_fwd_callee_name ON call_edges_forward(${simpleNameSql('callee')} COLLATE NOCASE)`]
+    ] as const;
+    for (const [name, sql] of statements) {
+      // Deliberately before each atomic standalone DDL; interruption leaves
+      // schema_version below 4 so a subsequent open resumes safely.
+      console.error(`building index ${name}`);
+      this.db.exec(sql);
+    }
+    this.db.transaction(() => {
+      this.db!.prepare('DELETE FROM schema_version').run();
+      this.db!.prepare('INSERT INTO schema_version(version) VALUES (4)').run();
+    })();
   }
 
   private ensureColumnExists(table: string, column: string, type: string): void {
@@ -192,6 +262,17 @@ export class SqliteStorage implements IIndexStorage {
     const exact = await this.getSymbol(nameOrFqn);
     if (exact) return [exact];
 
+    // Exact simple-name path: use the (name, kind) b-tree before any LIKE scan.
+    // Bound results so a common name never creates an unbounded allocation.
+    if (!nameOrFqn.includes('.')) {
+      const exactNames = this.db.prepare(
+        'SELECT data FROM symbols WHERE name = ? LIMIT 50'
+      ).all(nameOrFqn) as Array<{ data: string }>;
+      if (exactNames.length > 0) {
+        return exactNames.map(row => JSON.parse(row.data) as SymbolStub);
+      }
+    }
+
     // Partial match
     const limit = options?.limit || 100;
     const offset = options?.offset || 0;
@@ -228,8 +309,10 @@ export class SqliteStorage implements IIndexStorage {
     } else {
       // No limit - fetch all symbols
       const stmt = this.db.prepare(`SELECT data FROM symbols`);
-      const rows = stmt.all() as Array<{ data: string }>;
-      return rows.map(row => JSON.parse(row.data));
+      const result: SymbolStub[] = [];
+      for (const row of stmt.iterate() as IterableIterator<{data:string}>)
+        result.push(JSON.parse(row.data));
+      return result;
     }
   }
 
@@ -295,34 +378,41 @@ export class SqliteStorage implements IIndexStorage {
     }
   }
 
+  private usageLimitReached = false;
+  wasUsageSearchTruncated(): boolean { return this.usageLimitReached; }
+
   async findUsages(fqn: string): Promise<Reference[]> {
     if (!this.db) throw new Error('Database not initialized');
 
-    const simpleName = fqn.split('.').pop() || fqn;
-
-    const stmt = this.db.prepare(`
-      SELECT from_fqn, to_fqn, file, line, col, kind
-      FROM refs
-      WHERE to_fqn = ? OR to_fqn = ? OR to_fqn LIKE ?
-    `);
-
-    const rows = stmt.all(fqn, simpleName, `%.${simpleName}`) as Array<{
-      from_fqn: string;
-      to_fqn: string;
-      file: string;
-      line: number;
-      col: number;
-      kind: string;
-    }>;
-
-    return rows.map(row => ({
-      fromFqn: row.from_fqn,
-      toFqn: row.to_fqn,
-      file: row.file,
-      line: row.line,
-      column: row.col,
-      kind: row.kind as any
-    }));
+    const simpleName = simpleNameOf(fqn);
+    type UsageRow = {
+      id: number; from_fqn: string; to_fqn: string;
+      file: string; line: number; col: number; kind: string;
+    };
+    const select = 'SELECT id, from_fqn, to_fqn, file, line, col, kind FROM refs';
+    // Split exact and simple-name lookups so both clauses have a predictable
+    // indexed plan (including a cold cache). Deduplicate overlapping rows by id.
+    const exact = this.db.prepare(select + ' WHERE to_fqn = ?')
+      .all(fqn) as UsageRow[];
+    const byName = this.db.prepare(
+      select + ` WHERE ${simpleNameSql('to_fqn')} = ? COLLATE NOCASE LIMIT 5000`
+    ).all(simpleName) as UsageRow[];
+    this.usageLimitReached = byName.length >= 5000;
+    const seen = new Set<number>();
+    const results: Reference[] = [];
+    for (const row of [...exact, ...byName]) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      results.push({
+        fromFqn: row.from_fqn,
+        toFqn: row.to_fqn,
+        file: row.file,
+        line: row.line,
+        column: row.col,
+        kind: row.kind as Reference['kind']
+      });
+    }
+    return results;
   }
 
   async findReferencesFromClass(classFqn: string): Promise<Reference[]> {
@@ -333,10 +423,13 @@ export class SqliteStorage implements IIndexStorage {
     const stmt = this.db.prepare(`
       SELECT from_fqn, to_fqn, file, line, col, kind
       FROM refs
-      WHERE from_fqn = ? OR from_fqn LIKE ? OR from_fqn LIKE ?
+      WHERE from_fqn = ?
+        OR (from_fqn >= ? AND from_fqn < ?)
+        OR (from_fqn >= ? AND from_fqn < ?)
     `);
 
-    const rows = stmt.all(classFqn, `${classFqn}.%`, `${classFqn}(%`) as Array<{
+    const rows = stmt.all(classFqn, classFqn+'.', classFqn+'.\\uffff'.replace('\\uffff','\uffff'),
+      classFqn+'(', classFqn+'(\\uffff'.replace('\\uffff','\uffff')) as Array<{
       from_fqn: string;
       to_fqn: string;
       file: string;
@@ -374,23 +467,19 @@ export class SqliteStorage implements IIndexStorage {
     }
 
     const stmt = this.db.prepare(sql);
-    const rows = stmt.all() as Array<{
-      from_fqn: string;
-      to_fqn: string;
-      file: string;
-      line: number;
-      col: number;
-      kind: string;
-    }>;
-
-    return rows.map(row => ({
+    const result: Reference[] = [];
+    for (const row of stmt.iterate() as IterableIterator<{
+      from_fqn: string; to_fqn: string; file: string;
+      line: number; col: number; kind: string;
+    }>) result.push({
       fromFqn: row.from_fqn,
       toFqn: row.to_fqn,
       file: row.file,
       line: row.line,
       column: row.col,
       kind: row.kind as any
-    }));
+    });
+    return result;
   }
 
   async getAllCallGraphEdges(options?: StorageQueryOptions): Promise<CallGraphEdge[]> {
@@ -405,117 +494,62 @@ export class SqliteStorage implements IIndexStorage {
     }
 
     const stmt = this.db.prepare(sql);
-    const rows = stmt.all() as Array<{
-      caller: string;
-      callee: string;
-      locations: string;
-    }>;
-
-    return rows.map(row => ({
+    const result: CallGraphEdge[] = [];
+    for (const row of stmt.iterate() as IterableIterator<{
+      caller: string; callee: string; locations: string;
+    }>) result.push({
       caller: row.caller,
       callee: row.callee,
       locations: JSON.parse(row.locations)
-    }));
+    });
+    return result;
   }
 
   async saveCallEdge(edge: CallGraphEdge, direction: 'forward' | 'reverse'): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-
-    const table = direction === 'forward' ? 'call_edges_forward' : 'call_edges_reverse';
-    const key1 = direction === 'forward' ? 'caller' : 'callee';
-    const key2 = direction === 'forward' ? 'callee' : 'caller';
-
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO ${table} (${key1}, ${key2}, locations)
-      VALUES (?, ?, ?)
-    `);
-
-    stmt.run(edge.caller, edge.callee, JSON.stringify(edge.locations));
+    // The legacy reverse write is a compatibility no-op; inbound reads use
+    // call_edges_forward via idx_edges_fwd_callee.
+    if (direction === 'reverse') return;
+    this.db.prepare('INSERT OR REPLACE INTO call_edges_forward(caller,callee,locations) VALUES (?,?,?)')
+      .run(edge.caller,edge.callee,JSON.stringify(edge.locations));
   }
 
   async saveCallEdges(edges: CallGraphEdge[], direction: 'forward' | 'reverse'): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-
-    const table = direction === 'forward' ? 'call_edges_forward' : 'call_edges_reverse';
-    const key1 = direction === 'forward' ? 'caller' : 'callee';
-    const key2 = direction === 'forward' ? 'callee' : 'caller';
-
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO ${table} (${key1}, ${key2}, locations)
-      VALUES (?, ?, ?)
-    `);
-
-    const saveTransaction = this.db.transaction((edgeList: CallGraphEdge[]) => {
-      for (const edge of edgeList) {
-        stmt.run(edge.caller, edge.callee, JSON.stringify(edge.locations));
-      }
-    });
-
-    saveTransaction(edges);
+    if (direction === 'reverse' || !edges.length) return;
+    const insert=this.db.prepare(
+      'INSERT OR REPLACE INTO call_edges_forward(caller,callee,locations) VALUES (?,?,?)'
+    );
+    this.db.transaction(() => {
+      for (const edge of edges)
+        insert.run(edge.caller,edge.callee,JSON.stringify(edge.locations));
+    })();
   }
 
   async getOutboundCalls(fqn: string): Promise<CallGraphEdge[]> {
     if (!this.db) throw new Error('Database not initialized');
-
-    const stmt = this.db.prepare(`
-      SELECT caller, callee, locations FROM call_edges_forward
-      WHERE caller = ?
-    `);
-
-    const rows = stmt.all(fqn) as Array<{ caller: string; callee: string; locations: string }>;
-
-    return rows.map(row => ({
-      caller: row.caller,
-      callee: row.callee,
-      locations: JSON.parse(row.locations)
-    }));
+    type Row={caller:string;callee:string;locations:string};
+    let rows=this.db.prepare('SELECT caller,callee,locations FROM call_edges_forward WHERE caller = ?')
+      .all(fqn) as Row[];
+    if (!rows.length) {
+      const name=simpleNameOf(fqn);
+      rows=this.db.prepare(`SELECT caller,callee,locations FROM call_edges_forward
+          WHERE ${simpleNameSql('caller')} = ? COLLATE NOCASE LIMIT 100`).all(name) as Row[];
+    }
+    return rows.map(row=>({caller:row.caller,callee:row.callee,locations:JSON.parse(row.locations)}));
   }
 
   async getInboundCalls(fqn: string): Promise<CallGraphEdge[]> {
     if (!this.db) throw new Error('Database not initialized');
-
-    // Exact match
-    const exactStmt = this.db.prepare(`
-      SELECT caller, callee, locations FROM call_edges_reverse
-      WHERE callee = ?
-    `);
-
-    const exact = exactStmt.all(fqn) as Array<{ caller: string; callee: string; locations: string }>;
-    
-    // Fuzzy matching for unresolved references
-    const parts = fqn.split('.');
-    const methodName = parts[parts.length - 1].split('(')[0];
-    const className = parts[parts.length - 2];
-
-    const fuzzyStmt = this.db.prepare(`
-      SELECT DISTINCT caller, callee, locations FROM call_edges_reverse
-      WHERE callee LIKE ? OR callee = ? OR callee LIKE ?
-      LIMIT 100
-    `);
-
-    const fuzzy = fuzzyStmt.all(`%.${methodName}%`, methodName, `%${className}%${methodName}%`) as Array<{
-      caller: string;
-      callee: string;
-      locations: string;
-    }>;
-
-    // Combine and deduplicate
-    const seen = new Set<string>();
-    const results: CallGraphEdge[] = [];
-
-    for (const row of [...exact, ...fuzzy]) {
-      const key = `${row.caller}->${row.callee}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        results.push({
-          caller: row.caller,
-          callee: row.callee,
-          locations: JSON.parse(row.locations)
-        });
-      }
+    type Row={caller:string;callee:string;locations:string};
+    let rows=this.db.prepare('SELECT caller,callee,locations FROM call_edges_forward WHERE callee = ?')
+      .all(fqn) as Row[];
+    if (!rows.length) {
+      const name=simpleNameOf(fqn);
+      rows=this.db.prepare(`SELECT caller,callee,locations FROM call_edges_forward
+          WHERE ${simpleNameSql('callee')} = ? COLLATE NOCASE LIMIT 100`).all(name) as Row[];
     }
-
-    return results;
+    return rows.map(row=>({caller:row.caller,callee:row.callee,locations:JSON.parse(row.locations)}));
   }
 
   async deleteCallEdgesByFile(file: string): Promise<void> {
@@ -528,12 +562,6 @@ export class SqliteStorage implements IIndexStorage {
          OR callee IN (SELECT fqn FROM symbols WHERE file = '${file.replace(/'/g, "''")}')
     `);
 
-    // Delete from reverse table
-    this.db.exec(`
-      DELETE FROM call_edges_reverse
-      WHERE caller IN (SELECT fqn FROM symbols WHERE file = '${file.replace(/'/g, "''")}')
-         OR callee IN (SELECT fqn FROM symbols WHERE file = '${file.replace(/'/g, "''")}')
-    `);
   }
 
   async saveInheritance(child: string, parent: string): Promise<void> {
@@ -645,27 +673,21 @@ export class SqliteStorage implements IIndexStorage {
   async deleteFile(filePath: string): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 
-    const transaction = this.db.transaction((path: string) => {
-      // Delete file record
-      this.db!.prepare('DELETE FROM files WHERE path = ?').run(path);
-
-      // Delete symbols
-      this.db!.prepare('DELETE FROM symbols WHERE file = ?').run(path);
-
-      // Delete references
-      this.db!.prepare('DELETE FROM refs WHERE file = ?').run(path);
-
-      // Delete call edges (harder - need to find symbols in file first)
-      const symbolFqns = this.db!.prepare('SELECT fqn FROM symbols WHERE file = ?').all(path) as Array<{ fqn: string }>;
-      
-      for (const { fqn } of symbolFqns) {
-        this.db!.prepare('DELETE FROM call_edges_forward WHERE caller = ? OR callee = ?').run(fqn, fqn);
-        this.db!.prepare('DELETE FROM call_edges_reverse WHERE caller = ? OR callee = ?').run(fqn, fqn);
-        this.db!.prepare('DELETE FROM inheritance WHERE child = ? OR parent = ?').run(fqn, fqn);
+    this.db.transaction((file: string) => {
+      // Read ownership BEFORE deleting symbols. Only remove edges emitted by
+      // callers in this file; inbound edges from other files must remain.
+      const fqns = this.db!.prepare('SELECT fqn FROM symbols WHERE file = ?')
+        .all(file) as Array<{ fqn: string }>;
+      const delForward = this.db!.prepare('DELETE FROM call_edges_forward WHERE caller = ?');
+      const delInheritance = this.db!.prepare('DELETE FROM inheritance WHERE child = ?');
+      for (const { fqn } of fqns) {
+        delForward.run(fqn);
+        delInheritance.run(fqn);
       }
-    });
-
-    transaction(filePath);
+      this.db!.prepare('DELETE FROM files WHERE path = ?').run(file);
+      this.db!.prepare('DELETE FROM symbols WHERE file = ?').run(file);
+      this.db!.prepare('DELETE FROM refs WHERE file = ?').run(file);
+    })(filePath);
   }
 
   async getStats(): Promise<IndexStats> {
@@ -695,7 +717,6 @@ export class SqliteStorage implements IIndexStorage {
       DELETE FROM symbols;
       DELETE FROM refs;
       DELETE FROM call_edges_forward;
-      DELETE FROM call_edges_reverse;
       DELETE FROM inheritance;
       DELETE FROM files;
     `);
@@ -703,6 +724,13 @@ export class SqliteStorage implements IIndexStorage {
 
   async flush(): Promise<void> {
     // better-sqlite3 is synchronous, writes are immediate - no flush needed
+  }
+
+  // Run only on the 30-minute maintenance timer; never during a one-file refresh.
+  async runMaintenance(): Promise<void> {
+    if (!this.db) return;
+    this.db.pragma('optimize');
+    this.db.pragma('wal_checkpoint(PASSIVE)');
   }
 
   async close(): Promise<void> {

@@ -33,8 +33,14 @@ interface Suggestion {
 
 export async function handleRefactoringSuggestions(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled refactoring_suggestions');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   const symbolFqn = args.symbolFqn as string;
   const analysisDepth = (args.analysisDepth as string) || 'thorough';
 

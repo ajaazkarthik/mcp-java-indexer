@@ -22,8 +22,14 @@ export const gotoDefinitionTool: Tool = {
 
 export async function handleGotoDefinition(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled goto_definition');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   // Accept both 'symbol' and 'symbolName' for backward compatibility
   const symbol = (args.symbol || args.symbolName) as string;
   
