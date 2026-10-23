@@ -358,6 +358,11 @@ The MCP server uses **better-sqlite3** exclusively. Install dependencies under
 or Visual Studio C++ Build Tools may be required. There is no sql.js
 fallback. The database lives at `<project>/.mcp-index/index.db`.
 
+SQLite schema upgrades run automatically when the index is opened. The startup
+log estimates how many indexes require building or verification. For an explicit
+upgrade check, use `compact_index(migrate: true)`; this runs the SQLite
+migration before normal compaction and leaves the 18-tool API intact.
+
 Set `INDEX_VALIDATOR_DISABLED=true` in the MCP server's environment to
 disable on-demand automatic index validation/refresh. The file watcher is a
 separate mechanism; disable it separately if a fully manual indexing

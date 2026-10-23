@@ -1,5 +1,6 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { MemoryIndex } from '../memory-index.js';
+import { SqliteStorage } from '../storage/sqlite-storage.js';
 
 export const compactIndexTool: Tool = {
   name: 'compact_index',
@@ -14,6 +15,10 @@ export const compactIndexTool: Tool = {
       aggressive: {
         type: 'boolean',
         description: 'Optional: Use aggressive cleanup (multiple passes, extensive GC). Default: false'
+      },
+      migrate: {
+        type: 'boolean',
+        description: 'Optional: explicitly verify/migrate SQLite schema indexes. Default: false'
       }
     }
   }
@@ -33,6 +38,17 @@ export async function handleCompactIndex(
   const aggressive = (args.aggressive as boolean) || false;
 
   try {
+    if (args.migrate === true) {
+      const storage = new SqliteStorage(memoryIndex.getIndexDir());
+      try {
+        await storage.initialize({deferMigration:true});
+        const pending = storage.estimateMigrationIndexCount();
+        console.error(`compact_index migrate: ${pending} indexes need building or verification`);
+        storage.migrateSchema();
+      } finally {
+        await storage.close();
+      }
+    }
     const beforeMem = process.memoryUsage();
     const beforeHeapMB = Math.round(beforeMem.heapUsed / 1024 / 1024);
     const beforeStats = memoryIndex.getStats();

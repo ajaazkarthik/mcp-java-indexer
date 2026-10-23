@@ -18,7 +18,7 @@ export class SqliteStorage implements IIndexStorage {
     this.dbPath = path.join(indexDir, 'index.db');
   }
 
-  async initialize(): Promise<void> {
+  async initialize(options?: { deferMigration?: boolean }): Promise<void> {
     // Ensure directory exists
     const dir = path.dirname(this.dbPath);
     await fs.mkdir(dir, { recursive: true });
@@ -40,7 +40,11 @@ export class SqliteStorage implements IIndexStorage {
       "SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbols'"
     ).get());
     this.createTables();
-    this.migrateSchema(existing);
+    const estimatedIndexes = this.estimateMigrationIndexCount();
+    if (!options?.deferMigration) {
+      console.error(`Schema migration check: ${estimatedIndexes} indexes to build or verify`);
+      this.migrateSchema(existing);
+    }
     
     console.error('✅ SQLite storage initialized at', this.dbPath);
   }
@@ -108,6 +112,19 @@ export class SqliteStorage implements IIndexStorage {
     `);
 
     this.ensureColumnExists('files', 'mtime', 'INTEGER');
+  }
+
+  estimateMigrationIndexCount(): number {
+    if (!this.db) throw new Error('Database not initialized');
+    const current = this.db.prepare('SELECT version FROM schema_version LIMIT 1')
+      .get() as {version:number}|undefined;
+    if (current?.version === 3) return 0;
+    const targets = ['idx_symbols_name_kind','idx_refs_to_name','idx_refs_to_covering',
+      'idx_symbols_declaring','idx_edges_fwd_caller_name','idx_edges_fwd_callee_name'];
+    const existing = new Set((this.db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='index'"
+    ).all() as Array<{name:string}>).map(row=>row.name));
+    return targets.filter(name=>!existing.has(name)).length;
   }
 
   /** Upgrade existing indexes without holding an all-index DDL transaction.
