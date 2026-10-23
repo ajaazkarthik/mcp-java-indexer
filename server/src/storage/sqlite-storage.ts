@@ -110,7 +110,10 @@ export class SqliteStorage implements IIndexStorage {
     this.ensureColumnExists('files', 'mtime', 'INTEGER');
   }
 
-  private migrateSchema(existing: boolean): void {
+  /** Upgrade existing indexes without holding an all-index DDL transaction.
+   * Each CREATE is atomic on its own; if interrupted, the next open retries.
+   */
+  public migrateSchema(existing = true): void {
     if (!this.db) throw new Error('Database not initialized');
     const stored = this.db.prepare('SELECT version FROM schema_version LIMIT 1')
       .get() as {version:number}|undefined;
@@ -118,30 +121,38 @@ export class SqliteStorage implements IIndexStorage {
     if (existing) {
       console.error('Migrating index to schema 3: building reference indexes, may take several minutes on large databases');
     }
+    // Only drop obsolete or legacy-expression indexes; preserve already rebuilt
+    // indexes after an interrupted migration.
+    const named = this.db.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_refs_to_name'")
+      .get() as {sql:string}|undefined;
+    const oldFunctionIndex = named?.sql?.includes('ref_simple_name(') ?? false;
     this.db.transaction(() => {
       this.db!.exec(`
         DROP INDEX IF EXISTS idx_symbols_name;
         DROP INDEX IF EXISTS idx_refs_to;
-        DROP INDEX IF EXISTS idx_refs_to_name;
-        DROP INDEX IF EXISTS idx_refs_to_covering;
         DROP INDEX IF EXISTS idx_edges_rev_caller;
         DROP TABLE IF EXISTS call_edges_reverse;
-        CREATE INDEX idx_symbols_name_kind ON symbols(name, kind);
-        CREATE INDEX idx_refs_to_name ON refs(replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') COLLATE NOCASE, to_fqn);
-        CREATE INDEX idx_refs_to_covering ON refs(to_fqn, id, from_fqn, file, line, col, kind);
-        CREATE INDEX IF NOT EXISTS idx_symbols_declaring
-          ON symbols(json_extract(data, '$.declaringClass'));
-        CREATE INDEX IF NOT EXISTS idx_edges_fwd_caller_name
-          ON call_edges_forward(
-            replace(caller, rtrim(caller, replace(caller, '.', '')), '') COLLATE NOCASE
-          );
-        CREATE INDEX IF NOT EXISTS idx_edges_fwd_callee_name
-          ON call_edges_forward(
-            replace(callee, rtrim(callee, replace(callee, '.', '')), '') COLLATE NOCASE
-          );
-        DELETE FROM schema_version;
-        INSERT INTO schema_version(version) VALUES (3);
       `);
+      if (oldFunctionIndex) this.db!.exec('DROP INDEX IF EXISTS idx_refs_to_name');
+    })();
+
+    const statements = [
+      ["idx_symbols_name_kind", "CREATE INDEX IF NOT EXISTS idx_symbols_name_kind ON symbols(name, kind)"],
+      ["idx_refs_to_name", "CREATE INDEX IF NOT EXISTS idx_refs_to_name ON refs(replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') COLLATE NOCASE, to_fqn)"],
+      ["idx_refs_to_covering", "CREATE INDEX IF NOT EXISTS idx_refs_to_covering ON refs(to_fqn, id, from_fqn, file, line, col, kind)"],
+      ["idx_symbols_declaring", "CREATE INDEX IF NOT EXISTS idx_symbols_declaring ON symbols(json_extract(data, '$.declaringClass'))"],
+      ["idx_edges_fwd_caller_name", "CREATE INDEX IF NOT EXISTS idx_edges_fwd_caller_name ON call_edges_forward(replace(caller, rtrim(caller, replace(caller, '.', '')), '') COLLATE NOCASE)"],
+      ["idx_edges_fwd_callee_name", "CREATE INDEX IF NOT EXISTS idx_edges_fwd_callee_name ON call_edges_forward(replace(callee, rtrim(callee, replace(callee, '.', '')), '') COLLATE NOCASE)"]
+    ] as const;
+    for (const [name, sql] of statements) {
+      // Deliberately before each atomic standalone DDL; interruption leaves
+      // schema_version below 3 so a subsequent open resumes safely.
+      console.error(`building index ${name}`);
+      this.db.exec(sql);
+    }
+    this.db.transaction(() => {
+      this.db!.prepare('DELETE FROM schema_version').run();
+      this.db!.prepare('INSERT INTO schema_version(version) VALUES (3)').run();
     })();
   }
 

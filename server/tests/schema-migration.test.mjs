@@ -53,3 +53,51 @@ test('schema v2 upgrades explicitly and produces only the new reference indexes'
    }finally{check.close();}
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('interrupted schema migration retries safely after the second index log', async () => {
+ const dir=await mkdtemp(path.join(os.tmpdir(),'migration-interrupt-'));
+ const file=path.join(dir,'index.db');
+ const original=console.error;
+ try {
+  const initial=new SqliteStorage(dir);
+  await initial.initialize();
+  await initial.close();
+  const db=new Database(file);
+  try {
+   db.exec(`UPDATE schema_version SET version=2;
+       DROP INDEX IF EXISTS idx_symbols_name_kind;
+       DROP INDEX IF EXISTS idx_refs_to_name;
+       DROP INDEX IF EXISTS idx_refs_to_covering;`);
+  } finally {db.close();}
+  const interrupted=new SqliteStorage(dir);
+  let building=0;
+  console.error=(...args)=>{
+   const msg=args.join(' ');
+   if(msg.startsWith('building index ') && ++building===2)
+     throw new Error('simulated crash during migration');
+  };
+  await assert.rejects(interrupted.initialize(),/simulated crash/);
+  console.error=original;
+  // No version 3 marker is published for a partially created index set.
+  const mid=new Database(file);
+  try {
+   assert.equal(mid.prepare('SELECT version FROM schema_version').get().version,2);
+   assert.equal(mid.prepare(
+     "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='index' AND name='idx_symbols_name_kind'"
+   ).get().n,1);
+  }finally{mid.close();}
+  // New connection must be able to rebuild all missing indexes without errors.
+  const resumed=new SqliteStorage(dir);
+  try {
+   await resumed.initialize();
+   const check=new Database(file);
+   try {
+    assert.equal(check.prepare('SELECT version FROM schema_version').get().version,3);
+    for(const name of ['idx_symbols_name_kind','idx_refs_to_name','idx_refs_to_covering']){
+     assert.equal(check.prepare('SELECT COUNT(*) AS n FROM sqlite_master WHERE type=? AND name=?')
+       .get('index',name).n,1,name);
+    }
+   }finally{check.close();}
+  }finally{await resumed.close();}
+ }finally{console.error=original;await rm(dir,{recursive:true,force:true});}
+});
