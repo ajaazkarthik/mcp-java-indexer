@@ -28,6 +28,9 @@ test('metadata-only load and lazy SQLite queries keep symbols and refs off heap'
       assert.equal(query.getSymbol('example.Demo')?.name,'Demo');
       assert.equal(query.findSymbols('Demo').length,1);
       assert.equal(query.findUsages('example.Demo').length,1);
+      // Source-of-truth forward edges also work when older reverse tables
+      // were populated using a previous column-ordering bug.
+      assert.ok(Array.isArray(query.getInboundCalls('example.Demo')));
       assert.equal(query.getAllSymbols().size,1);
       assert.equal([...query.getAllSymbols().values()].length,1);
       assert.equal(query.getAllFiles().length,1);

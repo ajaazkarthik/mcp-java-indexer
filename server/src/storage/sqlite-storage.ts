@@ -507,7 +507,7 @@ export class SqliteStorage implements IIndexStorage {
 
     // Exact match
     const exactStmt = this.db.prepare(`
-      SELECT caller, callee, locations FROM call_edges_reverse
+      SELECT caller, callee, locations FROM call_edges_forward
       WHERE callee = ?
     `);
 
@@ -519,7 +519,7 @@ export class SqliteStorage implements IIndexStorage {
     const className = parts[parts.length - 2];
 
     const fuzzyStmt = this.db.prepare(`
-      SELECT DISTINCT caller, callee, locations FROM call_edges_reverse
+      SELECT DISTINCT caller, callee, locations FROM call_edges_forward
       WHERE callee LIKE ? OR callee = ? OR callee LIKE ?
       LIMIT 100
     `);

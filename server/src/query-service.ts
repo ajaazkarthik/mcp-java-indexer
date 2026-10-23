@@ -114,11 +114,11 @@ export class QueryService extends MemoryIndex {
   }
   override getInboundCalls(fqn: string): CallGraphEdge[] {
     const exact = this.db.prepare(
-      'SELECT caller, callee, locations FROM call_edges_reverse WHERE callee = ?'
+      'SELECT caller, callee, locations FROM call_edges_forward WHERE callee = ?'
     ).all(fqn) as EdgeRow[];
     const name = (fqn.split('.').pop() || fqn).split('(')[0];
     const fuzzy = this.db.prepare(
-      'SELECT caller, callee, locations FROM call_edges_reverse WHERE callee LIKE ? LIMIT 100'
+      'SELECT caller, callee, locations FROM call_edges_forward WHERE callee LIKE ? LIMIT 100'
     ).all('%.'+name+'%') as EdgeRow[];
     const distinct = new Map<string,CallGraphEdge>();
     for (const edge of this.edges([...exact,...fuzzy]))
