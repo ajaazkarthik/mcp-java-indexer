@@ -1,9 +1,11 @@
 import { spawn } from 'node:child_process';
-import { totalmem } from 'node:os';
+import {createRequire} from 'node:module';
+const require = createRequire(import.meta.url);
+const {heapLimitMiB} = require('./heap-limit.cjs');
 import { fileURLToPath } from 'node:url';
 
 // Keep V8's old-space limit at or below half the host RAM (in MiB).
-const heapMiB = Math.max(64, Math.floor(totalmem() / (1024 * 1024 * 2)));
+const heapMiB = heapLimitMiB();
 const child = spawn(process.execPath,
   [`--max-old-space-size=${heapMiB}`, fileURLToPath(new URL('./dist/index.js', import.meta.url))],
   { stdio: 'inherit' });
