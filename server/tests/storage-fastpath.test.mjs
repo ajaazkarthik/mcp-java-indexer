@@ -1,41 +1,35 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import Database from 'better-sqlite3';
-import { SqliteStorage } from '../dist/storage/sqlite-storage.js';
+import {SqliteStorage} from '../dist/storage/sqlite-storage.js';
+import {QueryService} from '../dist/query-service.js';
 
-test('exact simple-name queries use the compound index and preserve fallback search', async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'index-name-'));
-  const storage = new SqliteStorage(dir);
-  try {
-    await storage.initialize();
-    const makeSymbol = (name, i) => ({
-      fqn: 'example.' + name + i, name, kind: 'class',
-      file: '/tmp/' + i + '.java', line: 1, column: 1,
-      packageName: 'example', modifiers: []
-    });
-    const symbols = Array.from({ length: 15000 }, (_, i) => makeSymbol('Unrelated' + i, i));
-    symbols.push(makeSymbol('RareExactClass', 50000));
-    await storage.saveSymbols(symbols);
-    const inspect = new Database(path.join(dir, 'index.db'), { readonly: true });
-    try {
-      const plan = inspect.prepare('EXPLAIN QUERY PLAN SELECT data FROM symbols WHERE name = ? LIMIT 50')
-        .all('RareExactClass').map(row => row.detail).join(' ');
-      assert.match(plan, /idx_symbols_name_kind/, plan);
-    } finally {
-      inspect.close();
-    }
-    const started = performance.now();
-    const found = await storage.findSymbols('RareExactClass');
-    const elapsed = performance.now() - started;
-    assert.equal(found.length, 1);
-    assert.equal(found[0].name, 'RareExactClass');
-    assert.equal((await storage.findSymbols('ExactClass')).length, 1);
-    console.log('Exact class lookup: ' + elapsed.toFixed(3) + ' ms');
-  } finally {
-    await storage.close();
-    await rm(dir, { recursive: true, force: true });
-  }
+test('QueryService uses compound index for exact simple-class lookup',async()=>{
+ const root=await mkdtemp(path.join(os.tmpdir(),'query-symbol-'));
+ const store=new SqliteStorage(path.join(root,'.mcp-index'));
+ try{
+  await store.initialize();
+  const symbols=Array.from({length:15000},(_,i)=>({
+    fqn:'example.Other'+i,name:'Other'+i,kind:'class',
+    file:'/tmp/Other.java',line:i,column:1,packageName:'example',modifiers:[]
+  }));
+  symbols.push({fqn:'example.Target',name:'RareExactClass',kind:'class',
+    file:'/tmp/Rare.java',line:1,column:1,packageName:'example',modifiers:[]});
+  await store.saveSymbols(symbols);
+  const query=new QueryService(root);
+  try{
+   const plan=query.explainQueryPlan('SELECT data FROM symbols WHERE name = ? LIMIT 50','RareExactClass');
+   assert.match(plan,/idx_symbols_name_kind/);
+   assert.doesNotMatch(plan,/SCAN symbols\\b/);
+   const start=performance.now();
+   const found=query.findSymbols('RareExactClass');
+   const elapsed=performance.now()-start;
+   assert.equal(found.length,1);
+   assert.equal(found[0].fqn,'example.Target');
+   assert.ok(elapsed<10,'Exact symbol lookup took '+elapsed+'ms');
+   console.log('QueryService exact class: '+elapsed.toFixed(3)+' ms');
+  }finally{query.close();}
+ }finally{await store.close();await rm(root,{recursive:true,force:true});}
 });

@@ -6,6 +6,7 @@ import os from 'node:os';
 import {MemoryIndex} from '../dist/memory-index.js';
 import {Persistence} from '../dist/persistence.js';
 import {SqliteStorage} from '../dist/storage/sqlite-storage.js';
+import {QueryService} from '../dist/query-service.js';
 
 test('incremental save retains all unchanged rows on a populated index', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'index-delta-'));
@@ -44,19 +45,18 @@ test('incremental save retains all unchanged rows on a populated index', async (
       console.log('Idle heap after metadata-only 10k load: '+heap.toFixed(1)+' MiB');
       assert.ok(heap<300,'Idle heap exceeds 300 MiB');
     }
-    const check=new SqliteStorage(memory.getIndexDir());
-    await check.initialize();
+    const check=new QueryService(dir);
     try {
-      const updated=await check.getSymbol('example.F1');
-      const untouched=await check.getSymbol('example.F2');
-      const after=await check.getStats();
+      const updated=check.getSymbol('example.F1');
+      const untouched=check.getSymbol('example.F2');
+      const after=check.getStats();
       assert.equal(updated.line,2);
       assert.equal(untouched.line,1);
       assert.equal(after.symbols,original.symbols);
       console.log('reindex_file delta on ' + count + ' files: ' + elapsed.toFixed(2) + ' ms');
       if (process.env.BENCH_10K) assert.ok(elapsed<1000,'10k file delta exceeds 1 second');
     } finally {
-      await check.close();
+      check.close();
     }
   } finally {
     await persistence.close();
@@ -82,20 +82,18 @@ test('incremental reindex preserves call graph and inheritance', async () => {
       line:10,column:4,kind:'method_call'}];
     await persistence.saveFileIncremental(file,symbols,refs,
       {path:file,hash:'before',lastIndexed:1,mtime:1,symbols:symbols.map(s=>s.fqn)});
-    const storage=new SqliteStorage(memory.getIndexDir());
-    await storage.initialize();
+    const storage=new QueryService(dir);
     try {
-      assert.equal((await storage.getInboundCalls('example.Service.save')).length,1);
-      assert.deepEqual(await storage.getParents('example.Child'),['example.Parent']);
-    } finally {await storage.close();}
+      assert.equal(storage.getInboundCalls('example.Service.save').length,1);
+      assert.deepEqual(storage.getParents('example.Child'),['example.Parent']);
+    } finally {storage.close();}
     await persistence.saveFileIncremental(file,symbols,refs,
       {path:file,hash:'after',lastIndexed:2,mtime:2,symbols:symbols.map(s=>s.fqn)});
-    const second=new SqliteStorage(memory.getIndexDir());
-    await second.initialize();
+    const second=new QueryService(dir);
     try {
-      assert.equal((await second.getInboundCalls('example.Service.save')).length,1);
-      assert.equal((await second.getStats()).references,1);
-    } finally {await second.close();}
+      assert.equal(second.getInboundCalls('example.Service.save').length,1);
+      assert.equal(second.getStats().references,1);
+    } finally {second.close();}
   } finally {
     await persistence.close();
     await rm(dir,{recursive:true,force:true});
