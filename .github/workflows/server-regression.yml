@@ -13,6 +13,10 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: server/package-lock.json
+      - name: Install extension dependencies
+        run: npm ci
+      - name: Type-check VS Code extension heap provider
+        run: npx tsc --noEmit -p tsconfig.json
       - run: npm ci
         working-directory: server
       - run: npm run release:gate
