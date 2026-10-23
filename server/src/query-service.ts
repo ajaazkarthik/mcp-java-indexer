@@ -127,8 +127,13 @@ export class QueryService extends MemoryIndex {
     return (this.db.prepare('EXPLAIN QUERY PLAN '+sql)
       .all(...params) as Array<{detail:string}>).map(row=>row.detail).join(' ');
   }
-  close(): void {
+  /** Refresh the size cache after persistence changes the SQLite file. */
+  invalidateCaches(): void {
     this.diskSymbols.invalidate();
+    this.usageLimitReached = false;
+  }
+  close(): void {
+    this.invalidateCaches();
     this.statementObserver = undefined;
     if (this.db.open) this.db.close();
   }

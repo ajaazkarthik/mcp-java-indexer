@@ -386,6 +386,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const result = await indexValidator.ensureFresh(memoryIndex, indexerClient, persistence, signal);
       if (result.wasStale && result.refreshResult && !result.refreshResult.skipped) {
         const r = result.refreshResult;
+        if (r.refreshed) queryService?.invalidateCaches();
         return `🔄 Auto-refreshed index: ${r.filesUpdated} updated, ${r.filesAdded} added, ${r.filesDeleted} deleted (${r.duration}ms)\n\n`;
       } else if (result.wasStale && result.refreshResult?.skipped) {
         // Don't show warning for grace period or cooldown skips - these are expected behavior
@@ -429,6 +430,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           handleReindexFile(args, memoryIndex, indexerClient, signal)
         );
         addTimingToResult(result, 'reindex_file', elapsedFormatted);
+        if (!result.isError) queryService?.invalidateCaches();
         return result;
       }
 
