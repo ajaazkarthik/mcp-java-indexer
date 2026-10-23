@@ -89,8 +89,11 @@ export class QueryService extends MemoryIndex {
   }
   override findReferencesFromClass(fqn: string): Reference[] {
     const rows = this.db.prepare(`SELECT id, from_fqn, to_fqn, file, line, col, kind
-      FROM refs WHERE from_fqn = ? OR from_fqn LIKE ? OR from_fqn LIKE ?`)
-      .all(fqn, fqn+'.%', fqn+'(%') as RefRow[];
+      FROM refs WHERE from_fqn = ?
+        OR (from_fqn >= ? AND from_fqn < ?)
+        OR (from_fqn >= ? AND from_fqn < ?)`)
+      .all(fqn, fqn+'.', fqn+'.\\uffff'.replace('\\uffff','\uffff'),
+        fqn+'(', fqn+'(\\uffff'.replace('\\uffff','\uffff')) as RefRow[];
     return rows.map(r=>this.mapRef(r));
   }
 

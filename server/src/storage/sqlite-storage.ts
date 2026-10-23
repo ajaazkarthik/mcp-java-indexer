@@ -356,7 +356,7 @@ export class SqliteStorage implements IIndexStorage {
     const exact = this.db.prepare(select + ' WHERE to_fqn = ?')
       .all(fqn) as UsageRow[];
     const byName = this.db.prepare(
-      select + ' WHERE ref_simple_name(to_fqn) = ? COLLATE NOCASE'
+      select + ` WHERE replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') = ? COLLATE NOCASE`
     ).all(simpleName) as UsageRow[];
     const seen = new Set<number>();
     const results: Reference[] = [];
@@ -383,10 +383,13 @@ export class SqliteStorage implements IIndexStorage {
     const stmt = this.db.prepare(`
       SELECT from_fqn, to_fqn, file, line, col, kind
       FROM refs
-      WHERE from_fqn = ? OR from_fqn LIKE ? OR from_fqn LIKE ?
+      WHERE from_fqn = ?
+        OR (from_fqn >= ? AND from_fqn < ?)
+        OR (from_fqn >= ? AND from_fqn < ?)
     `);
 
-    const rows = stmt.all(classFqn, `${classFqn}.%`, `${classFqn}(%`) as Array<{
+    const rows = stmt.all(classFqn, classFqn+'.', classFqn+'.\\uffff'.replace('\\uffff','\uffff'),
+      classFqn+'(', classFqn+'(\\uffff'.replace('\\uffff','\uffff')) as Array<{
       from_fqn: string;
       to_fqn: string;
       file: string;

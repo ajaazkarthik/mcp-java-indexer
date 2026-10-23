@@ -22,7 +22,7 @@ test('cold simple-name find_usages has an indexed EXPLAIN plan', async () => {
       file: '/tmp/Caller.java', line: 42, column: 3, kind: 'method_call'
     });
     await store.saveReferences(refs);
-    const connection = new Database(path.join(dir, 'index.db'), { readonly: true });
+    const connection = new Database(path.join(dir, 'index.db'));
     try {
       const plan = connection.prepare(
         'EXPLAIN QUERY PLAN SELECT id FROM refs WHERE replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') = ? COLLATE NOCASE'
@@ -47,4 +47,42 @@ test('cold simple-name find_usages has an indexed EXPLAIN plan', async () => {
     await store.close();
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('QueryService from-class prefix ranges are indexed (12000 refs)', async () => {
+ const dir=await mkdtemp(path.join(os.tmpdir(),'ref-class-plan-'));
+ const store=new SqliteStorage(dir);
+ try {
+  await store.initialize();
+  await store.saveReferences(Array.from({length:12000},(_,i)=>({
+   fromFqn:i%4===0 ? 'example.Target.method'+i : 'example.Other.method'+i,
+   toFqn:'example.Receiver.call'+i,
+   file:'/tmp/C'+i+'.java', line:i+1,column:1,kind:'method_call'
+  })));
+  const connection = new Database(path.join(dir,'index.db'),{readonly:true});
+  try {
+   const query=`SELECT id FROM refs WHERE from_fqn = ?
+      OR (from_fqn >= ? AND from_fqn < ?)
+      OR (from_fqn >= ? AND from_fqn < ?)`;
+   const name='example.Target';
+   const args=[name,name+'.',name+'.\uffff',name+'(',name+'(\uffff'];
+   const plan=connection.prepare('EXPLAIN QUERY PLAN '+query).all(...args)
+     .map(row=>row.detail).join(' ');
+   assert.match(plan,/SEARCH refs USING INDEX idx_refs_from|SEARCH refs USING COVERING INDEX idx_refs_from/);
+   assert.doesNotMatch(plan,/SCAN refs\b/);
+  } finally { connection.close(); }
+  const {QueryService}=await import('../dist/query-service.js');
+  // QueryService accepts the Java project root (parent of .mcp-index)
+  const root=await mkdtemp(path.join(os.tmpdir(),'query-root-'));
+  try {
+    // Compare QueryService behavior using the very same database.
+    const {rename,mkdir}=await import('node:fs/promises');
+    await store.close();
+    await mkdir(path.join(root,'.mcp-index'),{recursive:true});
+    await rename(path.join(dir,'index.db'),path.join(root,'.mcp-index','index.db'));
+    const query=new QueryService(root);
+    try {assert.equal(query.findReferencesFromClass('example.Target').length,3000);}
+    finally{query.close();}
+  }finally{await rm(root,{recursive:true,force:true});}
+ }finally{await store.close();await rm(dir,{recursive:true,force:true});}
 });
