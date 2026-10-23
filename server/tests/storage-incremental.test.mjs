@@ -35,6 +35,15 @@ test('incremental save retains all unchanged rows on a populated index', async (
     const started=performance.now();
     await persistence.save(memory);
     const elapsed=performance.now()-started;
+    if (process.env.BENCH_10K) {
+      // Verify the metadata-only reload under the target 10k-file fixture.
+      const loaded=await persistence.load(memory);
+      assert.equal(loaded,true);
+      assert.equal(memory.getAllSymbols().size,0);
+      const heap=process.memoryUsage().heapUsed/1024/1024;
+      console.log('Idle heap after metadata-only 10k load: '+heap.toFixed(1)+' MiB');
+      assert.ok(heap<300,'Idle heap exceeds 300 MiB');
+    }
     const check=new SqliteStorage(memory.getIndexDir());
     await check.initialize();
     try {

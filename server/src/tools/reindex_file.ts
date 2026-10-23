@@ -42,11 +42,7 @@ export async function handleReindexFile(
     // Check if file exists in index
     const oldFileInfo = memoryIndex.getFile(filePath);
 
-    // Remove old data
-    if (oldFileInfo) {
-      memoryIndex.removeFile(filePath);
-    }
-
+    // Parse first, keeping the previous index intact if the parser fails.
     // Reindex file - Skip full type resolution if sourceRoots not provided
     // This dramatically speeds up single file reindexing (43s -> <1s)
     const result = await indexerClient.indexFile(filePath, sourceRoots);
@@ -61,6 +57,9 @@ export async function handleReindexFile(
         isError: true
       };
     }
+
+    // Only evict the old in-memory metadata after a successful parse.
+    if (oldFileInfo) memoryIndex.removeFile(filePath);
 
     // Add new data
     const symbolFqns: string[] = [];

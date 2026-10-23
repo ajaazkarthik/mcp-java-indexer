@@ -285,6 +285,8 @@ export class FileSystemWatcher {
 
       if (filesToReindex.length === 0) {
         console.error('[FileWatcher] No files actually changed (mtime check)');
+        // A deletion-only batch must still be persisted to SQLite.
+        if (deletesToProcess.size > 0) this.schedulePersist();
         return;
       }
 
