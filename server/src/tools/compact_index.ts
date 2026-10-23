@@ -21,8 +21,14 @@ export const compactIndexTool: Tool = {
 
 export async function handleCompactIndex(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled compact_index');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   const emergency = (args.emergency as boolean) || false;
   const aggressive = (args.aggressive as boolean) || false;
 

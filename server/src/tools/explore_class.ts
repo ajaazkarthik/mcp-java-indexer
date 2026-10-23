@@ -42,8 +42,14 @@ This is more efficient than calling find_symbol + explain_code + call_graph + fi
 
 export async function handleExploreClass(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled explore_class');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   const className = args.className as string;
   const includeMethodDetails = args.includeMethodDetails === true;
   const directOnly = args.directOnly === true;

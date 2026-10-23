@@ -58,8 +58,14 @@ batch_query(queries: [
 
 export async function handleBatchQuery(
   args: any,
-  memoryIndex: MemoryIndex
+  memoryIndex: MemoryIndex,
+  signal?: AbortSignal
 ) {
+  if (signal?.aborted) {
+    console.error('[MCP] cancelled batch_query');
+    return { content: [{type:'text',text:'Request cancelled'}], isError: true };
+  }
+
   const queries = args.queries as Array<{
     tool: string;
     args: any;
