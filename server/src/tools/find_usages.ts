@@ -91,6 +91,7 @@ Use the exact FQN to find usages.`
     // Find all usages using the resolved FQN
     // Merge references array with call graph data for complete results
     const directReferences = memoryIndex.findUsages(resolvedFqn);
+    const fuzzyTruncated = memoryIndex.wasUsageSearchTruncated();
     const callGraphRefs = memoryIndex.getInboundCalls(resolvedFqn);
     
     // Convert call graph edges to Reference format
@@ -160,7 +161,7 @@ Use the exact FQN to find usages.`
 
     const text = `Found ${usages.length} usage${usages.length > 1 ? 's' : ''} of \`${resolvedFqn}\` in ${byFile.size} file${byFile.size > 1 ? 's' : ''}:
 
-${results.join('\n')}`;
+${results.join('\n')}${fuzzyTruncated ? '\n\nNote: showing first 5000 fuzzy matches; exact fully qualified name matches are not limited.' : ''}`;
 
     return {
       content: [{

@@ -68,6 +68,8 @@ export class QueryService extends MemoryIndex {
   private readonly diskSymbols: DiskSymbolMap;
   private readonly _stmts: Record<string, Database.Statement>;
   private statementObserver?: (statementName: string) => void;
+  private usageLimitReached = false;
+  override wasUsageSearchTruncated(): boolean { return this.usageLimitReached; }
 
   constructor(projectRoot: string) {
     super();
@@ -84,7 +86,7 @@ export class QueryService extends MemoryIndex {
       exactNames: this.db.prepare('SELECT data FROM symbols WHERE name = ? LIMIT 50'),
       partialSymbols: this.db.prepare('SELECT data FROM symbols WHERE name LIKE ? OR fqn LIKE ? ORDER BY name LIMIT 200'),
       refsExact: this.db.prepare(selectRefs + ' WHERE to_fqn = ?'),
-      refsSimple: this.db.prepare(selectRefs + ' WHERE ' + SIMPLE_REF + ' = ? COLLATE NOCASE'),
+      refsSimple: this.db.prepare(selectRefs + ' WHERE ' + SIMPLE_REF + ' = ? COLLATE NOCASE LIMIT 5000'),
       refsFrom: this.db.prepare(selectRefs + ' WHERE from_fqn = ? OR (from_fqn >= ? AND from_fqn < ?) OR (from_fqn >= ? AND from_fqn < ?)'),
       outboundExact: this.db.prepare(selectEdges + ' WHERE caller = ?'),
       outboundSimple: this.db.prepare(selectEdges + ' WHERE ' + SIMPLE_CALLER + ' = ? COLLATE NOCASE LIMIT 100'),
@@ -159,6 +161,7 @@ export class QueryService extends MemoryIndex {
     const exact=this.all<RefRow>('refsExact',fqn);
     const simple=fqn.split('.').pop()||fqn;
     const fuzzy=this.all<RefRow>('refsSimple',simple);
+    this.usageLimitReached = fuzzy.length >= 5000;
     const merged=new Map<number,Reference>();
     for(const row of [...exact,...fuzzy]) merged.set(row.id,this.mapRef(row));
     return [...merged.values()];

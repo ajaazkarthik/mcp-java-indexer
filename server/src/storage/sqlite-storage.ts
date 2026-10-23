@@ -370,6 +370,9 @@ export class SqliteStorage implements IIndexStorage {
     }
   }
 
+  private usageLimitReached = false;
+  wasUsageSearchTruncated(): boolean { return this.usageLimitReached; }
+
   async findUsages(fqn: string): Promise<Reference[]> {
     if (!this.db) throw new Error('Database not initialized');
 
@@ -384,8 +387,9 @@ export class SqliteStorage implements IIndexStorage {
     const exact = this.db.prepare(select + ' WHERE to_fqn = ?')
       .all(fqn) as UsageRow[];
     const byName = this.db.prepare(
-      select + ` WHERE replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') = ? COLLATE NOCASE`
+      select + ` WHERE replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') = ? COLLATE NOCASE LIMIT 5000`
     ).all(simpleName) as UsageRow[];
+    this.usageLimitReached = byName.length >= 5000;
     const seen = new Set<number>();
     const results: Reference[] = [];
     for (const row of [...exact, ...byName]) {

@@ -133,6 +133,8 @@ export class MemoryIndex {
     return result;
   }
 
+  wasUsageSearchTruncated(): boolean { return false; }
+
   // Get all symbols (for semantic search and code explanation)
   getAllSymbols(): Map<string, SymbolStub> {
     return this.symbols;
