@@ -1577,13 +1577,8 @@ export async function handleScanMigrationCandidates(
       // ========================================================================
       
       // Find all methods belonging to this class
-      const classMethods: SymbolStub[] = [];
-      for (const [symbolFqn, s] of allSymbols) {
-        if ((symbolFqn.startsWith(stub.fqn + '.') || s.declaringClass === stub.fqn) && 
-            (s.kind === 'method' || s.kind === 'constructor')) {
-          classMethods.push(s);
-        }
-      }
+      const classMethods = memoryIndex.getMembers(stub.fqn)
+        .filter(s => s.kind === 'method' || s.kind === 'constructor');
       
       // Analyze outbound calls from each method (like explore_class does)
       for (const method of classMethods) {

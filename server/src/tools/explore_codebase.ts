@@ -385,7 +385,7 @@ No classes found in the index.${filterPackages ? ` Filter packages: ${filterPack
         if (classSymbol) {
           const extendsClass = classSymbol.extends || classSymbol.extendsClass;
           if (extendsClass) {
-            const resolvedParent = resolveClassName(extendsClass, classSymbol.packageName, allSymbols);
+            const resolvedParent = resolveClassName(extendsClass, classSymbol.packageName, memoryIndex);
             if (resolvedParent && classSet.has(resolvedParent)) {
               outboundDeps.get(classFqn)!.add(resolvedParent);
               inboundDeps.get(resolvedParent)!.add(classFqn);
@@ -394,7 +394,7 @@ No classes found in the index.${filterPackages ? ` Filter packages: ${filterPack
           const implementsInterfaces = classSymbol.implements || classSymbol.implementsInterfaces;
           if (implementsInterfaces) {
             for (const iface of implementsInterfaces) {
-              const resolvedIface = resolveClassName(iface, classSymbol.packageName, allSymbols);
+              const resolvedIface = resolveClassName(iface, classSymbol.packageName, memoryIndex);
               if (resolvedIface && classSet.has(resolvedIface)) {
                 outboundDeps.get(classFqn)!.add(resolvedIface);
                 inboundDeps.get(resolvedIface)!.add(classFqn);
@@ -425,7 +425,7 @@ No classes found in the index.${filterPackages ? ` Filter packages: ${filterPack
       const subclasses = memoryIndex.getChildren(cls.fqn);
 
       // Calculate inheritance depth (with caching)
-      const inheritanceDepth = calculateInheritanceDepth(cls, allSymbols, inheritanceDepthCache);
+      const inheritanceDepth = calculateInheritanceDepth(cls, memoryIndex, inheritanceDepthCache);
 
       // Detect code smells
       const flags = detectCodeSmells(cls, methods, fields, outDeps.size, inDeps.size, subclasses.length);
@@ -651,26 +651,11 @@ function extractClassFromFqn(fqn: string): string | undefined {
   return fqn;
 }
 
-function resolveClassName(name: string, currentPackage: string, allSymbols: Map<string, SymbolStub>): string | undefined {
-  // If already qualified
-  if (name.includes('.')) {
-    return allSymbols.has(name) ? name : undefined;
-  }
-  
-  // Try same package first
+function resolveClassName(name: string, currentPackage: string, index: MemoryIndex): string | undefined {
+  if (name.includes('.')) return index.getSymbol(name) ? name : undefined;
   const samePackage = currentPackage + '.' + name;
-  if (allSymbols.has(samePackage)) {
-    return samePackage;
-  }
-  
-  // Search all symbols for simple name match
-  for (const [fqn, stub] of allSymbols) {
-    if (stub.name === name && (stub.kind === 'class' || stub.kind === 'interface' || stub.kind === 'enum')) {
-      return fqn;
-    }
-  }
-  
-  return undefined;
+  if (index.getSymbol(samePackage)) return samePackage;
+  return index.findClassesByName(name)[0]?.fqn;
 }
 
 /**
@@ -701,37 +686,21 @@ function detectMavenModules(classes: ClassSummary[]): { modules: string[]; isMul
 }
 
 function calculateInheritanceDepth(
-  cls: SymbolStub, 
-  allSymbols: Map<string, SymbolStub>,
+  cls: SymbolStub,
+  index: MemoryIndex,
   cache: Map<string, number>
 ): number {
-  if (cache.has(cls.fqn)) {
-    return cache.get(cls.fqn)!;
-  }
-
+  if (cache.has(cls.fqn)) return cache.get(cls.fqn)!;
   let depth = 0;
   let currentClass = cls.extends || cls.extendsClass;
   const visited = new Set<string>();
-
   while (currentClass && !visited.has(currentClass)) {
     visited.add(currentClass);
     depth++;
-    
-    const parentSymbol = allSymbols.get(currentClass);
-    if (parentSymbol) {
-      currentClass = parentSymbol.extends || parentSymbol.extendsClass;
-    } else {
-      // Try to resolve by simple name
-      for (const [fqn, stub] of allSymbols) {
-        if (stub.name === currentClass || fqn.endsWith('.' + currentClass)) {
-          currentClass = stub.extends || stub.extendsClass;
-          break;
-        }
-      }
-      break;
-    }
+    const parent = index.getSymbol(currentClass) ||
+      index.findClassesByName(currentClass.split('.').pop() || currentClass)[0];
+    currentClass = parent ? (parent.extends || parent.extendsClass) : undefined;
   }
-
   cache.set(cls.fqn, depth);
   return depth;
 }

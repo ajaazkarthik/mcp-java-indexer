@@ -57,6 +57,23 @@ export class QueryService extends MemoryIndex {
   close(): void { if (this.db.open) this.db.close(); }
   override getSymbol(fqn: string): SymbolStub | undefined { return this.diskSymbols.get(fqn); }
   override getAllSymbols(): Map<string,SymbolStub> { return this.diskSymbols; }
+  override getMembers(classFqn: string): SymbolStub[] {
+    const rows = this.db.prepare(`
+      SELECT data FROM symbols
+      WHERE (fqn >= ? AND fqn < ?)
+         OR json_extract(data, '$.declaringClass') = ?
+    `).all(classFqn+'.', classFqn+'.\\uffff'.replace('\\uffff','\uffff'), classFqn) as Array<{data:string}>;
+    return rows.map(row => JSON.parse(row.data));
+  }
+
+  override findClassesByName(name: string): SymbolStub[] {
+    const rows = this.db.prepare(`
+      SELECT data FROM symbols WHERE name = ?
+      AND kind IN ('class','interface','enum','record') LIMIT 50
+    `).all(name) as Array<{data:string}>;
+    return rows.map(row => JSON.parse(row.data));
+  }
+
 
   override findSymbols(query: string): SymbolStub[] {
     const exact = this.getSymbol(query);

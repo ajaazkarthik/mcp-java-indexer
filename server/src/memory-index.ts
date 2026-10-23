@@ -116,6 +116,23 @@ export class MemoryIndex {
     return this.symbols.get(fqn);
   }
 
+  // Member lookup used by the on-disk QueryService and in-memory index alike.
+  getMembers(classFqn: string): SymbolStub[] {
+    const prefix = classFqn + '.';
+    return [...this.symbols.values()].filter(s =>
+      s.fqn.startsWith(prefix) || s.declaringClass === classFqn);
+  }
+
+  findClassesByName(name: string): SymbolStub[] {
+    const kinds = new Set(['class', 'interface', 'enum', 'record']);
+    const result: SymbolStub[] = [];
+    for (const symbol of this.symbols.values()) {
+      if (symbol.name === name && kinds.has(symbol.kind)) result.push(symbol);
+      if (result.length >= 50) break;
+    }
+    return result;
+  }
+
   // Get all symbols (for semantic search and code explanation)
   getAllSymbols(): Map<string, SymbolStub> {
     return this.symbols;
