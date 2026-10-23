@@ -25,7 +25,7 @@ test('cold simple-name find_usages has an indexed EXPLAIN plan', async () => {
     const connection = new Database(path.join(dir, 'index.db'));
     try {
       const plan = connection.prepare(
-        'EXPLAIN QUERY PLAN SELECT id FROM refs WHERE replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') = ? COLLATE NOCASE'
+        `EXPLAIN QUERY PLAN SELECT id FROM refs WHERE replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') = ? COLLATE NOCASE`
       ).all('save').map(r => r.detail).join(' ');
       assert.match(plan, /idx_refs_to_name/, plan);
       assert.doesNotMatch(plan, /SCAN refs\b/, plan);
