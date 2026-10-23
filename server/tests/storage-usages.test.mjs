@@ -25,7 +25,7 @@ test('QueryService reads indexed simple-name usages without a user-defined DB fu
    const expr="replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '')";
    const plan=query.explainQueryPlan('SELECT id FROM refs WHERE '+expr+' = ? COLLATE NOCASE','save');
    assert.match(plan,/idx_refs_to_name/);
-   assert.doesNotMatch(plan,/SCAN refs\\b/);
+   assert.doesNotMatch(plan,/SCAN refs\b/);
    const start=performance.now();
    const found=query.findUsages('example.Target.save');
    const elapsed=performance.now()-start;
@@ -60,8 +60,22 @@ test('QueryService from-class prefix ranges use idx_refs_from',async()=>{
    const sql='SELECT id FROM refs WHERE from_fqn = ? OR (from_fqn >= ? AND from_fqn < ?) OR (from_fqn >= ? AND from_fqn < ?)';
    const plan=query.explainQueryPlan(sql,name,name+'.',name+'.'+max,name+'(',name+'('+max);
    assert.match(plan,/idx_refs_from/);
-   assert.doesNotMatch(plan,/SCAN refs\\b/);
+   assert.doesNotMatch(plan,/SCAN refs\b/);
    assert.equal(query.findReferencesFromClass(name).length,3000);
+   // Prove the scan assertion fails when its required index is unavailable.
+   query.close();
+   await store.close();
+   const sqlite=(await import('better-sqlite3')).default;
+   const db=new sqlite(path.join(root,'.mcp-index','index.db'));
+   try {
+     db.exec('DROP INDEX idx_refs_from');
+     const bad=db.prepare('EXPLAIN QUERY PLAN '+sql)
+       .all(name,name+'.',name+'.'+max,name+'(',name+'('+max)
+       .map(r=>r.detail).join(' ');
+     assert.match(bad,/SCAN refs\b/);
+     assert.throws(()=>assert.doesNotMatch(bad,/SCAN refs\b/),assert.AssertionError);
+   }finally{db.close();}
+
   }finally{query.close();}
  }finally{await store.close();await rm(root,{recursive:true,force:true});}
 });

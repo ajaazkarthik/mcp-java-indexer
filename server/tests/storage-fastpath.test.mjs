@@ -22,7 +22,7 @@ test('QueryService uses compound index for exact simple-class lookup',async()=>{
   try{
    const plan=query.explainQueryPlan('SELECT data FROM symbols WHERE name = ? LIMIT 50','RareExactClass');
    assert.match(plan,/idx_symbols_name_kind/);
-   assert.doesNotMatch(plan,/SCAN symbols\\b/);
+   assert.doesNotMatch(plan,/SCAN symbols\b/);
    const start=performance.now();
    const found=query.findSymbols('RareExactClass');
    const elapsed=performance.now()-start;

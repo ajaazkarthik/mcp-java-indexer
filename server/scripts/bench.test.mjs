@@ -50,7 +50,7 @@ test('release gate: 50k symbols, 200k references, indexed MCP read paths', async
    const usagesPlan=query.explainQueryPlan(
      'SELECT id FROM refs WHERE '+expr+' = ? COLLATE NOCASE','save');
    assert.match(usagesPlan,/idx_refs_to_name/);
-   assert.doesNotMatch(usagesPlan,/SCAN refs\\b/);
+   assert.doesNotMatch(usagesPlan,/SCAN refs\b/);
    const usageStarted=performance.now();
    assert.equal(query.findUsages('save').length,1);
    const usageMs=performance.now()-usageStarted;
@@ -62,7 +62,7 @@ test('release gate: 50k symbols, 200k references, indexed MCP read paths', async
    const plan=query.explainQueryPlan(sql,'example.Client','example.Client.','example.Client.'+max,
      'example.Client(','example.Client('+max);
    assert.match(plan,/idx_refs_from/);
-   assert.doesNotMatch(plan,/SCAN refs\\b/);
+   assert.doesNotMatch(plan,/SCAN refs\b/);
    assert.equal(query.findReferencesFromClass('example.Client').length,1);
 
    const observed=[];
