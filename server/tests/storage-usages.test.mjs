@@ -24,13 +24,16 @@ test('cold simple-name find_usages has an indexed EXPLAIN plan', async () => {
     await store.saveReferences(refs);
     const connection = new Database(path.join(dir, 'index.db'), { readonly: true });
     try {
-      connection.function('ref_simple_name', { deterministic: true },
-        fqn => fqn.slice(fqn.lastIndexOf('.') + 1));
       const plan = connection.prepare(
-        'EXPLAIN QUERY PLAN SELECT id FROM refs WHERE ref_simple_name(to_fqn) = ? COLLATE NOCASE'
+        'EXPLAIN QUERY PLAN SELECT id FROM refs WHERE replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') = ? COLLATE NOCASE'
       ).all('save').map(r => r.detail).join(' ');
       assert.match(plan, /idx_refs_to_name/, plan);
       assert.doesNotMatch(plan, /SCAN refs\b/, plan);
+      connection.prepare(`INSERT INTO refs(from_fqn,to_fqn,file,line,col,kind)
+        VALUES (?, ?, ?, ?, ?, ?)`).run(
+          'example.Additional', 'example.Service.newMethod',
+          '/tmp/Additional.java', 9, 3, 'method_call');
+      assert.equal(connection.pragma('integrity_check', { simple:true }), 'ok');
     } finally {
       connection.close();
     }

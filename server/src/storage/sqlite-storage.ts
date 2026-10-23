@@ -25,9 +25,6 @@ export class SqliteStorage implements IIndexStorage {
 
     // Open database
     this.db = new Database(this.dbPath);
-    // Stable, deterministic extraction for SQLite's expression index on reference names.
-    this.db.function('ref_simple_name', { deterministic: true }, (fqn: string) =>
-      fqn.slice(fqn.lastIndexOf('.') + 1));
     
     // Enable WAL mode for better concurrency
     this.db.pragma('journal_mode = WAL');
@@ -78,7 +75,7 @@ export class SqliteStorage implements IIndexStorage {
       );
       CREATE INDEX IF NOT EXISTS idx_refs_to ON refs(to_fqn);
       CREATE INDEX IF NOT EXISTS idx_refs_to_name
-        ON refs(ref_simple_name(to_fqn) COLLATE NOCASE, to_fqn);
+        ON refs(replace(to_fqn, rtrim(to_fqn, replace(to_fqn, '.', '')), '') COLLATE NOCASE, to_fqn);
       CREATE INDEX IF NOT EXISTS idx_refs_to_covering
         ON refs(to_fqn, id, from_fqn, file, line, col, kind);
       CREATE INDEX IF NOT EXISTS idx_refs_from ON refs(from_fqn);
